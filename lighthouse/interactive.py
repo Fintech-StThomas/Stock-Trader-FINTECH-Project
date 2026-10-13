@@ -188,10 +188,11 @@ def score_breakdown(decision, height: Optional[int] = None, beacons=None) -> go.
 # Price dashboard
 # --------------------------------------------------------------------------- #
 def _band_spec(p) -> dict:
-    """Columns and labels of the price-band overlay: a Hull-MA centre +/- k standard deviations of the closes around it."""
+    """Columns and labels of the price-band overlay: a trend-filter centre +/- k standard deviations of the closes
+    around it."""
     return dict(up="band_upper", lo="band_lower", mid="band_mid", name=f"Price bands (±{p.band_std:g}σ)",
-                mid_name=f"Band centre (Hull MA {p.band_window})", short=f"Hull {p.band_window}",
-                title=f"price bands (Hull MA {p.band_window} ± {p.band_std:g}σ)", extra="price bands")
+                mid_name="Band centre (trend filter)", short="Centre",
+                title=f"price bands (trend filter ± {p.band_std:g}σ)", extra="price bands")
 
 
 def _add_bands(fig, ind: pd.DataFrame, spec: dict, alpha: float, **rc) -> None:

@@ -6,9 +6,9 @@ Open a position at the suggested size; the balance of evidence is positive.
 
 ### How the score is built
 - Fundamental score **63** × weight 60% = 38.0
-- Technical score **83** × weight 40% = 33.1
+- Technical score **83** × weight 40% = 33.3
 - Market-weather adjustment: **0** (Bull / Calm)
-- **Composite = 71.1** → Buy (bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)
+- **Composite = 71.3** → Buy (bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)
 
 ### Fundamental beacons (score 63)
 *Technology · Software - Infrastructure · data: offline_fixture (approximate, from memory of 10-K filings; demonstration only) (2017-11-10)*
@@ -35,7 +35,7 @@ Open a position at the suggested size; the balance of evidence is positive.
 | Trend (50/200-day SMA) | price +19.2% vs 200-SMA; Golden Cross (50 > 200) | 🟢 | +1.00 | 35% | +17.5 | Price is above its 200-day average and the 50-day sits above the 200-day: the long-term trend is up. |
 | Momentum (RSI 14) | RSI 74.9 | 🟢 | +0.67 | 15% | +5.1 | RSI above 70 is overbought: momentum is strong but stretched, so the signal fades. |
 | MACD (12/26/9) | histogram +0.06 (+0.05 ATR) | 🟡 | +0.05 | 10% | +0.3 | MACD line is above its signal line: short-term momentum is accelerating upward. |
-| Price bands (Hull 20, 2σ) | %B 0.19 | 🔴 | -0.62 | 10% | -3.1 | Price sits in the lower half of its bands: sellers are in control. |
+| Price bands (trend filter, 2σ) | %B 0.24 | 🔴 | -0.52 | 10% | -2.6 | Price sits in the lower half of its bands: sellers are in control. |
 | Volume confirmation (OBV, 20/60-day) | volume 1.20x avg; OBV up | 🟢 | +0.70 | 10% | +3.5 | Recent volume is 1.20x its 3-month average and on-balance volume is rising: the move is confirmed by participation. |
 | 52-week high proximity | -0.8% from 52-week high | 🟢 | +0.96 | 20% | +9.6 | Trading at or near its 52-week high: a breakout zone where trend-followers add exposure. |
 
@@ -43,7 +43,7 @@ Open a position at the suggested size; the balance of evidence is positive.
 Market weather is Bull / Calm: the S&P 500 is above its 200-day average (up-trend) and realised volatility (5%) is near or below its one-year norm (7%).
 
 ### Position plan
-- Buy **19 shares** near $83.87 = **$1,594** of your $25,000 cash (6.5% of the $25,000 account); $23,406 stays in cash.
+- Buy **19 shares** near $83.87 = **$1,594** of your $25,000 cash (6.6% of the $25,000 account); $23,406 stays in cash.
 - Exit level **$64.73** (22.8% below): worst case ≈ $364 (1.45% of the account, limit 2%) if the stop fills at its price; an overnight gap through the stop can lose more.
 - Size was limited by the **max-loss rule**.
   - Exit level 22.8% below the current price at $64.73 (200-day SMA minus 8% buffer).
@@ -64,7 +64,7 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 
 |  | CAGR | Volatility | Sharpe | Max drawdown | Trades | Win rate | Time invested |
 |---|---|---|---|---|---|---|---|
-| Technical signals only (fully invested) | 4.4% | 19.0% | 0.22 | -35.6% | 8 | 50.0% | 75.4% |
+| Technical signals only (fully invested) | 5.8% | 18.7% | 0.29 | -35.6% | 7 | 57.1% | 74.3% |
 | + market regime filter | 5.8% | 18.7% | 0.29 | -35.6% | 7 | 57.1% | 74.3% |
 | + fundamental gate (point-in-time) | 5.8% | 18.7% | 0.29 | -35.6% | 7 | 57.1% | 74.3% |
 | + volatility-targeted sizing (full Lighthouse) | 3.6% | 13.1% | 0.18 | -28.7% | 7 | 57.1% | 53.9% |
@@ -85,10 +85,10 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 |  | Total return | CAGR | Volatility | Sharpe | Max drawdown | Trades |
 |---|---|---|---|---|---|---|
 | Default rule (60/35) | 67.2% | 8.8% | 13.7% | 0.54 | -26.5% | 3 |
-| Tuned in-sample (55/30) | 67.2% | 8.8% | 13.7% | 0.54 | -26.5% | 3 |
+| Tuned in-sample (50/25) | 67.2% | 8.8% | 13.7% | 0.54 | -26.5% | 3 |
 | Buy & hold | 263.3% | 23.6% | 22.2% | 0.98 | -18.0% | n/a |
 
-**Sensitivity**: across 25 entry/exit threshold pairs the Sharpe ratio ranges from 0.08 (entry 55/exit 45) to 0.20 (entry 65/exit 25); median 0.16.
+**Sensitivity**: across 25 entry/exit threshold pairs the Sharpe ratio ranges from 0.08 (entry 55/exit 45) to 0.20 (entry 65/exit 25); median 0.18.
 
 ### Data notes and warnings
 - OFFLINE DATA (sample): series ends 2017-11-10; connect to the internet for live prices

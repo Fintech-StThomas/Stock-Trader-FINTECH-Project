@@ -542,12 +542,14 @@ def render_result(res) -> None:
     plotly(figure(res, ("dashboard", last_days), lambda: ix.dashboard(res, last_days=last_days)), key="dashboard")
     with st.expander("How the price bands are built"):
         n, k = res.params.band_window, res.params.band_std
-        st.markdown(f"The dashed centre line is a {n}-day **Hull moving average**: a weighted average that cancels most of the "
-                    f"delay of an ordinary average (about 3 sessions behind the price on the sample stocks, against about 9 for "
-                    f"the {n}-day simple average that classic Bollinger Bands use). The bands sit ± {k:g} standard deviations of "
-                    f"the closes around that line over the last {n} sessions. A close above the upper band means price is "
-                    "stretched relative to where it is now; the *Price bands* beacon scores that position (%B). Like every line "
-                    "in Lighthouse they use only past prices: nothing is shifted forward, so nothing peeks at the future.")
+        st.markdown("The dashed centre line is a **trend filter** (Holt's double exponential smoothing). Each session it "
+                    "projects yesterday's level along yesterday's slope and then moves part of the way to today's close, so "
+                    "it follows a steady trend without falling behind. On the sample stocks it is about 1 session behind the "
+                    f"price, against about 3 for a 20-day Hull moving average and about 9 for the {n}-day simple average that "
+                    f"classic Bollinger Bands use. The bands sit ± {k:g} standard deviations of the closes around that line "
+                    f"over the last {n} sessions. A close above the upper band means price is stretched relative to where it "
+                    "is now; the *Price bands* beacon scores that position (%B). Like every line in Lighthouse they use only "
+                    "past prices: nothing is shifted forward, so nothing peeks at the future.")
 
     # ---- backtest ---------------------------------------------------------
     bt = res.backtest

@@ -58,12 +58,42 @@ def hull_ma(series: pd.Series, window: int) -> pd.Series:
     return wma(2.0 * wma(series, half) - wma(series, window), root)
 
 
-def lowlag_bands(close: pd.Series, window: int = 20, num_std: float = 2.0):
-    """Price bands that follow the price: a Hull moving average as the centre, +/- `num_std` standard deviations of the
-    closes around it over the last `window` sessions. They ask the question Bollinger Bands ask (is price stretched?)
-    relative to where price is now: Bollinger's 20-day SMA centre trails the price by ~10 sessions, this one by ~3.
-    Returns (centre, upper, lower, %B). Causal: nothing is shifted forward."""
-    mid = hull_ma(close, window)
+def holt_trend(series: pd.Series, alpha: float = 0.4, beta: float = 0.1, min_periods: int = 1) -> pd.Series:
+    """Holt's linear trend filter (double exponential smoothing; the steady state of a Kalman filter for a local linear
+    trend). Each session it projects yesterday's level along yesterday's slope, then moves the level a share `alpha` of
+    the way to today's close and the slope a share `beta` of the way to the level's latest change:
+
+        level_t = alpha * close_t + (1 - alpha) * (level_t-1 + slope_t-1)
+        slope_t = beta * (level_t - level_t-1) + (1 - beta) * slope_t-1
+
+    Because it carries the slope forward, a straight-line trend is tracked with no lag at all (a moving average trails
+    it). Causal and recursive: the value on day t uses closes up to t only. Starts at the first close with a flat slope;
+    the start is forgotten within about a hundred sessions. NaN closes are skipped (the output is NaN there)."""
+    x = series.to_numpy(dtype=float).tolist()
+    out = [np.nan] * len(x)
+    level = slope = None
+    seen = 0
+    for i, v in enumerate(x):
+        if v != v:                       # NaN
+            continue
+        if level is None:
+            level, slope = v, 0.0
+        else:
+            prev = level
+            level = alpha * v + (1.0 - alpha) * (level + slope)
+            slope = beta * (level - prev) + (1.0 - beta) * slope
+        seen += 1
+        if seen >= min_periods:
+            out[i] = level
+    return pd.Series(out, index=series.index, dtype=float)
+
+
+def lowlag_bands(close: pd.Series, window: int = 20, num_std: float = 2.0, alpha: float = 0.4, beta: float = 0.1):
+    """Price bands that follow the price: Holt's trend filter (`holt_trend`) as the centre, +/- `num_std` standard
+    deviations of the closes around it over the last `window` sessions. They ask the question Bollinger Bands ask (is
+    price stretched?) relative to where price is now: Bollinger's 20-day SMA centre trails the price by ~10 sessions,
+    a 20-day Hull MA by ~3, this one by ~1. Returns (centre, upper, lower, %B). Causal: nothing is shifted forward."""
+    mid = holt_trend(close, alpha, beta, min_periods=window)
     std = (close - mid).rolling(window, min_periods=window).std(ddof=0)
     upper, lower = mid + num_std * std, mid - num_std * std
     pct_b = (close - lower) / (upper - lower).replace(0.0, np.nan)

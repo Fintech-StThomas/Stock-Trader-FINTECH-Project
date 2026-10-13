@@ -19,7 +19,7 @@ with a full risk report.
 
 1. **Collects and cleans** daily prices & volume, the S&P 500 and fundamentals (Yahoo Finance → Stooq → cache → bundled real sample data, so it always runs).
 2. **Fundamental analysis** — 13 beacons (P/E, forward P/E, PEG, P/B, EV/EBITDA, earnings stability, ROE, margin, debt/equity, FCF yield, current ratio, revenue & EPS growth) scored against sector norms.
-3. **Technical analysis** — 6 beacons: trend (50/200-day SMA, Golden/Death Cross), RSI, MACD, position in low-lag price bands (%B around a Hull moving average, ~3 sessions of lag), volume confirmation (OBV), 52-week-high proximity.
+3. **Technical analysis** — 6 beacons: trend (50/200-day SMA, Golden/Death Cross), RSI, MACD, position in low-lag price bands (%B around a trend filter, ~1 session of lag), volume confirmation (OBV), 52-week-high proximity.
 4. **Market weather** — Bull/Bear × Calm/Turbulent regime of the S&P 500 that penalises scores, raises the entry bar and halves sizes in bear markets.
 5. **Decision** — horizon-weighted composite → verdict → position size from the *smallest* of three rules (your max-loss limit, a volatility target, a concentration cap), paid from the **cash you have available** (risk limits are a % of your whole account).
 6. **Honest evaluation** — point-in-time backtest vs buy-and-hold and the S&P 500, layer attribution, sensitivity grid, walk-forward out-of-sample test, regime breakdown.
@@ -94,11 +94,11 @@ Long-horizon rule, balanced profile, 20 S&P 500 stocks, Dec 1990 – Dec 2022, 1
 | | CAGR | Volatility | Sharpe | Max drawdown |
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
-| Lighthouse signals + regime (fully invested when in) | 10.2% | — | 0.45 | −57% |
+| Lighthouse signals + regime (fully invested when in) | 10.3% | — | 0.45 | −57% |
 | **Lighthouse balanced (vol-targeted)** | 6.5% | 12.7% | 0.40 | **−32%** |
-| Lighthouse conservative | 4.6% | 8.8% | 0.33 | −23% |
+| Lighthouse conservative | 4.7% | 8.9% | 0.33 | −23% |
 
-Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 3 of 20. We say the second
+Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 4 of 20. We say the second
 part out loud: single-stock timing does not out-return relentless compounders, it delivers the risk profile you asked
 for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
 
@@ -108,7 +108,7 @@ for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
 lighthouse/            the product (pure Python, pandas/numpy/matplotlib)
   config.py            investor profiles, strategy parameters, verdict bands  <- all the numbers to defend
   data.py              live/offline data loading, cleaning report, fundamentals parsing, caching
-  indicators.py        causal SMA/EMA/WMA/Hull MA/RSI/MACD/low-lag price bands/ATR/OBV/volatility/drawdown
+  indicators.py        causal SMA/EMA/WMA/Hull MA/Holt trend/RSI/MACD/low-lag price bands/ATR/OBV/volatility/drawdown
   technicals.py        technical beacons and score
   fundamentals.py      fundamental beacons, sector norms, point-in-time scores
   regime.py            market weather

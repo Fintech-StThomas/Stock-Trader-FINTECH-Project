@@ -29,8 +29,10 @@ def test_memo_keys_on_content_and_on_parameters_that_matter(prices):
     swapped = prices.copy()
     swapped.iloc[[-1, -2], swapped.columns.get_loc("Close")] = prices["Close"].iloc[[-2, -1]].to_numpy()   # same sums
     assert memo.frame_fingerprint(swapped) != memo.frame_fingerprint(prices)
+    faster = compute_indicators(prices, StrategyParams(band_alpha=0.5))
+    assert not np.allclose(faster["band_mid"].dropna().tail(50), base["band_mid"].dropna().tail(50))
     wider = compute_indicators(prices, StrategyParams(band_window=30))
-    assert not np.allclose(wider["band_mid"].dropna().tail(50), base["band_mid"].dropna().tail(50))
+    assert not np.allclose(wider["band_upper"].dropna().tail(50), base["band_upper"].dropna().tail(50))
     # trading thresholds never change an indicator, so a sensitivity grid reuses one computation
     k1 = memo.params_key(StrategyParams(entry_score=55, exit_score=30, cost_bps=20))
     assert k1 == memo.params_key(StrategyParams())

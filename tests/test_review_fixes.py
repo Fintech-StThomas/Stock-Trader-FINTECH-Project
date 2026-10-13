@@ -85,7 +85,7 @@ def test_dashboard_draws_the_band_centre_and_the_regime_shading():
     from lighthouse import interactive as ix
     r = analyze("AAPL", source="sample", years=6)
     fig = ix.dashboard(r, last_days=252)
-    centre = [t for t in fig.data if t.name and t.name.startswith("Band centre (Hull MA")]
+    centre = [t for t in fig.data if t.name and t.name == "Band centre (trend filter)"]
     assert len(centre) == 1 and not any(t.name and "Bollinger" in t.name for t in fig.data)
     assert np.allclose(np.asarray(centre[0].y, dtype=float), r.indicators["band_mid"].tail(252).values, equal_nan=True)
     rects = [s for s in fig.layout.shapes if s.type == "rect"]
@@ -101,4 +101,4 @@ def test_static_dashboard_draws_the_band_centre():
     fig = plot_dashboard(r, last_days=252)
     labels = [ln.get_label() for ln in fig.axes[0].get_lines()]
     plt.close(fig)
-    assert any(lb.startswith("Band centre (Hull MA") for lb in labels)
+    assert any(lb == "Band centre (trend filter)" for lb in labels)

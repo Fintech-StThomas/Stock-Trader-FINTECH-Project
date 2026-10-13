@@ -49,26 +49,57 @@ All indicators are causal (rolling windows, `ewm(adjust=False)`): the value on d
 | Trend | 0.5·clip((Close/SMA200 − 1)/10%) + 0.5·clip((SMA50/SMA200 − 1)/5%) | Continuous Golden/Death Cross: fewer whipsaws than a binary cross | 35% / 20% |
 | RSI(14) | linear from −1 at 30 to +1 at 70, then fading (+1 → −1 from 70 to 100) | Confirms momentum; extremes signal exhaustion | 15% / 20% |
 | MACD(12/26/9) | histogram / ATR, clipped | Momentum acceleration, scale-free | 10% / 20% |
-| Price bands %B (Hull 20, 2σ) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits around its low-lag centre line; above the band = over-extended | 10% / 15% |
+| Price bands %B (trend filter, 2σ over 20 sessions) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits around its low-lag centre line; above the band = over-extended | 10% / 15% |
 | Volume | 0.5·sign(20-day return)·clip((vol20/vol60 − 1)/0.5, 0, 1) + 0.5·sign(OBV − SMA20(OBV)) | A move on expanding volume is more trustworthy; excluded (grey) when volume is unavailable | 10% / 15% |
 | 52-week high | +1 at the high, 0 at 20% below, −1 at 40% below | Breakout proximity; momentum literature | 20% / 10% |
 
 Technical score = 50 + 50 × weighted mean, with weights re-normalised over available beacons. Long-term weights lean on slow beacons (trend, breakout); short-term on oscillators.
 
 **Price bands: low lag instead of Bollinger's.** Classic Bollinger Bands are a 20-day simple moving average ± 2σ of the
-same closes. A trailing 20-day average lags price by (20 − 1) / 2 = 9.5 sessions (the sample data agree: the middle band
-lines up best with the close from 9 sessions earlier), so the bands trail every move. Lighthouse uses a 20-day Hull moving
-average (Hull 2005: WMA(2·WMA(10) − WMA(20), 4)) as the centre and ± 2 standard deviations of the closes around it over
-the same 20 sessions. On the 20 sample stocks the centre's best-matching lag is 3.0 sessions instead of 9.2, at about
-twice the roughness; a rolling-regression endpoint lagged 2.1 but was rougher still, and a 10-day SMA lagged 4.2. The
-bands are causal (nothing is shifted forward; the truncation test covers them), and the *price bands* beacon scores %B
-on them exactly as it scored Bollinger's %B.
+same closes. A trailing 20-day average lags price by (20 − 1) / 2 = 9.5 sessions, so the bands trail every move. Lighthouse
+centres its bands on **Holt's linear trend filter** (Holt 1957; double exponential smoothing, which is also the steady
+state of a Kalman filter for a local linear trend). Each session it projects yesterday's level along yesterday's slope,
+then moves the level 40% of the way to today's close and the slope 10% of the way to the level's latest change
+(`band_alpha` 0.4, `band_beta` 0.1). Because it carries the slope forward it follows a straight-line trend with no lag at
+all, where any moving average falls behind. The bands sit ± 2 standard deviations of the closes around that centre over
+the last 20 sessions. They are causal (a recursion over past closes; nothing is shifted forward; the truncation test
+covers them), and the *price bands* beacon scores %B on them exactly as it scored Bollinger's %B.
 
-Switching the beacon from Bollinger's bands to these was tested before it was made: on the 20 sample stocks over 15
-years the long-term rule's average Sharpe went 0.323 → 0.322 and the short-term rule's −0.134 → −0.127 (better on 21 of
-40 stock-horizon pairs), and over the full 1990-2022 cross-ticker test the balanced profile's average Sharpe went
-0.394 → 0.399 (better on 9 stocks, worse on 10). In other words a wash on returns; the gain is a chart and a beacon that
-describe the price as it is now. The classic bands were removed in October 2026.
+How far behind each candidate centre runs, on the 20 sample stocks over their last 15 years
+(`scripts/band_lag_evaluation.py` rebuilds this table):
+
+| Centre | Best-matching lag | Turns after price turns | Half of a jump covered after | Overshoot after a jump | Lag in a steady trend | Roughness |
+|---|---|---|---|---|---|---|
+| SMA 20 (Bollinger) | 9.5 | 5.7 | 9 | 0% | 9.5 | 0.20 |
+| Hull MA 20 (used until October 2026) | 2.6 | 3.2 | 3 | 26% | 0.7 | 0.42 |
+| Hull MA 10 | 1.2 | 1.5 | 1 | 24% | 0.3 | 0.57 |
+| Linear-regression end point, 20 | 2.4 | 3.0 | 2 | 30% | 0.0 | 0.40 |
+| EMA 5 | 1.2 | 1.1 | 1 | 0% | 2.0 | 0.42 |
+| Holt 0.3 / 0.1 | 1.3 | 1.5 | 1 | 12% | 0.0 | 0.43 |
+| **Holt 0.4 / 0.1 (Lighthouse)** | **0.9** | **1.0** | **1** | **9%** | **0.0** | **0.50** |
+| Holt 0.5 / 0.1 | 0.1 | 0.7 | 0 | 6% | 0.0 | 0.57 |
+
+All lags are in sessions. *Best-matching lag*: the shift k for which the centre on day t sits closest to the close of day
+t − k. *Roughness*: the standard deviation of the centre's daily change over the close's (1 = as jumpy as the price).
+The Holt filter at 0.4 / 0.1 is the only candidate that is about one session behind on every measure, with no lag in a
+trend and less overshoot than the Hull MA (which swings 26% past a jump before settling). The cost is a line about 20%
+rougher than the Hull MA's. Going further (0.5) puts the centre almost on the price (half of it is today's close), so
+the bands measure little more than today's move, and the short-horizon backtest got worse (below).
+
+Each centre change was tested on the score before it was made. Hull MA 20 → Holt 0.4 / 0.1, same rules otherwise:
+
+| Test | Hull MA 20 | Holt 0.4 / 0.1 |
+|---|---|---|
+| Cross-ticker test, balanced, 1990-2022 (20 stocks), average Sharpe | 0.399 | 0.401 (7 better, 4 worse, 9 unchanged) |
+| Same, stocks with a higher Sharpe than buy-and-hold | 3 of 20 | 4 of 20 (AAPL) |
+| Long-horizon rule, last 15 years, average Sharpe | 0.322 | 0.322 (1 better, 1 worse) |
+| Short-horizon rule, last 15 years, average Sharpe | −0.127 | −0.137 (9 better, 11 worse) |
+| Holt 0.5 / 0.1 instead (for comparison) | | long 15 y 0.321, short −0.147 |
+
+On returns the change is again a wash; the gain is a chart and a beacon that describe where the price is today. The MSFT
+example stays a Buy (71.1 → 71.3) with the same trades. The step before (October 2026): Bollinger's SMA centre → Hull MA
+20 moved the cross-ticker Sharpe 0.394 → 0.399 and the 15-year rules 0.323 → 0.322 (long) and −0.134 → −0.127 (short).
+The classic bands were removed in October 2026; `indicators.hull_ma` stays for comparisons.
 
 ## 4. Market weather (regime)
 
@@ -230,6 +261,12 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | The CLI `monitor` dropped today's unfinished bar | A position entered today could not be replayed, and a stop hit today was not reported | `analyze(keep_partial=True)` keeps today's bar (stock and benchmark) for the replay only |
 | A benchmark with no rows in the stock's window crashed the analysis | E.g. live prices with the S&P 500 falling back to the 2022 sample file | `load_prices` raises when the window is empty and `align` when the frames do not overlap; the regime rules are then switched off with a warning |
 | A quote was requested even after the prices had fallen back to old data | An extra network timeout per ticker, and today's price paired with stale signals | A separate quote is fetched only for current prices |
+
+### Third October 2026 session
+
+| Issue | Effect | Fix |
+|---|---|---|
+| The Hull-MA band centre still trailed the price by ~3 sessions and swung 26% past a jump | The chart's centre line and the *price bands* beacon described the price of three days earlier | Holt's trend filter (0.4 / 0.1): ~1 session behind, no lag in a trend, 9% overshoot (§3); `scripts/band_lag_evaluation.py` measures every candidate |
 
 ## 12. Speed
 

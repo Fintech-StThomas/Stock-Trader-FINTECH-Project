@@ -94,7 +94,7 @@ beacon_frame_df(f_beacons)""")
 md("""## 4 · Technical analysis
 
 Six beacons, all computed with **causal** indicators (no future data leaks into any value): trend (50/200-day SMA, Golden/Death
-Cross), RSI(14), MACD(12/26/9), position in the low-lag price bands (%B around a 20-day Hull moving average), volume confirmation (OBV + 20/60-day volume ratio) and distance from the 52-week high.
+Cross), RSI(14), MACD(12/26/9), position in the low-lag price bands (%B around Holt's trend filter, about 1 session behind the price), volume confirmation (OBV + 20/60-day volume ratio) and distance from the 52-week high.
 The weights depend on the horizon: long-term investors lean on trend and breakouts; short-term on momentum oscillators.""")
 code("""from lighthouse.technicals import compute_indicators, technical_score, latest_beacons
 ind = compute_indicators(prices, params)
