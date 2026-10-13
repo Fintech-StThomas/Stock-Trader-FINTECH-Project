@@ -259,6 +259,12 @@ with st.sidebar:
     if cash + holdings <= 0:
         st.error("Enter the cash you can invest (or the value of what you hold) to size positions.")
     with st.expander("Trade management (entries & exits)"):
+        long_exit = st.radio("Long-term buys: how to take profit", ["Trend exits (tested best)", "Profit targets (R)"],
+                             key="long_exit", help="Trend exits: no fixed target; at each month's last close sell if the close "
+                             "is below the 200-day SMA − 8% (a level that rises with the trend) or the technical score has "
+                             "faded to the exit score. These are the long-horizon backtest's own exits and, on the sample "
+                             "stocks, earned several times more per trade than profit targets 30-80% away. Short-term trades "
+                             "and shorts always use the profit targets below.")
         tp1 = st.number_input("Target 1 (× the risk, R)", 0.5, 10.0, 2.0, 0.5, key="tp1",
                               help="Take-profit level 1 = entry ± this many times the distance from entry to the stop.")
         tp2 = st.number_input("Target 2 (R)", 0.5, 20.0, 3.0, 0.5, key="tp2")
@@ -266,7 +272,8 @@ with st.sidebar:
                             help="The rest runs to target 2 with the stop moved to breakeven and then trailed.")
         tstop = st.number_input("Time stop (trading sessions, 0 = horizon default)", 0, 1000, 0, 5, key="tstop",
                                 help=f"Close a trade that has reached neither stop nor target 1 after this many sessions. "
-                                     f"Default: {TIME_STOP_DEFAULT['short']} (short horizon) / {TIME_STOP_DEFAULT['long']} (long).")
+                                     f"Default: {TIME_STOP_DEFAULT['short']} (short horizon) / {TIME_STOP_DEFAULT['long']} (long "
+                                     "with profit targets); none with trend exits.")
         max_ideas = st.number_input("Max trade ideas funded at once", 1, 20, 5, key="max_ideas")
         heat = st.slider("Max total risk across ideas (% of account)", 1.0, 20.0, 6.0, 0.5, key="heat",
                          help="'Portfolio heat': the sum of every idea's planned loss stays below this.")
@@ -301,7 +308,8 @@ run = run or st.session_state.pop("auto_run", False)
 NONCE = st.session_state.get("live_nonce", 0)
 try:
     SETTINGS = TradeSettings(reward_multiples=(float(min(tp1, tp2)), float(max(tp1, tp2))), partial_exit=partial / 100.0,
-                             time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat))
+                             time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat),
+                             long_exit="targets" if str(long_exit).startswith("Profit") else "trend")
 except ValueError as exc:
     st.sidebar.error(f"Trade management: {exc}")
     SETTINGS = TradeSettings()
@@ -353,6 +361,7 @@ def ticket_headline(pl) -> str:
 
 
 EXIT_ICON = {"loss": "🛑", "profit": "🎯", "time": "⏱️", "evidence": "🧭"}
+TREND_ICON = {"loss": "🛑", "profit": "📈", "time": "⏱️", "evidence": "🧭"}
 
 
 def render_exits(pl, key: str) -> None:
@@ -361,16 +370,24 @@ def render_exits(pl, key: str) -> None:
     st.markdown("**When to get out** · place the stop when you enter, so the exit is decided before emotions are")
 
     rows = []
+    icons = TREND_ICON if pl.is_trend_plan else EXIT_ICON
     for x in pl.exit_plan():
         result = ""
         if x.r is not None:
             result = (f"{signed_usd(x.pnl)} ({x.r:+.2f}R)" if x.pnl is not None else f"{x.r:+.2f}R")
-        rows.append({"": EXIT_ICON.get(x.kind, ""), "Exit": x.name,
+        elif pl.is_trend_plan and x.kind != "loss":
+            result = "depends on when (see history)"
+        rows.append({"": icons.get(x.kind, ""), "Exit": x.name,
                      "Trigger": "" if x.price is None else f"${x.price:,.2f} ({x.move_pct:+.1f}%)",
                      "If the trade ends here": result, "What to do": x.action, "On this stock's history": x.history})
     st.table(pd.DataFrame(rows).set_index(""))
-    st.caption("Results are for the whole position (shares already sold included) before costs; R = multiples of the planned "
-               "loss. A gap through a stop fills at the open, which can be worse.")
+    if pl.is_trend_plan:
+        st.caption("A trend plan has no fixed profit target: the review-day exits end the trade, and their result depends on "
+                   "how far the trend ran (the history column shows the average). R = multiples of the planned loss. A gap "
+                   "through a stop fills at the open, which can be worse.")
+    else:
+        st.caption("Results are for the whole position (shares already sold included) before costs; R = multiples of the "
+                   "planned loss. A gap through a stop fills at the open, which can be worse.")
 
 
 def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) -> None:
@@ -390,18 +407,36 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
     kpi(c1, "Entry (limit)", money(pl.price, 2), f"do not chase: {lim} {money(pl.entry_limit, 2)}")
     kpi(c2, "Stop-loss", money(pl.stop, 2) if pl.stop else "n/a",
         f"{pl.stop_pct * 100:.1f}% {'below' if pl.side == 'long' else 'above'} · {pl.stop_label}" if pl.stop_pct else "")
-    kpi(c3, "Take profit 1", money(t1.price, 2) if t1 else "n/a", f"{t1.r_multiple:g}R · {t1.move_pct:+.1f}% · {t1.shares} sh" if t1 else "")
-    kpi(c4, "Take profit 2", money(t2.price, 2) if t2 else "n/a", f"{t2.r_multiple:g}R · {t2.move_pct:+.1f}% · {t2.shares} sh" if t2 else "")
+    if pl.is_trend_plan:
+        lvl = pl.trend_exit_level
+        kpi(c3, f"Trend exit ({pl.review}-end close)", money(lvl, 2) if lvl is not None else "n/a",
+            f"below the {pl.trend_exit_label}; rises with the trend" + (f" ({pl.trend_exit_pace_pct:+.1f}% last month)"
+                                                                         if pl.trend_exit_pace_pct is not None else ""))
+        kpi(c4, f"Signal exit ({pl.review}-end)", f"score ≤ {pl.signal_exit_score:g}",
+            f"technical score today {pl.technical_score:.0f}")
+    else:
+        kpi(c3, "Take profit 1", money(t1.price, 2) if t1 else "n/a", f"{t1.r_multiple:g}R · {t1.move_pct:+.1f}% · {t1.shares} sh" if t1 else "")
+        kpi(c4, "Take profit 2", money(t2.price, 2) if t2 else "n/a", f"{t2.r_multiple:g}R · {t2.move_pct:+.1f}% · {t2.shares} sh" if t2 else "")
     c5, c6, c7, c8 = st.columns(4)
     kpi(c5, "Cash used" if pl.side == "long" else "Collateral (1:1)", money(pl.notional),
         f"{pl.shares} shares · {money(pl.cash_left)} of {money(pl.cash_available)} cash left")
     kpi(c6, "Planned loss at the stop", money(pl.dollars_at_risk), f"{pl.risk_pct_of_account:.2f}% of the account (gaps can be worse)")
-    kpi(c7, "Profit if both targets fill", money(pl.profit_if_all_targets),
-        f"reward : risk {pl.reward_risk:g} : 1 on target 1" if t1 else "")
     st_ = pl.stats
+    if pl.is_trend_plan:
+        wins = st_.trades.loc[st_.trades["r"] > 0] if st_ is not None else None
+        if wins is not None and len(wins):
+            kpi(c7, "Winning trades on this stock's history", f"{wins['return_pct'].median():+.0f}% median",
+                f"{len(wins)} winners · median {wins['r'].median():+.1f}R, held {wins['days'].median():.0f} sessions")
+        else:
+            kpi(c7, "Winning trades on this stock's history", "n/a", "no finished winning setups")
+    else:
+        kpi(c7, "Profit if both targets fill", money(pl.profit_if_all_targets),
+            f"reward : risk {pl.reward_risk:g} : 1 on target 1" if t1 else "")
     if st_ is not None:
+        how = (f"ended by a review exit {st_.trend_exited * 100:.0f}%" if st_.exit_style == "trend"
+               else f"hit target 1 {st_.hit_target1 * 100:.0f}%")
         kpi(c8, "These rules on this stock's history", f"{st_.avg_r:+.2f}R / trade",
-            f"{st_.n_trades} trades in {st_.years:.0f}y · win {st_.win_rate * 100:.0f}% · hit target 1 {st_.hit_target1 * 100:.0f}% · "
+            f"{st_.n_trades} trades in {st_.years:.0f}y · win {st_.win_rate * 100:.0f}% · {how} · "
             f"profit factor {st_.profit_factor:.2f}", STATUS_GOOD if st_.avg_r > 0 else STATUS_BAD)
     else:
         kpi(c8, "These rules on this stock's history", "n/a", "no comparable historical setups")
@@ -411,13 +446,13 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
         render_exits(pl, key)
     st.markdown("**The plan, step by step**\n\n" + "\n".join(f"{i}. {esc(x)}" for i, x in enumerate(pl.management_steps(), 1)))
     if chart and not compact:
-        levels = (pl.side, pl.price, pl.stop, tuple(t.price for t in pl.targets), pl.as_of)
+        levels = (pl.side, pl.price, pl.stop, tuple(t.price for t in pl.targets), pl.trend_exit_level, pl.as_of)
         plotly(figure(res, ("trade", levels), lambda: ix.trade_chart(res, pl)), key=f"ticket_chart_{key}_{pl.side}_{pl.ticker}")
     with st.expander("Why this status, how it was sized, and the caveats"):
         st.markdown("**Setup**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.reasons))
         if pl.sizing_notes:
             st.markdown("**Sizing**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.sizing_notes))
-        st.markdown(f"**Typical move**: one standard deviation over {pl.time_stop_days} sessions ≈ ±{pl.typical_move_pct:.1f}% "
+        st.markdown(f"**Typical move**: one standard deviation over {pl.typical_days} sessions ≈ ±{pl.typical_move_pct:.1f}% "
                     f"(from {res.params.sizing_vol_window}-day realised volatility). ATR(14) today {esc(money(pl.atr, 2))}.")
         if pl.margin:
             st.markdown(f"**Margin (short)**: Regulation T initial margin ≈ {esc(money(pl.margin['reg_t_initial']))} (50% of the short "
@@ -426,10 +461,11 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
         if pl.warnings:
             st.markdown("**Caveats**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.warnings))
         if st_ is not None:
+            rules = ("stop order, then the review-day trend and signal exits at the next open" if pl.is_trend_plan else
+                     "stop, partial at target 1, breakeven, trailing stop, target 2, time stop")
             st.markdown("**Historical setup test**: every past day this stock met the same setup rule, the trade was entered the next "
-                        "session and managed with exactly the plan above (stop, partial at target 1, breakeven, trailing stop, target 2, "
-                        "time stop), one trade at a time, after costs. If the stop and a target fall in the same session the stop is "
-                        "assumed to come first.")
+                        f"session and managed with exactly the plan above ({rules}), one trade at a time, after costs. If the stop "
+                        "and a target fall in the same session the stop is assumed to come first.")
             tr = st_.trades.copy()
             st.dataframe(tr[["signal_date", "entry_date", "entry", "stop", "exit_date", "outcome", "r", "return_pct", "days"]],
                          hide_index=True, width="stretch", column_config={
@@ -715,6 +751,7 @@ def render_side(side: str, desk: dict) -> None:
             "risk_usd": st.column_config.NumberColumn("Risk $", format="$%.0f"), "risk_pct": st.column_config.NumberColumn("Risk % acct", format="%.2f%%"),
             "target1": st.column_config.NumberColumn("Target 1", format="$%.2f"), "target2": st.column_config.NumberColumn("Target 2", format="$%.2f"),
             "profit_t1": st.column_config.NumberColumn("Profit @T1", format="$%.0f"), "profit_all": st.column_config.NumberColumn("Profit @T1+T2", format="$%.0f"),
+            "exit": "Exits", "trend_exit": st.column_config.NumberColumn("Trend exit", format="$%.2f"),
             "hist_win_rate": st.column_config.NumberColumn("Hist. win %", format="%.0f%%"), "hist_avg_r": st.column_config.NumberColumn("Hist. R/trade", format="%+.2f")})
         st.download_button(f"Download {side} orders (CSV)", table.to_csv(index=False), file_name=f"lighthouse_{side}_orders.csv",
                            key=f"dl_orders_{side}")
@@ -727,8 +764,9 @@ def render_side(side: str, desk: dict) -> None:
 with tab_desk:
     st.markdown("### Trade desk: what to buy (or sell short) right now with your cash")
     st.caption(f"Sized for {esc(money(cash))} of cash in a {esc(money(cash + holdings))} account, {horizon}-term, {risk} risk, max loss "
-               f"{max_loss:g}% of the account per position. Each idea gets an entry, a stop-loss, two take-profit levels, a trailing "
-               "and a time stop, and the record of those exact rules on the stock's own history. Change the targets and the "
+               f"{max_loss:g}% of the account per position. Each idea gets an entry, a stop-loss, its exits (long-term buys: "
+               "trend and signal exits reviewed each month; short-term trades and shorts: two take-profit levels, a trailing "
+               "and a time stop), and the record of those exact rules on the stock's own history. Change the exits and the "
                "risk caps under *Trade management* in the sidebar.")
     d_tab_long, d_tab_short = st.tabs(["📈 Long (buy)", "📉 Short (sell short)"])
     with d_tab_long:

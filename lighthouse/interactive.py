@@ -421,7 +421,7 @@ def all_figures(result) -> Dict[str, go.Figure]:
 # Trade desk
 # --------------------------------------------------------------------------- #
 def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Figure:
-    """Recent price with the ticket's levels: entry, stop, targets (and the price bands for context)."""
+    """Recent price with the ticket's levels: entry, stop, targets or the trend exit's path (and the price bands)."""
     ind = result.indicators.tail(last_days)
     fig = go.Figure()
     _add_bands(fig, ind, _band_spec(result.params), 0.25)
@@ -432,6 +432,12 @@ def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Fig
         levels.append(("stop", plan.stop, STATUS["red"], "dash"))
     for k, t in enumerate(plan.targets):
         levels.append((f"target {k + 1} ({t.r_multiple:g}R)", t.price, STATUS["green"], "dot"))
+    if plan.is_trend_plan and plan.trend_exit_level is not None:
+        # the trend exit is a moving level: draw its path, so the investor sees it climb behind the price
+        trail = ind["sma_slow"] * (1.0 - result.params.exit_below_sma)
+        fig.add_trace(go.Scatter(x=ind.index, y=trail, name=f"trend exit ({plan.trend_exit_label})",
+                                 line=dict(color=STATUS["green"], width=1.4, dash="dot"),
+                                 hovertemplate="trend exit $%{y:,.2f}<extra></extra>"))
     # one layout update (fig.add_hline re-validates the whole layout on every call)
     fig.update_layout(
         shapes=[dict(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=y, y1=y, line=dict(color=color, width=1.4, dash=dash))

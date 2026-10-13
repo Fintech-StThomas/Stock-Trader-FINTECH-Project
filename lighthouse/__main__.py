@@ -74,7 +74,10 @@ def main(argv=None) -> int:
         sp.add_argument("--side", choices=["long", "short"], default="long")
         sp.add_argument("--targets", type=float, nargs=2, default=[2.0, 3.0], metavar=("R1", "R2"), help="take-profit levels in R")
         sp.add_argument("--partial", type=float, default=0.5, help="share of the position sold at target 1")
-        sp.add_argument("--time-stop", type=int, default=None, help="sessions (default: 40 short horizon / 252 long)")
+        sp.add_argument("--time-stop", type=int, default=None,
+                        help="sessions (default: 40 short horizon / 252 long with --long-exit targets; none for trend exits)")
+        sp.add_argument("--long-exit", choices=["trend", "targets"], default="trend",
+                        help="long-horizon buys: monthly trend and signal exits (default, tested best) or R-multiple targets")
 
     a4 = sub.add_parser("trade", help="trade tickets for your cash across one or more tickers"); common(a4); trade_opts(a4)
     universe_opt(a4)
@@ -139,6 +142,7 @@ def main(argv=None) -> int:
     if a.cmd in {"trade", "monitor"}:
         from .tradeplan import TradeSettings, allocate_ideas, monitor_position, signed_usd
         s = TradeSettings(reward_multiples=tuple(sorted(a.targets)), partial_exit=a.partial, time_stop_days=a.time_stop,
+                          long_exit=a.long_exit,
                           **({"max_ideas": a.max_ideas, "max_total_risk_pct": a.max_total_risk} if a.cmd == "trade" else {}))
         prof = _profile(a)
         if a.cmd == "monitor":
@@ -176,7 +180,8 @@ def main(argv=None) -> int:
         if not funded:
             print(f"no actionable {a.side} setup in {', '.join(a.tickers)}")
         if len(table):
-            print("\n" + table[["ticker", "status", "score", "shares", "cost", "stop", "target1", "target2", "risk_usd"]].to_string(index=False))
+            print("\n" + table[["ticker", "status", "score", "shares", "cost", "stop", "target1", "target2", "trend_exit",
+                                 "risk_usd"]].to_string(index=False))
         return 0
 
     if a.cmd == "portfolio":

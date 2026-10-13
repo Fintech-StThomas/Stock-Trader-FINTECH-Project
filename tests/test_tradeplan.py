@@ -7,7 +7,7 @@ import pytest
 from lighthouse import analyze, InvestorProfile
 from lighthouse.data import sample_pack_tickers
 from lighthouse.tradeplan import (TradeSettings, build_trade_plan, setup_statistics, allocate_ideas, monitor_position,
-                                  _simulate, _split_shares, SHORT_MAX_SCORE)
+                                  review_days, _simulate, _simulate_trend, _split_shares, SHORT_MAX_SCORE)
 
 
 @pytest.fixture(scope="module")
@@ -244,3 +244,79 @@ def test_screen_accepts_a_generator():
     from lighthouse.screener import screen
     df = screen((t for t in ["MSFT", "KO"]), source="sample", years=5, progress=False)
     assert list(df["ticker"]) and set(df["ticker"]) == {"MSFT", "KO"}
+
+
+# --------------------------------------------------------------------------- long-horizon trend plan
+@pytest.fixture(scope="module")
+def msft_long_horizon():
+    prof = InvestorProfile.from_cash(25_000, horizon="long", risk="balanced")
+    return analyze("MSFT", prof, source="sample", years=15)
+
+
+def test_long_horizon_buy_follows_the_trend_plan(msft_long_horizon):
+    r = msft_long_horizon
+    pl = build_trade_plan(r, "long")
+    assert pl.is_trend_plan and pl.status == "actionable" and pl.shares > 0
+    assert pl.targets == [] and pl.time_stop_days is None
+    sma = float(r.indicators["sma_slow"].iloc[-1])
+    assert pl.trend_exit_level == pytest.approx(sma * (1 - r.params.exit_below_sma))
+    assert pl.signal_exit_score == r.params.exit_score and pl.review == "month"
+    names = [x.name for x in pl.exit_plan()]
+    assert names == ["Stop-loss (stop order)", "Trend exit (review)", "Signal exit (review)"]
+    steps = " ".join(pl.management_steps())
+    assert "No fixed profit target" in steps and "month's last close" in steps and "stop order" in steps
+    st = pl.stats
+    assert st.exit_style == "trend" and st.hit_target1 == 0.0
+    assert st.stopped_out + st.timed_out + st.trend_exited == pytest.approx(1.0)
+    assert set(st.trades["outcome"]) <= {"stop", "trend exit", "signal exit"}
+    assert all("average" in x.history for x in pl.exit_plan()[1:] if not x.history.startswith("never"))
+    # the R-target plan stays available, and shorts and the short horizon never use the trend plan
+    old = build_trade_plan(r, "long", TradeSettings(long_exit="targets"), with_stats=False)
+    assert not old.is_trend_plan and len(old.targets) == 2 and old.time_stop_days == 252
+    assert not build_trade_plan(r, "short", with_stats=False).is_trend_plan
+    with pytest.raises(ValueError):
+        TradeSettings(long_exit="moon")
+
+
+def test_trend_simulator_stop_review_exits_and_pending():
+    o, h, l, c, _ = _bars([[100, 101, 99, 100]] * 6)
+    level, tech = np.full(6, 90.0), np.full(6, 70.0)
+    review = np.array([False, False, True, False, False, True])
+    sim = _simulate_trend(o, h, l, c, 0, 95.0, level, tech, review, 35.0, None, True, True)
+    assert sim["remaining"] == 1.0 and sim["pending"] is None and sim["exits"] == []        # on plan, still open
+    lvl = level.copy(); lvl[2] = 100.5                       # review-day close (100) below the trend level
+    sim = _simulate_trend(o, h, l, c, 0, 95.0, lvl, tech, review, 35.0, None, True, True)
+    assert sim["exits"] == [(1.0, 100.0, "trend exit", 3)]   # sold at the next open
+    lvl[2] = 90.0; lvl[3] = 100.5                            # not a review day: ignored
+    assert _simulate_trend(o, h, l, c, 0, 95.0, lvl, tech, review, 35.0, None, True, True)["exits"] == []
+    t = tech.copy(); t[5] = 30.0                             # signal exit decided on the last bar: pending
+    sim = _simulate_trend(o, h, l, c, 0, 95.0, level, t, review, 35.0, None, True, True)
+    assert sim["exits"] == [] and sim["pending"] == "signal exit"
+    o2, h2, l2, c2, _ = _bars([[100, 101, 99, 100], [100, 101, 94, 96], [96, 97, 95, 96]])
+    sim = _simulate_trend(o2, h2, l2, c2, 0, 95.0, np.full(3, 90.0), np.full(3, 70.0), np.ones(3, bool), 35.0, None, True, True)
+    assert sim["exits"] == [(1.0, 95.0, "stop", 1)]          # the stop order fills intraday
+    sim = _simulate_trend(o, h, l, c, 0, 95.0, level, tech, review, 35.0, 4, True, True)
+    assert sim["exits"] == [(1.0, 100.0, "time stop", 3)]
+
+
+def test_review_days_are_period_ends():
+    idx = pd.bdate_range("2024-01-24", "2024-03-05")
+    m = review_days(idx, "monthly")
+    assert [d.strftime("%Y-%m-%d") for d in idx[m]] == ["2024-01-31", "2024-02-29"]   # 2024-03-05 is not a month end
+    assert review_days(pd.bdate_range("2024-01-24", "2024-01-31"), "monthly")[-1]       # ... but 2024-01-31 is
+    assert review_days(idx, "daily").all()
+    assert idx[review_days(idx, "weekly")][0].strftime("%A") == "Friday"
+
+
+def test_position_replay_reproduces_a_historical_trend_exit(msft_long_horizon):
+    r = msft_long_horizon
+    tr = setup_statistics(r, "long").trades
+    t = tr[tr["outcome"] == "trend exit"].iloc[0]
+    ms = monitor_position(r, "long", float(t.entry), 10, t.entry_date)
+    assert ms.status == "TREND EXIT" and ms.shares_open == 0 and len(ms.exits) == 1
+    day, n, px, why = ms.exits[0]
+    assert why == "trend exit" and day == str(t.exit_date.date()) and n == 10
+    assert ms.r_multiple == pytest.approx(t.r + (r.params.cost_bps + r.params.slippage_bps) / 1e4 * (t.entry + px)
+                                          / (t.entry - t.stop), abs=1e-6)          # the setup test's R before costs
+    fresh = monitor_position(r, "long", 80.0, 10, "2017-10-02")
+    assert fresh.status in {"OK", "NEAR STOP"} and "200-day SMA" in fresh.action and fresh.targets == []

@@ -85,7 +85,9 @@ def test_app_trade_desk_offline():
     assert "The plan" in text and "stop order" in text
     assert "When to get out" in text                          # every ticket says where to take the loss and the profit
     exits = [t.value for t in at.table if "Exit" in getattr(t.value, "columns", [])]
-    assert exits and {"Stop-loss (before target 1)", "Target 2: the rest"} <= set(exits[0]["Exit"])
+    trend = {"Stop-loss (stop order)", "Trend exit (review)", "Signal exit (review)"}
+    assert exits and trend <= set(exits[0]["Exit"])            # long-term buys: the backtest's review-day exits
+    assert any({"Stop-loss (before target 1)", "Target 2: the rest"} <= set(e["Exit"]) for e in exits)   # shorts: targets
     assert not any("Position monitor" in str(t.label) for t in at.tabs)   # removed: the tickets carry the exits
 
 
@@ -105,11 +107,14 @@ def test_app_portfolio_builder_offline():
 
 
 def test_trade_and_portfolio_figures_build():
-    from lighthouse.tradeplan import build_trade_plan
+    from lighthouse.tradeplan import TradeSettings, build_trade_plan
     from lighthouse import portfolio as pf
     r = analyze("MSFT", InvestorProfile.from_cash(5_000, 20_000), source="sample", years=6, run_backtest_=False)
     fig = ix.trade_chart(r, build_trade_plan(r, "long", with_stats=False))
-    assert any(t.name == "Close" for t in fig.data) and len(fig.layout.shapes) >= 3   # entry, stop, targets
+    assert any(t.name == "Close" for t in fig.data) and len(fig.layout.shapes) == 2   # entry, stop ...
+    assert any(t.name and t.name.startswith("trend exit") for t in fig.data)          # ... and the trend exit's path
+    fig = ix.trade_chart(r, build_trade_plan(r, "long", TradeSettings(long_exit="targets"), with_stats=False))
+    assert len(fig.layout.shapes) >= 3                                                # entry, stop, targets
     fig.to_json()
     port = pf.build_portfolio(["AAPL", "JNJ", "XOM", "KO", "PG"], "hrp", capital=10_000, source="sample", years=6)
     for f in (ix.allocation_chart(port.table()), ix.correlation_heatmap(port.risk["correlation"]), ix.equity_curves(port.comparison_runs)):
