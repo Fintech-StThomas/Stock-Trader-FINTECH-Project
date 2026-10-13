@@ -12,7 +12,9 @@ This document exists so that the team can defend every number in the product. It
 | Fundamentals | Yahoo snapshot (trailing/forward P/E, PEG, P/B, EV/EBITDA, ROE, margins, D/E, current ratio, FCF, growth) plus annual and quarterly statements | One valuation ratio and one quality/growth measure are required; we use several so a missing field never breaks the score |
 | Cleaning | Sort, de-duplicate dates, drop rows without a positive close, fill missing O/H/L from the close, enforce High ≥ max(O,C) and Low ≤ min(O,C), disable volume if >50% missing, flag >50% one-day moves | Each step is counted and shown to the user (`CleaningReport`) |
 | Offline pack | Real data shipped in open-source packages (Microsoft OHLCV 1986-2017 from `pmdarima`, 19 S&P stocks and the index 1990-2022 from `skfolio`) | The notebook and tests must run end-to-end without internet; provenance in `scripts/build_sample_pack.py` |
-| Caching | Last live download cached in `data/cache/` for 20 hours | Yahoo rate-limits; the product stays usable |
+| Caching | Last live download cached in `data/cache/` for at most 20 hours, and only until the next session close (16:00 New York) after the download | Yahoo rate-limits; the product stays usable; a finished session is never missing from the cache |
+| Unfinished sessions | During market hours today's daily bar is left out of every indicator, and never cached; a note says so | Its close, range and volume are not final (a partial day's volume reads as a collapse), and the rules were tested on finished days |
+| Order price | "Buy now" tickets and the position plan are priced from the feed's latest quote with its timestamp and market state (Yahoo chart metadata: `regularMarketPrice`, `regularMarketTime`, trading periods); the last close when there is none, when it is older than the data, or when it is more than 25% from the close (a split or a bad tick) | The decision is made on finished sessions, the order on the price you can trade at. Yahoo quotes can lag by up to 15 minutes on some exchanges |
 
 ## 2. Fundamental beacons
 
@@ -59,6 +61,15 @@ lags price by (20 − 1) / 2 = 9.5 sessions, and after a sharp move the band wid
 20-day window. On the sample data the middle band lines up best with the close from 9–10 sessions earlier, exactly as
 theory says. Centring the bands on the price would use the next ~10 days of prices, which is look-ahead, so they are not
 shifted.
+
+**Low-lag bands for the charts.** The app draws, by default, bands that follow the price: a 20-day Hull moving average
+(Hull 2005: WMA(2·WMA(10) − WMA(20), 4)) ± 2 standard deviations of the closes around it over the same 20 sessions. They are
+causal (no shift forward; the truncation test covers them). On the 20 sample stocks the best-matching lag of the centre
+line fell from 9.2 sessions (SMA 20) to 3.0, at about twice the roughness; a rolling-regression endpoint lagged 2.1 but
+was rougher still, and a 10-day SMA lagged 4.2. Scoring the Bollinger beacon on the low-lag bands instead was tested on the
+same 20 stocks over 15 years: long-term rule Sharpe 0.323 → 0.322, short-term −0.134 → −0.127, better on 21 of 40
+stock-horizon pairs. That is no evidence either way, so the score keeps the standard definition and the classic bands are
+one click away on the chart. The static charts (CLI, report, notebook) still draw the classic bands.
 
 ## 4. Market weather (regime)
 
@@ -132,9 +143,20 @@ Gaps fill at the open; when a stop and a target fall in the same session the sto
 money on that stock is flagged in red. Shorts are simulated on the dividend-adjusted series, so the dividends a short seller
 owes are reflected; borrow fees are not.
 
-**Position monitor.** An open position is replayed from the session after its entry with the same rules. The monitor reports a
-stop or target hit (with the date), how far price is from the stop (in % and ATR; "near stop" within 0.5 ATR), the current
-breakeven or trailing stop, a due time stop, and whether the latest verdict has turned against the trade.
+**When to get out.** Every ticket lists its exits with a trigger, the result for the *whole* position if the trade ends
+that way, and how often (and how fast) the setup test's trades ended that way on that stock: the stop (−1R); target 1 (the
+partial sold there, which is also the result if the rest is then stopped at breakeven); the trailing stop (between target 1
+and target 2); target 2 (the best planned outcome); the time stop (between the stop and target 1); and a verdict turning
+against the trade at the weekly (short horizon) or monthly (long horizon) review. The exits are decided, and the stop
+order placed, when the trade is entered.
+
+**Position replay (CLI `monitor`).** An open position is replayed from the session after its entry with the same rules,
+assuming the plan was followed: the shares sold at target 1 are the ticket's split (half by default, all of a single
+share), every later exit closes what is left. P&L is realised on those fills (the fill price, so a gap through a target
+or a stop counts at the open) and unrealised only on the shares still held, at the last close; R is that total over the
+initial risk of the whole position. It also reports how far price is from the current (breakeven or trailing) stop, a
+due time stop and whether the verdict has turned against the trade. The app has no position-entry screen: the tickets
+carry the exits instead.
 
 **Short-sale facts shown on short tickets.** Regulation T initial margin is 150% of the short value (the sale proceeds plus a
 50% deposit). FINRA Rule 4210 maintenance for a short stock at $5 or more is the greater of $5 per share or 30% of market
@@ -159,7 +181,11 @@ account or an IRA), borrowable shares, and the payment of dividends in lieu.
 **Goals.** *Capital preservation* picks the 10 calmest stocks and uses minimum variance with a 12% volatility target. *Balanced*
 picks the 10 best technical scores (≥ 45) and uses risk parity. *Growth* picks the 8 strongest 12-1 month momentum names in an
 up-trend and uses maximum Sharpe. *Maximum diversification* picks 15 names (technical score ≥ 45) and uses HRP. At most 3 stocks
-per sector and sector weight caps apply. The walk-forward test **re-selects** the stocks every rebalance with only the data
+per sector and sector weight caps apply. A ticker outside the curated sector list gets the sector its fundamentals
+snapshot reports (Yahoo's `info["sector"]`, cached); one with no sector at all (ETFs, unknown symbols) is labelled
+"Unknown" and is exempt from both the 3-per-sector limit and the sector weight caps, because "Unknown" is not a sector.
+Before this rule, every unlabelled ticker shared one "Unknown" sector, so a custom universe produced at most 3 picks.
+All 122 curated labels were checked against Yahoo's live `info["sector"]` in October 2026 and match. The walk-forward test **re-selects** the stocks every rebalance with only the data
 available then, so it does not benefit from knowing today's winners. That matters: the back-cast of today's picks over the
 last year is inflated by how they were chosen, so the app shows it for risk only and uses the walk-forward test for performance.
 
@@ -187,6 +213,16 @@ the most estimation-sensitive.
 
 The changes do not alter the strategy backtest itself. Regenerating `reports/examples/MSFT` reproduced every return,
 drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor columns changed.
+
+### Second October 2026 session
+
+| Issue | Effect | Fix |
+|---|---|---|
+| Tickers outside the curated sector list all became "Unknown" | Goal portfolios on custom universes stopped at 3 stocks; sector caps were infeasible or forced concentration | Sector from the fundamentals snapshot; "Unknown" exempt from per-sector limits |
+| Position replay valued every share at the last price | After target 1 (half sold) or a stop, P&L and R ignored the fills already taken (one test case: $299 reported, $231 realised) | Realised P&L on the exits, unrealised on the open shares |
+| A bar for a session still trading was used as a finished day | Signals, especially volume, moved during the day; a partial bar could sit in the cache for 20 hours | Unfinished bar left out and never cached; orders priced from a timestamped quote |
+| A cache written before a session closed was reused after it | A finished session could be missing for most of a day | The cache expires at the first session close after the download |
+| The app's "Position monitor" asked the investor to type in positions | Not what the tickets are for: the sell decision belongs to the plan | Removed; every ticket shows *When to get out* |
 
 ## 12. Q&A preparation
 

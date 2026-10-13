@@ -39,7 +39,7 @@ from .config import StrategyParams
 from .data import DataUnavailable, load_prices
 from .indicators import max_drawdown
 from .technicals import compute_indicators, technical_score
-from .universe import sector_of
+from .universe import UNKNOWN_SECTOR, sectors_for
 
 TRADING_DAYS = 252
 METHODS: Dict[str, str] = {
@@ -91,11 +91,18 @@ class PortfolioConstraints:
         if n * self.min_weight > 1 + 1e-9:
             raise ValueError(f"{n} stocks with a {self.min_weight:.0%} minimum exceed 100%: lower the minimum")
         if self.max_sector_weight is not None and sectors is not None:
-            counts = pd.Series(list(sectors)).value_counts()
-            room = sum(min(self.max_sector_weight, c * self.max_weight) for c in counts)
-            if room < 1 - 1e-9:
+            if sector_room(sectors, self.max_sector_weight, self.max_weight) < 1 - 1e-9:
+                counts = pd.Series(list(sectors)).value_counts()
                 raise ValueError(f"the sector cap of {self.max_sector_weight:.0%} cannot be met with these sectors "
                                  f"({', '.join(f'{s}: {c}' for s, c in counts.items())}): add sectors or raise the cap")
+
+
+def sector_room(sectors: Sequence[str], sector_cap: float, max_weight: float) -> float:
+    """The most weight the caps allow in total. A stock with an unknown sector is not counted against any sector cap,
+    so it only adds its own per-stock cap."""
+    known = [s for s in sectors if s != UNKNOWN_SECTOR]
+    counts = pd.Series(known, dtype=object).value_counts()
+    return float(sum(min(sector_cap, c * max_weight) for c in counts) + (len(sectors) - len(known)) * max_weight)
 
 
 @dataclass
@@ -147,7 +154,7 @@ def load_universe(tickers: Iterable[str], years: float = 10, source: str = "auto
             bench = b.reindex(closes.index.union(b.index)).ffill().reindex(closes.index)
         except DataUnavailable:
             bench = None
-    return PriceUniverse(closes=closes, frames=frames, sectors={t: sector_of(t) for t in closes.columns}, benchmark=bench,
+    return PriceUniverse(closes=closes, frames=frames, sectors=sectors_for(closes.columns, source), benchmark=bench,
                          excluded=excluded, sources=sources)
 
 
@@ -208,15 +215,18 @@ def estimate(window: pd.DataFrame) -> Estimates:
 # Optimisers
 # --------------------------------------------------------------------------- #
 def _sector_matrix(sectors: Optional[Sequence[str]], n: int) -> Tuple[List[str], np.ndarray]:
+    """Membership matrix (sector x stock) for the sector caps. Stocks with an unknown sector belong to no row."""
     if sectors is None:
         return [], np.zeros((0, n))
-    names = sorted(set(sectors))
+    names = sorted(set(sectors) - {UNKNOWN_SECTOR})
+    if not names:
+        return [], np.zeros((0, n))
     return names, np.array([[1.0 if s == name else 0.0 for s in sectors] for name in names])
 
 
 def _weight_constraints(n: int, cons: PortfolioConstraints, sectors: Optional[Sequence[str]]) -> list:
     out = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0, "jac": lambda w: np.ones_like(w)}]
-    if cons.max_sector_weight is not None and sectors is not None:
+    if cons.max_sector_weight is not None and sectors is not None and len(_sector_matrix(sectors, n)[0]):
         _, m = _sector_matrix(sectors, n)
         cap = cons.max_sector_weight
         out.append({"type": "ineq", "fun": lambda w, m=m: cap - m @ w, "jac": lambda w, m=m: -m})
@@ -268,7 +278,7 @@ def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tu
          {"type": "ineq", "fun": lambda y: cons.max_weight * np.sum(y) - y, "jac": lambda y: cons.max_weight * np.ones((n, n)) - np.eye(n)}]
     if cons.min_weight > 0:
         c.append({"type": "ineq", "fun": lambda y: y - cons.min_weight * np.sum(y), "jac": lambda y: np.eye(n) - cons.min_weight * np.ones((n, n))})
-    if cons.max_sector_weight is not None and sectors is not None:
+    if cons.max_sector_weight is not None and sectors is not None and len(_sector_matrix(sectors, n)[0]):
         _, m = _sector_matrix(sectors, n)
         c.append({"type": "ineq", "fun": lambda y, m=m: cons.max_sector_weight * np.sum(y) - m @ y,
                   "jac": lambda y, m=m: cons.max_sector_weight * np.ones((len(m), n)) - m})
@@ -652,9 +662,9 @@ def select(panels: Dict[str, pd.DataFrame], t: int, goal: Goal, sectors: Dict[st
         score = score[tech >= goal.min_technical]
     picked, per = [], {}
     for tk in score.sort_values(ascending=False).index:
-        s = sectors.get(tk, "Unknown")
-        if per.get(s, 0) >= max_per_sector:
-            continue
+        s = sectors.get(tk, UNKNOWN_SECTOR)
+        if s != UNKNOWN_SECTOR and per.get(s, 0) >= max_per_sector:
+            continue                     # an unknown sector is not a sector: it never counts against the limit
         picked.append(tk)
         per[s] = per.get(s, 0) + 1
         if len(picked) >= goal.n_stocks:
@@ -667,10 +677,8 @@ def _goal_constraints(goal: Goal, picked: Sequence[str], sectors: Dict[str, str]
     n = max(len(picked), 1)
     max_w = max(cons.max_weight, 1.0 / n)
     sec = cons.max_sector_weight
-    if sec is not None:
-        counts = pd.Series([sectors.get(t, "Unknown") for t in picked]).value_counts()
-        if sum(min(sec, c * max_w) for c in counts) < 1 - 1e-9:
-            sec = None
+    if sec is not None and sector_room([sectors.get(t, UNKNOWN_SECTOR) for t in picked], sec, max_w) < 1 - 1e-9:
+        sec = None
     return PortfolioConstraints(max_weight=max_w, min_weight=0.0, max_sector_weight=sec, target_vol=cons.target_vol)
 
 
@@ -698,7 +706,7 @@ class PortfolioResult:
 
     def table(self) -> pd.DataFrame:
         a = self.allocation.copy()
-        a["sector"] = [self.universe.sectors.get(t, "Unknown") for t in a.index]
+        a["sector"] = [self.universe.sectors.get(t, UNKNOWN_SECTOR) for t in a.index]
         a["risk_share"] = self.risk["risk_contributions"].reindex(a.index)
         a["volatility"] = pd.Series(self.estimates.vol, index=self.weights.index).reindex(a.index)
         return a
@@ -712,6 +720,10 @@ def _finish(universe: PriceUniverse, picked: List[str], method: str, cons: Portf
     est = estimate(window)
     w, more = optimize(window, method, cons, sectors, risk_free_rate, est=est)
     notes = notes + more
+    unknown = [t for t in picked if universe.sectors.get(t, UNKNOWN_SECTOR) == UNKNOWN_SECTOR]
+    if unknown:
+        notes.append(f"No sector found for {', '.join(unknown)} (not in the curated list and none in the fundamentals, "
+                     "e.g. an ETF): not counted against the per-sector limits.")
     invested = vol_target_scale(w.to_numpy(), est.cov, cons.target_vol)
     if invested < 1.0:
         notes.append(f"Volatility target {cons.target_vol:.0%}: the stocks' mix is expected to run at "

@@ -109,8 +109,8 @@ class TradePlan:
     side: str                       # "long" | "short"
     status: str                     # "actionable" | "watch" | "avoid"
     reasons: List[str]
-    as_of: str
-    price: float                    # reference entry price (last close in the data)
+    as_of: str                      # last finished session the signals use
+    price: float                    # reference entry price: the live quote when there is one, else the last close
     entry_limit: float              # do-not-chase price (long: max price to pay; short: min price to sell at)
     stop: Optional[float]
     stop_label: str
@@ -138,6 +138,9 @@ class TradePlan:
     warnings: List[str] = field(default_factory=list)
     margin: Dict[str, float] = field(default_factory=dict)
     stats: Optional[SetupStats] = None
+    priced_from: str = ""           # where `price` comes from (live quote with its time, or the close)
+    horizon: str = "long"           # the rules the trade follows ("short" for every short sale)
+    partial_exit: float = 0.5       # share of the position sold at target 1 (TradeSettings.partial_exit)
 
     @property
     def is_actionable(self) -> bool:
@@ -195,6 +198,107 @@ class TradePlan:
                              f"shares (+${t1.profit:,.0f}).")
         steps.append(f"Time stop: if the trade is still open after {self.time_stop_days} trading sessions, close it.")
         return steps
+
+    def exit_plan(self) -> List["ExitRule"]:
+        """When to get out, for a loss or a profit: every exit the plan has, its trigger price, what it does to the
+        whole position's P&L if the trade ends that way, and how often it happened on this stock's history."""
+        short = self.side == "short"
+        unverb = "Buy back" if short else "Sell"
+        t1 = self.targets[0] if self.targets else None
+        t2 = self.targets[1] if len(self.targets) > 1 else None
+        if self.shares > 0:
+            q1, q2, total = (t1.shares if t1 else 0), (t2.shares if t2 else 0), float(self.shares)
+        else:   # no position: express the plan per unit of position (fractions instead of shares)
+            f1 = self.partial_exit if t2 is not None and self.partial_exit < 1.0 else 1.0
+            q1, q2, total = f1, 1.0 - f1, 1.0
+        risk = self.risk_per_share
+        money = self.shares > 0
+
+        def pnl(units_r: float) -> Optional[float]:
+            return float(units_r * risk) if money else None
+
+        hist = _exit_history(self.stats)
+        rules: List[ExitRule] = []
+        if self.stop is not None:
+            rules.append(ExitRule(
+                "loss", "Stop-loss (before target 1)", self.stop, (self.stop / self.price - 1.0) * 100.0, self.shares or None,
+                pnl(-total), -1.0, f"{unverb} everything at the stop order ({self.stop_label}). The trade was wrong; take the planned loss.",
+                hist.get("stop", "")))
+        if t1 is not None and q1:
+            locked = q1 * t1.r_multiple
+            if t2 is not None and q2:
+                rules.append(ExitRule(
+                    "profit", "Target 1: partial profit", t1.price, t1.move_pct, t1.shares or None, pnl(locked), locked / total,
+                    f"{unverb} {t1.shares or 'half'} {'shares' if t1.shares else 'of the position'} and move the stop on the rest to "
+                    f"breakeven (${self.price:,.2f}). If the rest is then stopped at breakeven, this is the result.",
+                    hist.get("target 1", "")))
+            else:
+                rules.append(ExitRule(
+                    "profit", "Target 1: take profit", t1.price, t1.move_pct, t1.shares or None, pnl(locked), locked / total,
+                    f"{unverb} the whole position.", hist.get("target 1", "")))
+        if t2 is not None and q2:
+            best = q1 * (t1.r_multiple if t1 else 0.0) + q2 * t2.r_multiple
+            trail_dir = "−" if not short else "+"
+            rules.append(ExitRule(
+                "profit", "Trailing stop (after target 1)", None, None, t2.shares or None, None, None,
+                f"Trail the stop on the rest at the {'lowest' if short else 'highest'} close since entry {trail_dir} "
+                f"{self.trail_atr_multiple:g} × ATR (≈ ${self.trail_atr_multiple * self.atr:,.2f} today), never loosening it. "
+                f"It locks in more of the run; the result lands between target 1's and target 2's.",
+                hist.get("trailing", "")))
+            rules.append(ExitRule(
+                "profit", "Target 2: the rest", t2.price, t2.move_pct, t2.shares or None, pnl(best), best / total,
+                f"{unverb} the remaining {t2.shares or ''} shares. The best planned outcome.".replace("  ", " "),
+                hist.get("target 2", "")))
+        rules.append(ExitRule(
+            "time", f"Time stop: {self.time_stop_days} sessions", None, None, None, None, None,
+            f"{unverb} at the market if neither the stop nor target 1 has been reached by then: the idea has not worked and "
+            "the cash is better used elsewhere. The result lies between the stop's loss and target 1's profit.",
+            hist.get("time stop", "")))
+        rules.append(ExitRule(
+            "evidence", "Verdict turns", None, None, None, None, None,
+            (f"Re-run Lighthouse every {'week' if self.horizon == 'short' else 'month'} (the review cycle these rules were "
+             "tested with). If the verdict turns " + ("Buy or better while you are short, buy back early." if short else
+                                                      "Reduce or Sell while you are long, sell early.")),
+            ""))
+        return rules
+
+
+@dataclass
+class ExitRule:
+    """One way out of a trade."""
+    kind: str                     # "loss" | "profit" | "time" | "evidence"
+    name: str
+    price: Optional[float]        # trigger price (None: no fixed level)
+    move_pct: Optional[float]     # signed % from the entry
+    shares: Optional[int]         # shares closed by this exit
+    pnl: Optional[float]          # $ result of the WHOLE position if the trade ends this way (None: not fixed in advance)
+    r: Optional[float]            # the same in R
+    action: str
+    history: str                  # how often (and how fast) it happened on this stock's history
+
+
+def _exit_history(stats: Optional["SetupStats"]) -> Dict[str, str]:
+    """Plain-English frequency and median duration of each exit in the historical setup test."""
+    if stats is None or stats.trades is None or not len(stats.trades):
+        return {}
+    tr = stats.trades
+    n = len(tr)
+    parts = tr["outcome"].str.split(" + ", regex=False)
+    first, last = parts.str[0], parts.str[-1]
+
+    def line(mask, label: Optional[str]) -> str:
+        k = int(mask.sum())
+        if k == 0:
+            return f"never in {n} past setups"
+        when = f", median {int(tr.loc[mask, 'days'].median())} sessions {label}" if label else ""
+        return f"{k} of {n} past setups ({k / n:.0%}){when}"
+    return {
+        "stop": line(first == "stop", "to the stop"),
+        "target 1": line(tr["hit_target1"].astype(bool), None),
+        "trailing": line(last == "breakeven/trailing stop", "to the exit"),
+        "target 2": line(last == "target 2", "to target 2"),
+        "time stop": line(first == "time stop", "held"),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -376,6 +480,9 @@ def build_trade_plan(result, side: str = "long", settings: Optional[TradeSetting
         fundamental_score=d.fundamental_score, verdict=d.verdict, regime=d.regime.label if d.regime else "n/a",
         conviction=float(conviction), size_binding=binding, cash_available=prof.cash, account_value=prof.account_value,
         sizing_notes=notes, warnings=warnings, margin=margin,
+        priced_from=(f"live quote {result.quote.describe()}" if getattr(result, "quote", None) is not None
+                     else f"close of {d.as_of}"),
+        horizon=rprof.horizon, partial_exit=s.partial_exit,
     )
     if with_stats:
         attach_stats(plan, result, s)
@@ -401,6 +508,10 @@ def attach_stats(plan: TradePlan, result, settings: Optional[TradeSettings] = No
 # --------------------------------------------------------------------------- #
 # Trade simulation (shared by the setup test and the position monitor)
 # --------------------------------------------------------------------------- #
+def _signed_usd(v: float) -> str:
+    return f"{'−' if v < 0 else '+'}${abs(v):,.0f}"
+
+
 def _bar_exit(o: float, h: float, l: float, c: float, stop: float, target: Optional[float], check_open: bool,
               real_ohlc: bool) -> Optional[Tuple[str, float]]:
     """Long-space exit test for one bar. Gaps fill at the open; if the stop and the target are both inside the bar's
@@ -656,6 +767,7 @@ def ideas_table(plans: Iterable[TradePlan]) -> pd.DataFrame:
             "target1": None if t1 is None else round(t1.price, 2), "target2": None if t2 is None else round(t2.price, 2),
             "profit_t1": None if t1 is None else round(t1.profit, 2), "profit_all": round(pl.profit_if_all_targets, 2),
             "rr": None if t1 is None else t1.r_multiple, "regime": pl.regime, "binding": pl.size_binding, "as_of": pl.as_of,
+            "priced_from": pl.priced_from,
             "hist_trades": pl.stats.n_trades if pl.stats else None,
             "hist_win_rate": None if not pl.stats else round(pl.stats.win_rate * 100, 0),
             "hist_avg_r": None if not pl.stats else round(pl.stats.avg_r, 2),
@@ -676,9 +788,9 @@ class PositionStatus:
     as_of: str
     last_price: float
     days_held: int
-    pnl: float
-    pnl_pct: float
-    r_multiple: float               # unrealised result in R
+    pnl: float                      # realised + unrealised, assuming the plan was followed (partial sold at target 1)
+    pnl_pct: float                  # pnl as % of the cost of the original position
+    r_multiple: float               # pnl in R (multiples of the initial risk on the whole position)
     initial_stop: float
     current_stop: float
     stop_note: str
@@ -690,6 +802,10 @@ class PositionStatus:
     alerts: List[str]
     verdict_now: str
     score_now: float
+    shares_open: int = 0            # shares still held after the plan's exits
+    realised_pnl: float = 0.0       # locked in by the exits already taken (target 1 partial, target 2, stops)
+    unrealised_pnl: float = 0.0     # on the shares still open, at the last price
+    exits: List[Tuple[str, int, float, str]] = field(default_factory=list)   # (date, shares, price, reason)
 
 
 def monitor_position(result, side: str, entry_price: float, shares: int, entry_date, stop: Optional[float] = None,
@@ -749,8 +865,20 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
     last_atr = float(ind["atr"].iloc[-1])
     cur_stop = abs(sim["stop"])
     days_held = len(ind) - 1 - pos
-    pnl = sgn * (last_price - entry_price) * shares
-    r_now = sgn * (last_price - entry_price) / risk
+    # Whole shares per exit, as the ticket splits them: target 1 sells `partial_exit` of the shares when a second target
+    # exists; every other exit closes whatever is still open. P&L is realised on the exits, unrealised on the rest.
+    n1, _ = _split_shares(shares, s.partial_exit) if len(tps) > 1 else (shares, 0)
+    open_sh, realised, done = int(shares), 0.0, []
+    for _frac, px, reason, bar in sim["exits"]:
+        n = min(n1, open_sh) if reason == "target 1" else open_sh
+        if n <= 0:
+            continue
+        realised += sgn * (abs(px) - entry_price) * n
+        open_sh -= n
+        done.append((str(ind.index[bar].date()), int(n), float(abs(px)), reason))
+    unrealised = sgn * (last_price - entry_price) * open_sh
+    pnl = realised + unrealised
+    r_now = pnl / (risk * shares)
     dist = sgn * (last_price - cur_stop) / last_price
     dist_atr = sgn * (last_price - cur_stop) / last_atr if last_atr > 0 else float("nan")
     reached = []
@@ -759,26 +887,30 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
         hit = sim["tp1_hit"] if k == 0 else any(x[2] == "target 2" for x in sim["exits"])
         reached.append((float(r_mult), float(tp), bool(hit)))
     t_days = s.time_stop_for(prof.horizon)
-    exits = sim["exits"]
-    stop_exit = next((x for x in exits if "stop" in x[2]), None)
-    t2_exit = next((x for x in exits if x[2] == "target 2"), None)
     unverb = "Sell" if side == "long" else "Buy back"
-    if stop_exit is not None:
+    closing = done[-1] if open_sh == 0 and done else None     # the exit that closed the whole position, if any
+    result_txt = f"Result {_signed_usd(pnl)} ({r_now:+.2f}R)."
+    if closing is not None and "stop" in closing[3]:
         status = "STOP HIT"
-        action = (f"{unverb} the {'remaining ' if sim['tp1_hit'] else ''}shares: the {stop_exit[2]} at ${abs(stop_exit[1]):,.2f} "
-                  f"was reached on {ind.index[stop_exit[3]].date()}.")
-    elif t2_exit is not None:
+        action = (f"{unverb} the {'remaining ' if len(done) > 1 else ''}shares: the {closing[3]} was hit on {closing[0]} "
+                  f"(fill ${closing[2]:,.2f}). {result_txt}")
+    elif closing is not None and closing[3] == "target 2":
         status = "TARGET 2 HIT"
-        action = f"Target 2 at ${tps[1]:,.2f} was reached on {ind.index[t2_exit[3]].date()}: take the rest of the profit."
+        action = (f"Target 2 (${tps[1]:,.2f}) was reached on {closing[0]} (fill ${closing[2]:,.2f}): take the rest of the profit. "
+                  f"{result_txt}")
+    elif closing is not None:
+        status = "TARGET 1 HIT"
+        action = (f"Target 1 (${tps[0]:,.2f}) was reached on {closing[0]} (fill ${closing[2]:,.2f}): the whole position closes "
+                  f"there. {result_txt}")
     elif dist <= s.alert_atr * last_atr / last_price:
         status = "NEAR STOP"
         action = (f"Price is {dist * 100:.1f}% ({dist_atr:.2f} ATR) from the stop at ${cur_stop:,.2f}. Keep the stop order in "
                   "place; do not move it further away.")
     elif sim["tp1_hit"]:
         status = "TARGET 1 HIT"
-        action = (f"Target 1 was reached: take the partial profit if you have not, keep the stop at ${cur_stop:,.2f} "
-                  f"(breakeven or better, trailing), and let the rest run to ${tps[1]:,.2f}." if len(tps) > 1 else
-                  "Target 1 was reached: take the profit.")
+        action = (f"Target 1 was reached: {unverb.lower()} {shares - open_sh} shares there if you have not (${realised:,.0f} "
+                  f"locked in), keep the stop on the other {open_sh} at ${cur_stop:,.2f} (breakeven or better, trailing), and let "
+                  f"them run to ${tps[1]:,.2f}." if len(tps) > 1 and open_sh > 0 else "Target 1 was reached: take the profit.")
     elif days_held >= t_days:
         status = "TIME STOP DUE"
         action = f"Held {days_held} sessions without reaching target 1 (time stop {t_days}): close the trade and free the capital."
@@ -794,6 +926,7 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
     return PositionStatus(
         ticker=result.ticker, side=side, entry_price=float(entry_price), shares=int(shares), entry_date=str(entry_ts.date()),
         as_of=str(ind.index[-1].date()), last_price=last_price, days_held=int(days_held), pnl=float(pnl),
-        pnl_pct=float(sgn * (last_price / entry_price - 1.0) * 100.0), r_multiple=float(r_now), initial_stop=float(stop_raw),
+        pnl_pct=float(100.0 * pnl / (entry_price * shares)), r_multiple=float(r_now), initial_stop=float(stop_raw),
         current_stop=float(cur_stop), stop_note=stop_note, distance_to_stop_pct=float(dist), distance_to_stop_atr=float(dist_atr),
-        targets=reached, status=status, action=action, alerts=alerts, verdict_now=d.verdict, score_now=float(d.composite_score))
+        targets=reached, status=status, action=action, alerts=alerts, verdict_now=d.verdict, score_now=float(d.composite_score),
+        shares_open=int(open_sh), realised_pnl=float(realised), unrealised_pnl=float(unrealised), exits=done)

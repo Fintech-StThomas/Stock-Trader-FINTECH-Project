@@ -89,3 +89,28 @@ def test_trend_beacon_sign_in_uptrend():
     up.index = pd.bdate_range("2020-01-01", periods=400)
     bs = beacon_scores(compute_indicators(up))
     assert bs["trend"].iloc[-1] > 0.9 and bs["breakout"].iloc[-1] > 0.9
+
+
+def test_wma_and_hull_ma():
+    s = pd.Series(np.random.default_rng(1).normal(100, 5, 80))
+    w = np.arange(1, 21)
+    ref = s.rolling(20).apply(lambda x: np.dot(x, w) / w.sum(), raw=True)
+    assert np.allclose(ind.wma(s, 20).dropna(), ref.dropna()) and ind.wma(s, 20).isna().sum() == 19
+    ramp = pd.Series(np.arange(200, dtype=float))             # +1 a session
+    sma_lag = (ramp - ind.sma(ramp, 20)).dropna()
+    hull_lag = (ramp - ind.hull_ma(ramp, 20)).dropna()
+    assert np.allclose(sma_lag, 9.5)                          # (20 - 1) / 2 sessions behind
+    assert np.allclose(hull_lag, 2 / 3)                       # the Hull MA trails a straight line by 2/3 of a session
+
+
+def test_lowlag_bands_follow_the_price(prices):
+    close = prices["Close"]
+    mid, up, lo, pct_b = ind.lowlag_bands(close, 20, 2.0)
+    valid = pct_b.dropna().index
+    assert (up[valid] >= mid[valid]).all() and (lo[valid] <= mid[valid]).all()
+    assert np.allclose(pct_b[valid], ((close - lo) / (up - lo))[valid])
+    gap_low = (close - mid).abs().div(close)[valid].mean()
+    gap_sma = (close - ind.sma(close, 20)).abs().div(close)[valid].mean()
+    assert gap_low < 0.75 * gap_sma                           # the centre sits much closer to the price
+    full = compute_indicators(prices)
+    assert {"ll_mid", "ll_upper", "ll_lower", "ll_pct_b"} <= set(full.columns)

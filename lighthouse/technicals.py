@@ -68,6 +68,8 @@ def compute_indicators(prices: pd.DataFrame, params: Optional[StrategyParams] = 
     df["rsi"] = ind.rsi(close, p.rsi_window)
     df["macd"], df["macd_signal"], df["macd_hist"] = ind.macd(close, p.macd_fast, p.macd_slow, p.macd_signal)
     df["bb_mid"], df["bb_upper"], df["bb_lower"], df["pct_b"], df["bb_width"] = ind.bollinger(close, p.bb_window, p.bb_std)
+    # low-lag bands for the charts (Hull MA centre): they follow the price instead of trailing it by ~10 sessions
+    df["ll_mid"], df["ll_upper"], df["ll_lower"], df["ll_pct_b"] = ind.lowlag_bands(close, p.bb_window, p.bb_std)
     df["atr"] = ind.atr(high, low, close, p.atr_window)
     df["atr_pct"] = df["atr"] / close
     df["realized_vol"] = ind.realized_vol(close, p.vol_window, p.trading_days)

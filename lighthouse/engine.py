@@ -13,7 +13,7 @@ import pandas as pd
 
 from .backtest import BacktestResult, run_backtest, strategy_layers, sensitivity_grid, walk_forward, regime_breakdown
 from .config import InvestorProfile, StrategyParams
-from .data import load_prices, load_benchmark, load_fundamentals, align, DataUnavailable
+from .data import EXCHANGE_TZ, Quote, load_prices, load_benchmark, load_fundamentals, load_quote, align, DataUnavailable
 from .decision import Decision, make_decision
 from .fundamentals import FundamentalSnapshot, StatementHistory, fundamental_beacons, fundamental_score, point_in_time_scores
 from .regime import regime_table, latest_regime, RegimeSnapshot
@@ -37,6 +37,8 @@ class AnalysisResult:
     backtest: Optional[BacktestResult]
     warnings: List[str] = field(default_factory=list)
     extras: Dict[str, object] = field(default_factory=dict)   # layers / sensitivity / walk-forward when computed
+    quote: Optional[Quote] = None              # the live price the orders are priced from (None: the last close)
+    partial_bar: Optional[dict] = None         # today's unfinished session, left out of the signals
 
     # ---- convenience -------------------------------------------------------------
     @property
@@ -85,7 +87,7 @@ class AnalysisResult:
 def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Optional[StrategyParams] = None,
             years: float = 10, benchmark: str = "^GSPC", source: str = "auto", run_backtest_: bool = True,
             fundamentals_overrides: Optional[Dict[str, float]] = None, fundamentals_fixture: Optional[str] = None,
-            as_of=None) -> AnalysisResult:
+            as_of=None, live_quote: bool = True, refresh: bool = False) -> AnalysisResult:
     """Analyse one ticker end-to-end and return everything the product shows.
 
     Parameters
@@ -96,16 +98,21 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     benchmark    : market index for regime detection and comparison
     source       : "auto" (live with offline fallbacks), "yfinance", "stooq", "cache", "sample"
     as_of        : optional date - "what would Lighthouse have said on this day?"
+    live_quote   : price "buy now" orders from the feed's latest quote (with its timestamp) instead of the last close.
+                   The signals always use finished sessions: a session still trading is left out of the indicators.
+    refresh      : download prices again even if the cache is fresh
     """
     prof = profile or InvestorProfile()
     p = params or StrategyParams.for_horizon(prof.horizon)
     ticker = ticker.upper().strip()
     warnings: List[str] = []
 
-    prices = load_prices(ticker, years=years, end=as_of, source=source)
+    prices = load_prices(ticker, years=years, end=as_of, source=source, refresh=refresh)
     rep = prices.attrs.get("cleaning")
     if rep is not None:
         warnings += rep.notes
+    partial = prices.attrs.get("partial_bar")
+    quote = (prices.attrs.get("quote") or load_quote(ticker, source)) if live_quote and as_of is None else None
     if len(prices) < p.min_history:
         raise DataUnavailable(f"{ticker}: only {len(prices)} trading days available; need at least {p.min_history} "
                               f"for the 200-day trend and 52-week high indicators")
@@ -147,7 +154,25 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     regimes = regime_table(bench, p) if bench is not None else None
     regime_now: Optional[RegimeSnapshot] = latest_regime(regimes, benchmark) if regimes is not None else None
 
-    decision = make_decision(ticker, prices.index[-1], float(last["Close"]), float(last["atr"]), float(last["sizing_vol"]),
+    close = float(last["Close"])
+    order_price = close
+    if quote is not None:
+        q_day = quote.timestamp.tz_convert(EXCHANGE_TZ).date()
+        move = quote.price / close - 1.0
+        if q_day < prices.index[-1].date():
+            quote = None                      # older than the data: nothing to add
+        elif abs(move) > 0.25:
+            warnings.append(f"The live quote ({quote.describe()}) is {move * 100:+.0f}% from the {prices.index[-1].date()} close: "
+                            "check for a split or a bad tick. Orders are priced from the close instead.")
+            quote = None
+        else:
+            order_price = float(quote.price)
+            if q_day > prices.index[-1].date() or abs(move) > 0.0005:
+                warnings.append(f"Orders are priced from the live quote {quote.describe()}, {move * 100:+.1f}% vs the "
+                                f"{prices.index[-1].date()} close; the signals use finished sessions through {prices.index[-1].date()}. "
+                                f"{quote.note}")
+
+    decision = make_decision(ticker, prices.index[-1], order_price, float(last["atr"]), float(last["sizing_vol"]),
                              f_now, t_now, f_beacons + t_beacons, regime_now, prof, p, warnings,
                              sma_slow=float(last["sma_slow"]))
 
@@ -160,4 +185,5 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
 
     return AnalysisResult(ticker=ticker, profile=prof, params=p, prices=prices, indicators=ind, technical_scores=tscores,
                           benchmark=bench, regimes=regimes, fundamentals=snap, statements=hist, pit_scores=pit,
-                          decision=decision, backtest=bt, warnings=list(dict.fromkeys(warnings)))
+                          decision=decision, backtest=bt, warnings=list(dict.fromkeys(warnings)), quote=quote,
+                          partial_bar=partial)

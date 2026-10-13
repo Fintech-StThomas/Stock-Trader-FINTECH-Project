@@ -178,28 +178,50 @@ def score_breakdown(decision, height: Optional[int] = None, beacons=None) -> go.
 # --------------------------------------------------------------------------- #
 # Price dashboard
 # --------------------------------------------------------------------------- #
-def dashboard(result, last_days: int = 756, height: Optional[int] = None) -> go.Figure:
-    """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons."""
+BANDS = ("lowlag", "classic")
+
+
+def _band_spec(p, bands: str) -> dict:
+    """Columns and labels of the band overlay. "lowlag": Hull-MA centre +/- k standard deviations of the closes around it
+    (follows the price, ~3 sessions of lag); "classic": Bollinger's SMA +/- k sigma (the one the score uses, ~10 sessions)."""
+    if bands not in BANDS:
+        raise ValueError(f"bands must be one of {BANDS}")
+    if bands == "lowlag":
+        return dict(up="ll_upper", lo="ll_lower", mid="ll_mid", name=f"Low-lag bands (±{p.bb_std:g}σ)",
+                    mid_name=f"Band centre (Hull MA {p.bb_window})", short=f"Hull {p.bb_window}",
+                    title=f"low-lag bands (Hull MA {p.bb_window} ± {p.bb_std:g}σ)", extra="low-lag bands")
+    return dict(up="bb_upper", lo="bb_lower", mid="bb_mid", name=f"Bollinger bands (±{p.bb_std:g}σ)",
+                mid_name=f"Bollinger middle (SMA {p.bb_window})", short=f"SMA {p.bb_window}",
+                title=f"Bollinger Bands (SMA {p.bb_window} ± {p.bb_std:g}σ, trailing)", extra="Bollinger")
+
+
+def _add_bands(fig, ind: pd.DataFrame, spec: dict, alpha: float, **rc) -> None:
+    fig.add_trace(go.Scatter(x=ind.index, y=ind[spec["up"]], line=dict(width=0), hoverinfo="skip", showlegend=False), **rc)
+    fig.add_trace(go.Scatter(x=ind.index, y=ind[spec["lo"]], line=dict(width=0), fill="tonexty",
+                             fillcolor=f"rgba(158,197,244,{alpha})", name=spec["name"], hoverinfo="skip"), **rc)
+    # The centre line is added after the lower band so the fill above still runs upper-to-lower.
+    fig.add_trace(go.Scatter(x=ind.index, y=ind[spec["mid"]], name=spec["mid_name"],
+                             line=dict(color=SERIES["band_mid"], width=1.2, dash="dash"),
+                             customdata=np.column_stack([ind[spec["up"]], ind[spec["lo"]]]),
+                             hovertemplate=spec["short"] + " %{y:,.2f}<br>bands %{customdata[1]:,.2f} – %{customdata[0]:,.2f}"
+                                           f"<extra>{spec['extra']}</extra>"), **rc)
+
+
+def dashboard(result, last_days: int = 756, height: Optional[int] = None, bands: str = "lowlag") -> go.Figure:
+    """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons.
+    `bands`: "lowlag" (bands that follow the price) or "classic" (Bollinger's, which the score uses)."""
     ind = result.indicators.tail(last_days)
     p = result.params
+    spec = _band_spec(p, bands)
     has_vol = ind["Volume"].notna().any()
     rows = 4 if has_vol else 3
     heights = [0.5, 0.14, 0.18, 0.18] if has_vol else [0.56, 0.22, 0.22]
-    titles = [f"Price, trend and Bollinger Bands (SMA {p.bb_window} ± {p.bb_std:g}σ, trailing)"] + (["Volume"] if has_vol else []) + \
+    titles = [f"Price, trend and {spec['title']}"] + (["Volume"] if has_vol else []) + \
              [f"RSI ({p.rsi_window}) · dashed = {p.rsi_overbought:.0f} / {p.rsi_oversold:.0f}", f"MACD ({p.macd_fast}/{p.macd_slow}/{p.macd_signal})"]
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.045, row_heights=heights, subplot_titles=titles)
 
     used = _shade_regimes(fig, result.regimes, ind.index, row=1)
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_upper"], line=dict(width=0), hoverinfo="skip", showlegend=False), row=1, col=1)
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_lower"], line=dict(width=0), fill="tonexty", fillcolor="rgba(158,197,244,0.35)",
-                             name=f"Bollinger bands (±{p.bb_std:g}σ)", hoverinfo="skip"), row=1, col=1)
-    # The middle band is the SMA the bands are built around. It is added after the lower band so the fill above
-    # still runs upper-to-lower. Like every trailing average it lags price by about (window - 1) / 2 sessions.
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_mid"], name=f"Bollinger middle (SMA {p.bb_window})",
-                             line=dict(color=SERIES["band_mid"], width=1.2, dash="dash"),
-                             customdata=np.column_stack([ind["bb_upper"], ind["bb_lower"]]),
-                             hovertemplate=f"SMA {p.bb_window} " + "%{y:,.2f}<br>bands %{customdata[1]:,.2f} – %{customdata[0]:,.2f}"
-                                           "<extra>Bollinger</extra>"), row=1, col=1)
+    _add_bands(fig, ind, spec, 0.35, row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
                              hovertemplate="close $%{y:,.2f}<extra></extra>"), row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["sma_fast"], name=f"SMA {p.sma_fast}", line=dict(color=SERIES["sma_fast"], width=1.3),
@@ -399,15 +421,11 @@ def all_figures(result) -> Dict[str, go.Figure]:
 # --------------------------------------------------------------------------- #
 # Trade desk
 # --------------------------------------------------------------------------- #
-def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Figure:
-    """Recent price with the ticket's levels: entry, stop, targets (and the 20-day Bollinger middle for context)."""
+def trade_chart(result, plan, last_days: int = 180, height: int = 420, bands: str = "lowlag") -> go.Figure:
+    """Recent price with the ticket's levels: entry, stop, targets (and the bands for context)."""
     ind = result.indicators.tail(last_days)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_upper"], line=dict(width=0), hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_lower"], line=dict(width=0), fill="tonexty", fillcolor="rgba(158,197,244,0.25)",
-                             name="Bollinger bands", hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_mid"], name="SMA 20", line=dict(color=SERIES["band_mid"], width=1, dash="dash"),
-                             hovertemplate="SMA 20 %{y:,.2f}<extra></extra>"))
+    _add_bands(fig, ind, _band_spec(result.params, bands), 0.25)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
                              hovertemplate="close $%{y:,.2f}<extra></extra>"))
     levels = [("entry", plan.price, INK2, "solid")]

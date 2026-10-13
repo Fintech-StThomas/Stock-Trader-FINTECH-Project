@@ -52,6 +52,34 @@ def bollinger(close: pd.Series, window: int = 20, num_std: float = 2.0):
     return mid, upper, lower, pct_b, bandwidth
 
 
+def wma(series: pd.Series, window: int) -> pd.Series:
+    """Linearly weighted moving average (weights 1..window, the newest bar weighs most)."""
+    x = series.to_numpy(dtype=float)
+    out = np.full(len(x), np.nan)
+    if window >= 1 and len(x) >= window:
+        w = np.arange(1, window + 1, dtype=float)
+        out[window - 1:] = np.convolve(x, w[::-1], mode="valid") / w.sum()   # NaN inside a window propagates
+    return pd.Series(out, index=series.index)
+
+
+def hull_ma(series: pd.Series, window: int) -> pd.Series:
+    """Hull moving average (Hull 2005): WMA(2 x WMA(n/2) - WMA(n), sqrt(n)). Doubling the fast average and subtracting
+    the slow one cancels most of the lag; the final short WMA smooths the result. Causal like every input."""
+    half, root = max(int(window // 2), 1), max(int(round(np.sqrt(window))), 1)
+    return wma(2.0 * wma(series, half) - wma(series, window), root)
+
+
+def lowlag_bands(close: pd.Series, window: int = 20, num_std: float = 2.0):
+    """Bands that follow the price: a Hull moving average as the centre, +/- `num_std` standard deviations of the
+    closes around it over the last `window` sessions. They answer the same question as Bollinger Bands (is price
+    stretched?) relative to where price is now rather than where it was ~10 sessions ago. Causal: no shift forward."""
+    mid = hull_ma(close, window)
+    std = (close - mid).rolling(window, min_periods=window).std(ddof=0)
+    upper, lower = mid + num_std * std, mid - num_std * std
+    pct_b = (close - lower) / (upper - lower).replace(0.0, np.nan)
+    return mid, upper, lower, pct_b
+
+
 def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
     prev_close = close.shift(1)
     tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)

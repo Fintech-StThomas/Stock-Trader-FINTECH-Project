@@ -23,12 +23,17 @@ have, where would I be wrong (and where do I take profit), and how should I spli
 | **Value of stocks you already hold** | optional; 0 if this cash is all you have invested | only used for the risk limits: max loss and the concentration cap are a % of cash + holdings |
 | Years of history | default 10 (notebook 15) | analysis window and backtest length |
 | Data source | auto / yfinance / stooq / cache / sample | `auto` tries live sources then offline fallbacks; `sample` uses the bundled historical pack |
+| 🔄 Refresh live prices | sidebar button | fetches the latest quote now; otherwise an analysis and its quote are reused for 15 minutes |
 
 Example: $5,000 cash and $20,000 of stocks already held, 2% max loss. The account is $25,000, so one position may lose at most
 $500 at its stop, but it can never cost more than the $5,000 of cash.
 
 ## Reading the Analyse tab
 
+* **Price line under the name**: the signals use *finished* sessions only; "buy now" orders are priced from the latest
+  quote and its time (for example "$341.20 at 2026-10-13 10:42 EDT (market open)"), or the last close when there is no
+  quote (offline, or the time machine). During market hours today's unfinished bar is left out of every indicator
+  (its volume and range are not final) and a note says so.
 * **Verdict and Lighthouse score (0-100)**: ≥72 Strong Buy · ≥60 Buy · ≥45 Hold · ≥32 Reduce · <32 Sell.
 * **Beacons**: every signal with its reading, a light (🟢 bullish, 🟡 neutral, 🔴 bearish, ⚪ unavailable), its vote (−1…+1), weight and the points it added.
 * **Market weather**: Bull/Bear × Calm/Turbulent for the S&P 500, and how it changed the score and the size.
@@ -36,8 +41,10 @@ $500 at its stop, but it can never cost more than the $5,000 of cash.
   worst-case loss if the stop fills at its price, and *which rule limited the size* (max loss, volatility target,
   concentration cap or your cash). Hold means keep what you own; Reduce means trim about half; Sell means exit.
 * **Trade ticket**: switch between 📈 Long and 📉 Short. See *Trade tickets* below.
-* **Price chart**: close, 50/200-day averages and the **Bollinger Bands with their dashed 20-day middle band**. The bands
-  trail the price by about 10 sessions by construction (they use only past prices); the expander under the chart explains why.
+* **Price chart**: close, 50/200-day averages and price bands. The default **low-lag bands** follow the price (a 20-day
+  Hull moving average ± 2 standard deviations, about 3 sessions of lag). Switch to **Classic Bollinger** to see the bands
+  the score uses (a 20-day SMA ± 2σ, which trails the price by about 10 sessions by construction). Both use only past
+  prices; the expander under the chart explains the difference.
 * **Backtest**: how the rule behind the verdict behaved historically versus buy-and-hold and the S&P 500.
 * **Warnings**: data-source notes (offline data, missing volume, fixture fundamentals) and anything to know before acting.
 
@@ -57,21 +64,35 @@ Each ticket shows **how these exact rules did on this stock's own history**: num
 in R per trade after costs, and profit factor. If the rules lost money on that stock, the ticket says so in red. Change the
 targets, the partial exit, the time stop, the number of ideas and the total-risk cap under *Trade management* in the sidebar.
 
+**When to get out** (on every ticket): one row per exit, for a loss or a profit, decided before you enter:
+
+| Exit | Trigger | Result shown |
+|---|---|---|
+| 🛑 Stop-loss | the stop price | the planned loss (−1R) |
+| 🎯 Target 1 | its price | the partial profit, which is also the result if the rest is later stopped at breakeven |
+| 🎯 Trailing stop | follows the best close | between target 1's and target 2's result |
+| 🎯 Target 2 | its price | the best planned outcome |
+| ⏱️ Time stop | after 40 / 252 sessions | between the stop's loss and target 1's profit |
+| 🧭 Verdict turns | at the weekly / monthly review | sell early (buy back for a short) |
+
+Each row also says how often trades ended that way on the stock's own history and how many sessions it took.
+
 **Status**: *actionable* (place the ticket), *watch* (close to a setup; levels shown, no order) or *avoid* (no trade).
 
 ## Trade desk tab
 
-* **📈 Long (buy)**: pick a universe (presets, all available tickers, or your own list) and press *Find trades now*.
+* **Universe**: a row of pre-built lists that scrolls sideways (mega caps, dividend & defensive, each sector,
+  semiconductors, sector ETFs, index & bond ETFs, all large caps, the offline sample pack). Picking one fills the ticker
+  box, which you can edit. ETFs have no fundamentals, so they are scored on technicals only.
+* **📈 Long (buy)**: pick a universe (or type your own list) and press *Find trades now*.
   Lighthouse scores every ticker, keeps the actionable setups, and funds the strongest first from your cash. It stops when
   the cash, the idea count or the total planned risk ("portfolio heat", 6% of the account by default) runs out. You get one
   ticket per idea, a summary table, a watch list, and a CSV of the orders.
 * **📉 Short (sell short)**: the same scan, mirrored. Read the banner first: shorts can lose more than planned, need a margin
   account and borrowable shares, and owe dividends. Each ticket shows the Regulation T and FINRA margin figures.
-* **🛡️ Position monitor (stop-loss lookout)**: type the positions you hold (ticker, long/short, entry price, shares, entry
-  date, optionally your own stop and target) and press *Check my positions*. For each one you get a status: 🛑 STOP HIT
-  (with the date), ⚠️ NEAR STOP (within 0.5 ATR), ✅ TARGET 1 HIT (stop now at breakeven or trailing), 🎯 TARGET 2 HIT,
-  ⏱️ TIME STOP DUE or 🟢 OK. You also get the current stop, P&L in dollars and in R, and an alert if the verdict has turned
-  against the trade.
+* There is no position-entry screen: every ticket already carries its exits (*When to get out*), so the sell decision is
+  made, and the stop order placed, when you buy. To replay a trade you already hold against the plan, use the command
+  line's `monitor` (below).
 
 ## Portfolio builder tab
 
@@ -84,7 +105,9 @@ targets, the partial exit, the time stop, the number of ideas and the total-risk
   * *Maximum Sharpe*: the best expected return per unit of risk. The most sensitive to estimation error.
   * *Hierarchical risk parity*: groups stocks that move together and splits the risk between groups.
 * **Build for a goal**: choose *Capital preservation*, *Balanced risk and reward*, *Growth* or *Maximum diversification*.
-  Lighthouse picks the stocks from the universe ("all available tickers" or your list) and weights them.
+  Lighthouse picks the stocks from the universe (any pre-built list, or your own) and weights them, at most 3 per sector.
+  A ticker outside the curated list gets the sector its fundamentals report; one with no sector at all (an ETF, say) is
+  not counted against the per-sector limits.
 
 Every portfolio shows:
 * whole-share **orders for your cash** (CSV download);
@@ -106,10 +129,17 @@ python -m lighthouse screen AAPL MSFT NVDA JPM --risk conservative --cash 10000 
 python -m lighthouse backtest MSFT --years 15 --evaluate
 python -m lighthouse trade MSFT AAPL JNJ XOM --side long --cash 5000 --holdings 20000 --targets 2 3
 python -m lighthouse trade AAPL AMD BBY --side short --cash 5000 --source sample
+python -m lighthouse trade --universe semiconductors --cash 5000                  # a pre-built universe
+python -m lighthouse universes                                                    # list them
 python -m lighthouse monitor MSFT --side long --entry 73.9 --shares 30 --date 2017-09-01 --source sample
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000 --target-vol 0.12
 python -m lighthouse portfolio --goal balanced --cash 10000
+python -m lighthouse portfolio --goal growth --universe technology --cash 10000
 ```
+
+`trade` prints each ticket's plan and its *when to get out* list. `monitor` replays a position you hold since its entry
+with the same rules (target 1 sells half, the stop then moves to breakeven and trails) and reports the exits already
+taken, the realised and unrealised P&L, and where the stop is now.
 
 Add `--as-of 2020-03-20` to `analyze` to ask what Lighthouse would have said on a past day. `--portfolio` still works and
 means "this much cash, nothing else held".
@@ -128,6 +158,7 @@ If a fundamentals feed is missing a field, type your own: in the app's expert se
 
 * **"could not load prices"**: no internet, or Yahoo is rate-limiting. Retry in a minute, or use `--source stooq`, or `--source sample` for the bundled tickers (`MSFT`, `AAPL`, `JNJ`, `XOM`, `JPM`, `UNH`, `KO`, `PG`, `PFE`, `WMT`, `HD`, `GE`, `CVX`, `LLY`, `BAC`, `AMD`, `MRK`, `PEP`, `BBY`, `RRC`).
 * **"Prices are from …"** on a ticket: the data is not today's (offline pack or cache). Refresh with live data before placing an order.
+* **"Today's session is still trading"**: during market hours the unfinished daily bar is left out of the signals; orders are priced from the live quote. Yahoo quotes can lag by up to 15 minutes on some exchanges, so confirm the price with your broker.
 * **"Left out MSFT: data ends 2017-11-10"** in the portfolio builder: the offline MSFT file ends earlier than the others, so it is excluded rather than cutting everyone's history short.
 * **"Fundamental data unavailable"**: the verdict is technical-only and flagged; supply overrides or try later.
 * **Volume beacon grey**: the series has no volume (index data or the offline pack's close-only files); the other beacons are re-weighted.

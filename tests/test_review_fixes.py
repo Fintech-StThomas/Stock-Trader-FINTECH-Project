@@ -84,10 +84,14 @@ def test_dashboard_draws_the_bollinger_middle_band_and_the_regime_shading():
     pytest.importorskip("plotly")
     from lighthouse import interactive as ix
     r = analyze("AAPL", source="sample", years=6)
-    fig = ix.dashboard(r, last_days=252)
+    fig = ix.dashboard(r, last_days=252, bands="classic")
     mid = [t for t in fig.data if t.name and t.name.startswith("Bollinger middle")]
     assert len(mid) == 1
     assert np.allclose(np.asarray(mid[0].y, dtype=float), r.indicators["bb_mid"].tail(252).values)
+    low = ix.dashboard(r, last_days=252)                    # the default view: bands that follow the price
+    centre = [t for t in low.data if t.name and t.name.startswith("Band centre (Hull MA")]
+    assert len(centre) == 1 and not any(t.name and t.name.startswith("Bollinger middle") for t in low.data)
+    assert np.allclose(np.asarray(centre[0].y, dtype=float), r.indicators["ll_mid"].tail(252).values, equal_nan=True)
     rects = [s for s in fig.layout.shapes if s.type == "rect"]
     assert rects, "2022 was a bear market: the regime shading must be drawn"
     bt = ix.backtest(r.backtest, r.regimes)

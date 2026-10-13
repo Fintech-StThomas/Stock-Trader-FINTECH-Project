@@ -12,7 +12,7 @@ were checked in October 2026.
 | Gap | Why it matters | Fix |
 |---|---|---|
 | Yahoo Finance is unofficial and rate-limited | Requests fail without warning; fields change meaning (e.g. `dividendYield` moved from a fraction to a percent) | A paid, documented price API |
-| Daily bars only, delayed or end of day | "Buy right now" is decided on yesterday's close or a 15-minute-delayed quote | A real-time quote from a broker API or a consolidated (SIP) feed |
+| Daily bars only, and Yahoo's quote | Signals use finished sessions and "buy now" is priced from Yahoo's latest quote with its timestamp, which can lag by up to 15 minutes on some exchanges and is not your broker's market | A real-time quote from a broker API or a consolidated (SIP) feed |
 | Only ~4–5 years of fundamentals, dated by fiscal period end | The backtest's fundamental gate only acts in recent years, and period end ≠ the date the numbers became public | Point-in-time fundamentals keyed by **filing date** |
 | Survivorship bias | Testing only on companies that still exist (and won) flatters every strategy | A universe that includes delisted stocks and historical index membership |
 | Fixed 2% risk-free rate | Sharpe ratios are overstated when T-bills pay ~4%, understated when they paid ~0% | The 3-month Treasury bill rate from FRED, day by day |

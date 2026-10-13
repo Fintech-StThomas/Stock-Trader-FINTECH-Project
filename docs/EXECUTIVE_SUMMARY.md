@@ -41,7 +41,8 @@ cash they can invest now and, optionally, the value of the stocks they already h
 7. **Watchlist ranking** — the same engine applied to a list of tickers.
 8. **Trade desk** — long and short tickets sized from the investor's cash: limit entry, stop-loss, two take-profit
    levels in multiples of the risk, breakeven and trailing stops, a time stop, a cap on total open risk, and how those
-   exact rules did on each stock's history. A position monitor flags stop hits and positions close to their stop.
+   exact rules did on each stock's history. Each ticket lists every way out, for a profit or a loss, with the price,
+   the result and how often it happened before; orders are priced from a timestamped live quote.
 9. **Portfolio builder** — a basket (the investor's or one picked for a goal) allocated by risk parity, minimum
    variance, hierarchical risk parity, maximum Sharpe or simpler rules on a shrunk covariance matrix, with VaR,
    expected shortfall, beta, risk contributions, stress tests and a walk-forward test of every method.

@@ -23,7 +23,7 @@ with a full risk report.
 4. **Market weather** — Bull/Bear × Calm/Turbulent regime of the S&P 500 that penalises scores, raises the entry bar and halves sizes in bear markets.
 5. **Decision** — horizon-weighted composite → verdict → position size from the *smallest* of three rules (your max-loss limit, a volatility target, a concentration cap), paid from the **cash you have available** (risk limits are a % of your whole account).
 6. **Honest evaluation** — point-in-time backtest vs buy-and-hold and the S&P 500, layer attribution, sensitivity grid, walk-forward out-of-sample test, regime breakdown.
-7. **Trade desk** — 📈 long and 📉 short tickets for your cash: limit entry, stop-loss, two take-profit levels in multiples of the risk (R), breakeven and trailing stops, a time stop, a cap on total open risk, and the record of those exact rules on each stock's own history. A **position monitor** (stop-loss lookout) re-checks the trades you hold.
+7. **Trade desk** — 📈 long and 📉 short tickets for your cash: limit entry, stop-loss, two take-profit levels in multiples of the risk (R), breakeven and trailing stops, a time stop, a cap on total open risk, and the record of those exact rules on each stock's own history. Every ticket has a **when to get out** table: each exit, for a profit or a loss, with its price, its result for the whole position and how often it happened on the stock's history. "Buy now" orders are priced from a timestamped live quote; signals use finished sessions only.
 8. **Portfolio builder** — allocate your basket (equal weight, inverse volatility, risk parity, minimum variance, maximum Sharpe with Bayes-Stein returns, hierarchical risk parity) on a Ledoit-Wolf risk model, with stock/sector caps and a volatility target, or let Lighthouse pick stocks for a goal (preservation, balanced, growth, diversified). You get whole-share orders, VaR / expected shortfall / beta / risk contributions / stress tests, and a walk-forward test of every method.
 9. **Watchlist ranking**, plain-English **report**, Streamlit **app**, **CLI**.
 
@@ -37,7 +37,7 @@ python -m lighthouse screen AAPL MSFT NVDA JPM XOM UNH --cash 10000
 python -m lighthouse trade MSFT AAPL JNJ XOM --side long --cash 5000        # what to buy right now, with stops and targets
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 85 tests, runs offline
+python -m pytest                # 100 tests, runs offline
 ```
 
 ```python
@@ -65,8 +65,8 @@ No internet? Set `LIGHTHOUSE_OFFLINE=1` (or `--source sample`): the bundled pack
 
 | Tab | What you can do |
 |---|---|
-| **Analyse a stock** | verdict dial, score waterfall, a position plan sized from your cash with a *what-if* sizer, a long/short **trade ticket** (entry, stop-loss, take-profits, management plan, historical record of the rules), 19 beacons you can filter by light and hover for the reason, a four-panel price / volume / RSI / MACD chart with Bollinger Bands (and their middle band), range buttons and the backtested entries and exits, the backtest with drawdown and exposure, deep evaluation (layers, sensitivity heatmap, walk-forward), trade list, downloads |
-| **Trade desk** | scan a universe and fund the best **long** or **short** setups from your cash, one ticket each, within a total-risk cap; a **position monitor** that flags stop hits, near-stop positions, targets reached, due time stops and verdicts that turned against you |
+| **Analyse a stock** | verdict dial, score waterfall, a position plan sized from your cash with a *what-if* sizer, a long/short **trade ticket** (entry, stop-loss, take-profits, management plan, historical record of the rules), 19 beacons you can filter by light and hover for the reason, a four-panel price / volume / RSI / MACD chart with low-lag bands that follow the price (or the classic Bollinger Bands the score uses), range buttons and the backtested entries and exits, the backtest with drawdown and exposure, deep evaluation (layers, sensitivity heatmap, walk-forward), trade list, downloads |
+| **Trade desk** | pick a pre-built universe (a sideways-scrolling row: mega caps, dividend & defensive, each sector, semiconductors, sector and index ETFs, all large caps) or type your own, then fund the best **long** or **short** setups from your cash, one ticket each with its *when to get out* table, within a total-risk cap |
 | **Portfolio builder** | allocate your own basket with six methods, or let Lighthouse build one for a goal; whole-share orders, risk report (volatility, VaR, expected shortfall, beta, risk contributions, correlations, stress tests) and a walk-forward test of every method |
 | **Rank & compare a watchlist** | presets or your own tickers, ranked bar chart, sortable table (select a row for a summary card and a one-click jump to the full analysis), rebased price comparison |
 | **Data behind the verdict** | where every number came from: price source and cleaning notes, the fundamental snapshot, every indicator row, market-weather history |
@@ -108,14 +108,14 @@ for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
 lighthouse/            the product (pure Python, pandas/numpy/matplotlib)
   config.py            investor profiles, strategy parameters, verdict bands  <- all the numbers to defend
   data.py              live/offline data loading, cleaning report, fundamentals parsing, caching
-  indicators.py        causal SMA/EMA/RSI/MACD/Bollinger/ATR/OBV/volatility/drawdown
+  indicators.py        causal SMA/EMA/WMA/Hull MA/RSI/MACD/Bollinger/low-lag bands/ATR/OBV/volatility/drawdown
   technicals.py        technical beacons and score
   fundamentals.py      fundamental beacons, sector norms, point-in-time scores
   regime.py            market weather
   decision.py          composite score, verdict, exit level, position sizing (cash-capped, long or short stops)
-  tradeplan.py         long/short trade tickets, stop-loss & take-profit management, historical setup test, idea allocation, position monitor
+  tradeplan.py         long/short trade tickets, exit plan, stop-loss & take-profit management, historical setup test, idea allocation, position replay
   portfolio.py         Ledoit-Wolf / Bayes-Stein estimates, six allocation methods, caps, vol target, risk report, walk-forward test, goals
-  universe.py          curated large-cap universe with sector labels; "all available tickers"
+  universe.py          pre-built universes, curated sector labels (fallback: the fundamentals snapshot's sector)
   backtest.py          point-in-time engine, metrics, layers, sensitivity, walk-forward, regime breakdown
   engine.py            analyze() pipeline and AnalysisResult
   screener.py          watchlist ranking
