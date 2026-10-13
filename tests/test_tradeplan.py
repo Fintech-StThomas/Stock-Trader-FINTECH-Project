@@ -1,5 +1,5 @@
-"""Trade tickets (long and short), the shared trade simulator, the historical setup test, idea allocation and the
-open-position monitor."""
+"""Trade tickets (long and short), their exit plans, the shared trade simulator, the historical setup test, idea
+allocation and the open-position replay."""
 import numpy as np
 import pandas as pd
 import pytest
@@ -155,19 +155,55 @@ def test_allocate_ideas_respects_cash_heat_and_count(sample_results):
             assert set(table["ticker"]) >= {p.ticker for p in funded}
 
 
+# --------------------------------------------------------------------------- exit plan
+def test_exit_plan_gives_every_way_out_with_the_whole_positions_result(msft_short_horizon):
+    r = msft_short_horizon
+    pl = build_trade_plan(r, "long")
+    rules = {x.name: x for x in pl.exit_plan()}
+    assert [x.kind for x in pl.exit_plan()] == ["loss", "profit", "profit", "profit", "time", "evidence"]
+    stop, t1, t2 = rules["Stop-loss (before target 1)"], rules["Target 1: partial profit"], rules["Target 2: the rest"]
+    risk, n1, n2 = pl.risk_per_share, pl.targets[0].shares, pl.targets[1].shares
+    assert stop.price == pl.stop and stop.r == -1.0 and stop.pnl == pytest.approx(-pl.dollars_at_risk)
+    assert t1.pnl == pytest.approx(n1 * 2 * risk) and t1.r == pytest.approx(n1 * 2 / pl.shares)
+    assert t2.pnl == pytest.approx(n1 * 2 * risk + n2 * 3 * risk) == pytest.approx(pl.profit_if_all_targets)
+    assert rules["Time stop: 40 sessions"].pnl is None and "week" in rules["Verdict turns"].action
+    # the history column counts the setup test's trades by how they ended
+    st = pl.stats
+    first = st.trades["outcome"].str.split(" + ", regex=False).str[0]
+    assert stop.history.startswith(f"{int((first == 'stop').sum())} of {st.n_trades} past setups")
+    one = TradeSettings(partial_exit=0.3)
+    avoid = build_trade_plan(r, "short", one, with_stats=False)          # no short in this up-trend: no shares
+    assert avoid.shares == 0
+    t1_short = next(x for x in avoid.exit_plan() if x.name.startswith("Target 1"))
+    assert t1_short.pnl is None and t1_short.r == pytest.approx(0.3 * 2)  # per unit, with the configured partial
+
+
 # --------------------------------------------------------------------------- monitor
 def test_monitor_reports_stop_and_targets(msft_short_horizon):
     r = msft_short_horizon
     ms = monitor_position(r, "long", 73.9, 30, "2017-09-01")       # MSFT ran from ~74 to ~84 by Nov 2017
     assert ms.status == "TARGET 2 HIT" and all(hit for _, _, hit in ms.targets)
-    assert ms.pnl == pytest.approx((ms.last_price - 73.9) * 30)
+    # half sold at target 1, the rest at target 2 (filled at the open after the 2017-10-27 earnings gap): P&L is
+    # realised on those fills, not marked to the last price as if all 30 shares were still held
+    assert [(n, why) for _, n, _, why in ms.exits] == [(15, "target 1"), (15, "target 2")]
+    assert ms.exits[0][2] == pytest.approx(ms.targets[0][1]) and ms.exits[1][2] >= ms.targets[1][1]
+    assert ms.pnl == pytest.approx(sum(n * (px - 73.9) for _, n, px, _ in ms.exits)) and ms.shares_open == 0
+    assert ms.unrealised_pnl == 0 and ms.pnl != pytest.approx((ms.last_price - 73.9) * 30)
+    risk = (ms.targets[0][1] - 73.9) / 2
+    assert ms.r_multiple == pytest.approx(ms.pnl / (30 * risk))
     ms = monitor_position(r, "long", 69.0, 30, "2017-05-01")       # the 2017-05-15 low (66.83) hit the plan stop
     assert ms.status == "STOP HIT" and "2017-05-15" in ms.action
+    assert ms.r_multiple == pytest.approx(-1.0) and ms.pnl == pytest.approx(30 * (ms.initial_stop - 69.0))
     ms = monitor_position(r, "short", 74.0, 10, "2017-09-01")
     assert ms.status == "STOP HIT" and ms.r_multiple < 0
     assert any("turned against this short" in a for a in ms.alerts)
     ms = monitor_position(r, "long", 83.0, 10, "2017-11-09", stop=82.5)   # 2017-11-10 high 84.10 reaches the 2R target 84.00
     assert ms.status == "TARGET 1 HIT" and ms.current_stop >= 83.0          # stop moved to breakeven or better
+    assert ms.shares_open == 5 and ms.realised_pnl == pytest.approx(5 * 1.0)  # 5 sold at 84.00
+    assert ms.unrealised_pnl == pytest.approx(5 * (ms.last_price - 83.0))
+    assert ms.r_multiple == pytest.approx((ms.realised_pnl + ms.unrealised_pnl) / (10 * 0.5))
+    one = monitor_position(r, "long", 83.0, 1, "2017-11-09", stop=82.5)   # a single share cannot be split
+    assert one.status == "TARGET 1 HIT" and one.shares_open == 0 and one.pnl == pytest.approx(1.0)
     ms = monitor_position(r, "long", 84.5, 10, "2017-11-09", stop=83.1, targets=[95, 100],
                           settings=TradeSettings(alert_atr=1.0))            # last close 83.87 is < 1 ATR above 83.10
     assert ms.status == "NEAR STOP" and ms.current_stop == pytest.approx(83.1)
@@ -187,3 +223,24 @@ def test_monitor_validates_inputs(msft_short_horizon):
         monitor_position(r, "long", 80.0, 10, "2030-01-01")                  # entry after the data
     with pytest.raises(ValueError):
         monitor_position(r, "sideways", 80.0, 10, "2017-09-01")
+
+
+def test_exit_plan_and_replay_with_no_partial_sale(msft_short_horizon):
+    r = msft_short_horizon
+    s0 = TradeSettings(partial_exit=0.0)
+    pl = build_trade_plan(r, "long", s0, with_stats=False)
+    names = [x.name for x in pl.exit_plan()]
+    assert "Target 1: stop to breakeven" in names and "Target 1: partial profit" not in names
+    t1 = next(x for x in pl.exit_plan() if x.name == "Target 1: stop to breakeven")
+    assert t1.pnl == 0.0 and t1.r == 0.0 and "Sell nothing" in t1.action
+    ms = monitor_position(r, "long", 83.0, 10, "2017-11-09", stop=82.5, settings=s0)
+    assert ms.status == "TARGET 1 HIT" and ms.shares_open == 10 and "keep all 10 shares" in ms.action
+    none = build_trade_plan(r, "short", TradeSettings(partial_exit=0.3), with_stats=False)
+    t1s = next(x for x in none.exit_plan() if x.name.startswith("Target 1"))
+    assert "30% of the position" in t1s.action                     # not "half"
+
+
+def test_screen_accepts_a_generator():
+    from lighthouse.screener import screen
+    df = screen((t for t in ["MSFT", "KO"]), source="sample", years=5, progress=False)
+    assert list(df["ticker"]) and set(df["ticker"]) == {"MSFT", "KO"}

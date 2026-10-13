@@ -3,9 +3,9 @@ Lighthouse - the web app.
 
     streamlit run app.py
 
-Six tabs: analyse one stock, find what to buy (or short) right now with your cash and watch your open
-positions' stops, build and risk-check a portfolio, rank and compare a watchlist, inspect the data behind
-a verdict, and learn how the method works. Every chart is interactive (hover for the reason behind every
+Six tabs: analyse one stock, find what to buy (or short) right now with your cash and when to get out
+(for a profit or a loss), build and risk-check a portfolio, rank and compare a watchlist, inspect the data
+behind a verdict, and learn how the method works. Every chart is interactive (hover for the reason behind every
 mark, zoom, range buttons, PNG download) and every number can be downloaded as CSV or Markdown.
 """
 from __future__ import annotations
@@ -13,6 +13,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import threading
 import traceback
 from dataclasses import asdict
 from datetime import date
@@ -28,8 +29,9 @@ from lighthouse.decision import size_position
 from lighthouse.regime import regime_adjustments
 from lighthouse.report import format_metrics, LIGHT_ICON
 from lighthouse import portfolio as pf
-from lighthouse.tradeplan import TradeSettings, build_trade_plan, allocate_ideas, monitor_position, TIME_STOP_DEFAULT
-from lighthouse.universe import available_universe
+from lighthouse.parallel import map_tickers
+from lighthouse.tradeplan import TradeSettings, build_trade_plan, allocate_ideas, signed_usd, TIME_STOP_DEFAULT
+from lighthouse.universe import available_universe, get_universe, universe_names
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
                    menu_items={"About": "Lighthouse turns a ticker and a few facts about you into an explainable Buy / Hold / Sell "
@@ -53,18 +55,25 @@ st.markdown("""
 .lh-verdict { display: inline-block; padding: .15rem .7rem; border-radius: 999px; color: white; font-weight: 700; font-size: 1.05rem; vertical-align: middle; }
 .lh-muted { opacity: .72; }
 h2, h3, h4 { scroll-margin-top: 4rem; }
+/* universe pickers: one line that scrolls sideways instead of a block of wrapped chips */
+[class*="st-key-uscroll_"] [data-testid="stElementContainer"], [class*="st-key-uscroll_"] [data-testid="stButtonGroup"] {
+    width: 100% !important; max-width: 100%; min-width: 0; }
+[class*="st-key-uscroll_"] [role="radiogroup"] { flex-wrap: nowrap !important; overflow-x: auto; overflow-y: hidden;
+    max-width: 100%; padding-bottom: .55rem; -webkit-overflow-scrolling: touch; }
+[class*="st-key-uscroll_"] [role="radiogroup"] button { flex: 0 0 auto; white-space: nowrap; }
+/* a styled WebKit/Blink scrollbar is always drawn (no overlay auto-hide), so the row visibly scrolls */
+[class*="st-key-uscroll_"] [role="radiogroup"]::-webkit-scrollbar { height: 9px; }
+[class*="st-key-uscroll_"] [role="radiogroup"]::-webkit-scrollbar-track { background: rgba(128,128,128,.14); border-radius: 5px; }
+[class*="st-key-uscroll_"] [role="radiogroup"]::-webkit-scrollbar-thumb { background: rgba(128,128,128,.6); border-radius: 5px; }
+@supports (-moz-appearance: none) {   /* Firefox: the standard properties (Blink would ignore the rules above if it saw these) */
+  [class*="st-key-uscroll_"] [role="radiogroup"] { scrollbar-width: thin; scrollbar-color: rgba(128,128,128,.6) rgba(128,128,128,.14); } }
 </style>
 """, unsafe_allow_html=True)
 
 VERDICT_COLOR = ix.VERDICT_COLOR
 LIGHT_WORD = ix.LIGHT_WORD
 POPULAR = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM", "UNH", "KO"]
-PRESET_WATCHLISTS = {
-    "Mega caps": "AAPL MSFT NVDA AMZN GOOGL META",
-    "Dividend & defensive": "JNJ KO PG PEP WMT UNH",
-    "Energy & financials": "XOM CVX JPM BAC",
-    "Sample pack (offline)": "MSFT AAPL JNJ XOM JPM UNH KO PG",
-}
+OFFLINE_DEFAULT_LIST = "MSFT AAPL JNJ XOM JPM UNH KO PG"     # a quick first scan of the sample pack
 
 
 def _is_offline() -> bool:
@@ -76,38 +85,43 @@ def _profile(horizon, risk, max_loss, cash, holdings) -> InvestorProfile:
     return InvestorProfile.from_cash(float(cash), float(holdings), horizon=horizon, risk=risk, max_loss_pct=max_loss)
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
-def _run(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, overrides, as_of):
+LIVE_TTL = 900   # analyses (and the quotes they carry) are reused for 15 minutes; "Refresh live prices" forces new ones
+# Analyses, universes and portfolios are large objects that the app only reads, so they are cached as shared resources:
+# st.cache_data would pickle and unpickle them (megabytes) on every cache hit.
+
+
+@st.cache_resource(show_spinner=False, ttl=LIVE_TTL, max_entries=400)
+def _run(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, overrides, as_of, nonce=0):
     prof = _profile(horizon, risk, max_loss, cash, holdings)
     params = StrategyParams.for_horizon(horizon, entry_score=entry, exit_score=exit_, cost_bps=cost)
     return analyze(ticker, prof, params, years=years, source=source, fundamentals_overrides=overrides or None, as_of=as_of)
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
-def _screen(tickers, horizon, risk, max_loss, cash, holdings, years, source):
+@st.cache_data(show_spinner=False, ttl=LIVE_TTL)
+def _screen(tickers, horizon, risk, max_loss, cash, holdings, years, source, nonce=0):
     prof = _profile(horizon, risk, max_loss, cash, holdings)
     return screen(list(tickers), prof, StrategyParams.for_horizon(horizon), years=years, source=source, progress=False)
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
-def _light(ticker, horizon, risk, max_loss, cash, holdings, years, source):
-    """Analysis without the strategy backtest: enough for trade tickets and the position monitor."""
+@st.cache_resource(show_spinner=False, ttl=LIVE_TTL, max_entries=400)
+def _light(ticker, horizon, risk, max_loss, cash, holdings, years, source, nonce=0):
+    """Analysis without the strategy backtest: enough for trade tickets."""
     return analyze(ticker, _profile(horizon, risk, max_loss, cash, holdings), years=years, source=source, run_backtest_=False)
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=20)
 def _universe(tickers, years, source):
     return pf.load_universe(list(tickers), years=years, source=source)
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
 def _basket(tickers, method, max_w, min_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf):
     cons = pf.PortfolioConstraints(max_weight=max_w, min_weight=min_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.build_portfolio(tickers, method, cons, capital=capital, lookback=lookback, rebalance=rebalance, cost_bps=cost,
                               risk_free_rate=rf, universe=_universe(tickers, years, source))
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
 def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf):
     cons = pf.PortfolioConstraints(max_weight=max_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.goal_portfolio(goal, capital=capital, n_stocks=n_stocks, constraints=cons, max_per_sector=per_sector,
@@ -115,7 +129,7 @@ def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, ca
                              universe=_universe(tickers, years, source))
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=200)
 def _closes(ticker, years, source) -> pd.Series:
     return load_prices(ticker, years=years, source=source)["Close"].rename(ticker)
 
@@ -189,6 +203,16 @@ def plotly(fig, key: str | None = None) -> None:
     st.plotly_chart(fig, width="stretch", config=ix.PLOTLY_CONFIG, key=key)
 
 
+def figure(owner, name, build):
+    """Build a chart once per result object and reuse it: every click re-runs the whole script, and rebuilding the
+    page's Plotly figures took most of a rerun. The figure lives on the object it was drawn from, so a new analysis
+    or portfolio always gets new charts."""
+    store = owner.__dict__.setdefault("_lh_figures", {})
+    if name not in store:
+        store[name] = build()
+    return store[name]
+
+
 def _pick_ticker() -> None:
     v = st.session_state.get("pick")
     if v:
@@ -234,7 +258,7 @@ with st.sidebar:
                                     "account (cash + holdings). Leave 0 if this cash is all you have invested.")
     if cash + holdings <= 0:
         st.error("Enter the cash you can invest (or the value of what you hold) to size positions.")
-    with st.expander("Trade management (tickets & monitor)"):
+    with st.expander("Trade management (entries & exits)"):
         tp1 = st.number_input("Target 1 (× the risk, R)", 0.5, 10.0, 2.0, 0.5, key="tp1",
                               help="Take-profit level 1 = entry ± this many times the distance from entry to the stop.")
         tp2 = st.number_input("Target 2 (R)", 0.5, 20.0, 3.0, 0.5, key="tp2")
@@ -251,6 +275,13 @@ with st.sidebar:
     years = st.slider("Years of history to analyse", 3, 25, 10, key="years")
     source = st.selectbox("Data source", ["auto", "yfinance", "stooq", "cache", "sample"], key="source",
                           help="auto = live data with offline fallbacks. 'sample' uses the bundled historical pack (no internet needed).")
+    refresh_live = st.button("🔄 Refresh live prices", key="refresh_live", width="stretch", disabled=_is_offline(),
+                             help="Fetch the latest quote (and any session that has finished) now. Otherwise an analysis and its "
+                                  "quote are reused for 15 minutes; the quote's time is always shown.")
+    if refresh_live:
+        st.session_state["live_nonce"] = st.session_state.get("live_nonce", 0) + 1
+        if st.session_state.get("result") is not None:
+            st.session_state["auto_run"] = True
     deep = st.checkbox("Run deep evaluation (layers, sensitivity, out-of-sample)", value=False, key="deep",
                        help="Adds ~30-60 seconds: strategy layer attribution, threshold sensitivity grid and a walk-forward test.")
     with st.expander("Expert settings"):
@@ -267,6 +298,7 @@ with st.sidebar:
     st.caption("Decision-support tool, not investment advice.")
 
 run = run or st.session_state.pop("auto_run", False)
+NONCE = st.session_state.get("live_nonce", 0)
 try:
     SETTINGS = TradeSettings(reward_multiples=(float(min(tp1, tp2)), float(max(tp1, tp2))), partial_exit=partial / 100.0,
                              time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat))
@@ -286,7 +318,7 @@ if run:
     with st.spinner(f"Collecting data and analysing {ticker} ..."):
         try:
             res = _run(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, overrides,
-                       str(as_of) if as_of else None)
+                       str(as_of) if as_of else None, NONCE)
             st.session_state["result"] = res
             st.session_state.pop("result_error", None)
         except Exception as exc:  # noqa: BLE001
@@ -320,10 +352,32 @@ def ticket_headline(pl) -> str:
     return f"NO {'LONG' if pl.side == 'long' else 'SHORT'} TRADE IN {pl.ticker}" if pl.status == "avoid" else f"{pl.ticker}: cash too small"
 
 
+EXIT_ICON = {"loss": "🛑", "profit": "🎯", "time": "⏱️", "evidence": "🧭"}
+
+
+def render_exits(pl, key: str) -> None:
+    """When to get out: every exit, for a loss or a profit, with its trigger, the result for the whole position and
+    how often it happened on this stock's history."""
+    st.markdown("**When to get out** · place the stop when you enter, so the exit is decided before emotions are")
+
+    rows = []
+    for x in pl.exit_plan():
+        result = ""
+        if x.r is not None:
+            result = (f"{signed_usd(x.pnl)} ({x.r:+.2f}R)" if x.pnl is not None else f"{x.r:+.2f}R")
+        rows.append({"": EXIT_ICON.get(x.kind, ""), "Exit": x.name,
+                     "Trigger": "" if x.price is None else f"${x.price:,.2f} ({x.move_pct:+.1f}%)",
+                     "If the trade ends here": result, "What to do": x.action, "On this stock's history": x.history})
+    st.table(pd.DataFrame(rows).set_index(""))
+    st.caption("Results are for the whole position (shares already sold included) before costs; R = multiples of the planned "
+               "loss. A gap through a stop fills at the open, which can be worse.")
+
+
 def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) -> None:
     """One trade ticket: levels, money, the management plan, the historical record of these rules, and the caveats."""
     color = TICKET_COLOR.get(pl.status, "#9a9892")
-    sub = (f"{pl.name} · score {pl.composite_score:.0f} ({pl.verdict}) · {pl.regime} · data to {pl.as_of}")
+    sub = (f"{pl.name} · score {pl.composite_score:.0f} ({pl.verdict}) · {pl.regime} · signals through {pl.as_of} · "
+           f"priced from the {pl.priced_from}")
     st.markdown(f"<h4 style='margin:.2rem 0'><span class='lh-verdict' style='background:{color}'>{_h(ticket_headline(pl))}</span> "
                 f"<span class='lh-muted' style='font-weight:400;font-size:.95rem'>{_h(sub)}</span></h4>", unsafe_allow_html=True)
     if pl.side == "short" and pl.status != "avoid":
@@ -353,9 +407,12 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
         kpi(c8, "These rules on this stock's history", "n/a", "no comparable historical setups")
     if pl.warnings and pl.warnings[0].startswith("On this stock's own history"):
         st.error(esc(pl.warnings[0]), icon="📉")
-    st.markdown("**The plan**\n\n" + "\n".join(f"{i}. {esc(x)}" for i, x in enumerate(pl.management_steps(), 1)))
+    if pl.stop is not None:
+        render_exits(pl, key)
+    st.markdown("**The plan, step by step**\n\n" + "\n".join(f"{i}. {esc(x)}" for i, x in enumerate(pl.management_steps(), 1)))
     if chart and not compact:
-        plotly(ix.trade_chart(res, pl), key=f"ticket_chart_{key}_{pl.side}_{pl.ticker}")
+        levels = (pl.side, pl.price, pl.stop, tuple(t.price for t in pl.targets), pl.as_of)
+        plotly(figure(res, ("trade", levels), lambda: ix.trade_chart(res, pl)), key=f"ticket_chart_{key}_{pl.side}_{pl.ticker}")
     with st.expander("Why this status, how it was sized, and the caveats"):
         st.markdown("**Setup**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.reasons))
         if pl.sizing_notes:
@@ -385,6 +442,14 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
 STATUS_GOOD, STATUS_BAD = VERDICT_COLOR["Strong Buy"], VERDICT_COLOR["Sell"]
 
 
+def price_line(res) -> str:
+    """Where the order price comes from: the live quote and its time, or the last close."""
+    d, q = res.decision, getattr(res, "quote", None)
+    if q is not None:
+        return f"signals through {d.as_of} · price {q.describe()}"
+    return f"{d.as_of} close ${d.price:,.2f}"
+
+
 def render_result(res) -> None:
     d, f, pl, prof = res.decision, res.fundamentals, res.decision.plan, res.profile
     color = VERDICT_COLOR[d.verdict]
@@ -394,12 +459,12 @@ def render_result(res) -> None:
     with h1:
         st.markdown(f"<h2 style='margin:0 0 .3rem 0'>{f.name or d.ticker} <span class='lh-muted' style='font-weight:400'>({d.ticker})</span> "
                     f"<span class='lh-verdict' style='background:{color}'>{d.verdict}</span></h2>"
-                    f"<p class='lh-muted' style='margin:0'>{_h(f'{d.as_of} · ${d.price:,.2f} · {prof.describe()}')}</p>", unsafe_allow_html=True)
+                    f"<p class='lh-muted' style='margin:0'>{_h(price_line(res) + ' · ' + prof.describe())}</p>", unsafe_allow_html=True)
         st.info(esc(pl.action), icon="🧭")
         if res.warnings:
             st.warning("**Read before acting**\n\n" + "\n".join(f"- {esc(w)}" for w in res.warnings), icon="⚠️")
     with h2:
-        plotly(ix.score_gauge(d), key="gauge")
+        plotly(figure(res, "gauge", lambda: ix.score_gauge(d)), key="gauge")
 
     k1, k2, k3, k4 = st.columns(4)
     kpi(k1, "Lighthouse score", f"{d.composite_score:.0f} / 100", "verdict bands: ≥72 Strong Buy · ≥60 Buy · ≥45 Hold · ≥32 Reduce", color)
@@ -415,7 +480,7 @@ def render_result(res) -> None:
     # ---- score composition + position plan ---------------------------------
     c1, c2 = st.columns([1.1, 1.4])
     with c1:
-        plotly(ix.score_waterfall(d, prof), key="waterfall")
+        plotly(figure(res, "waterfall", lambda: ix.score_waterfall(d, prof)), key="waterfall")
         if d.regime:
             st.caption(d.regime.describe())
     with c2:
@@ -458,7 +523,7 @@ def render_result(res) -> None:
     want = {"all": None, "bullish": "green", "neutral": "amber", "bearish": "red"}[flt or "all"]
     shown = [b for b in d.beacons if want is None or b.light == want]
     if shown:
-        plotly(ix.score_breakdown(d, beacons=shown), key="breakdown")
+        plotly(figure(res, ("breakdown", tuple(b.key for b in shown)), lambda: ix.score_breakdown(d, beacons=shown)), key="breakdown")
     else:
         st.info("No beacon has that light right now.")
     colf, colt = st.columns(2)
@@ -473,16 +538,16 @@ def render_result(res) -> None:
     st.markdown("#### Price, trend and momentum")
     look = st.segmented_control("Lookback", ["1y", "3y", "5y", "all"], default="3y", key="lookback", label_visibility="collapsed")
     last_days = {"1y": 252, "3y": 756, "5y": 1260, "all": len(res.indicators)}[look or "3y"]
-    st.caption("Shaded bands show market weather (red = bear, amber = turbulent). Triangles are the backtested rule's entries and exits. Drag to zoom, double-click to reset.")
-    plotly(ix.dashboard(res, last_days=last_days), key="dashboard")
-    with st.expander("Why do the Bollinger Bands seem to trail the price?"):
-        st.markdown(f"The bands are built around the dashed **{res.params.bb_window}-day simple moving average** (the middle band), "
-                    f"± {res.params.bb_std:g} standard deviations of the last {res.params.bb_window} closes. Each day's value uses only that "
-                    f"day and the {res.params.bb_window - 1} before it, so the middle band lags the price by about "
-                    f"({res.params.bb_window} − 1) / 2 ≈ {(res.params.bb_window - 1) / 2:.1f} trading days, and after a sharp move the "
-                    "bands keep widening for up to 20 days while that move is still inside the window. This is how Bollinger Bands are "
-                    "defined and drawn on every professional platform. Centring them on the price would require the next ~10 days of "
-                    "prices, which nobody has when deciding, and would make the backtest cheat.")
+    st.caption("Shaded areas show market weather (red = bear, amber = turbulent). Triangles are the backtested rule's entries and exits. Drag to zoom, double-click to reset.")
+    plotly(figure(res, ("dashboard", last_days), lambda: ix.dashboard(res, last_days=last_days)), key="dashboard")
+    with st.expander("How the price bands are built"):
+        n, k = res.params.band_window, res.params.band_std
+        st.markdown(f"The dashed centre line is a {n}-day **Hull moving average**: a weighted average that cancels most of the "
+                    f"delay of an ordinary average (about 3 sessions behind the price on the sample stocks, against about 9 for "
+                    f"the {n}-day simple average that classic Bollinger Bands use). The bands sit ± {k:g} standard deviations of "
+                    f"the closes around that line over the last {n} sessions. A close above the upper band means price is "
+                    "stretched relative to where it is now; the *Price bands* beacon scores that position (%B). Like every line "
+                    "in Lighthouse they use only past prices: nothing is shifted forward, so nothing peeks at the future.")
 
     # ---- backtest ---------------------------------------------------------
     bt = res.backtest
@@ -500,7 +565,7 @@ def render_result(res) -> None:
         kpi(b3, "Sharpe", ratio(m["sharpe"]), f"buy & hold {ratio(mb['sharpe'])}")
         kpi(b4, "Trades", f"{int(m['n_trades'])}", f"win rate {pct(m['win_rate'])} · invested {pct(m['exposure'])} of the time")
         st.dataframe(format_metrics(bt.summary()), width="stretch")
-        plotly(ix.backtest(bt, res.regimes), key="backtest")
+        plotly(figure(res, "backtest", lambda: ix.backtest(bt, res.regimes)), key="backtest")
 
         if "layers" not in res.extras:
             if st.button("Run deep evaluation (layers, sensitivity, out-of-sample) · ~30-60 s", key="deep_now"):
@@ -514,7 +579,7 @@ def render_result(res) -> None:
             with e1:
                 st.caption("Each row adds one layer of the product on top of the previous one, so you can see what every rule is for.")
                 st.dataframe(format_metrics(res.extras["layers"]), width="stretch")
-                plotly(ix.layers(res.extras["layers"]), key="layers")
+                plotly(figure(res, "layers", lambda: ix.layers(res.extras["layers"])), key="layers")
                 rb = res.extras.get("regime_breakdown")
                 if rb is not None and len(rb):
                     st.markdown("**Behaviour by market regime** (annualised daily returns)")
@@ -523,13 +588,13 @@ def render_result(res) -> None:
                 sens = res.extras.get("sensitivity")
                 if sens is not None and len(sens):
                     metric = st.selectbox("Sensitivity metric", ["sharpe", "cagr", "max_drawdown", "win_rate"], key="sens_metric")
-                    plotly(ix.sensitivity(sens, metric), key="sensitivity")
+                    plotly(figure(res, ("sensitivity", metric), lambda: ix.sensitivity(sens, metric)), key="sensitivity")
                     st.caption("A robust rule shows a plateau of similar values; a single bright cell means the thresholds were fitted to noise.")
                 wf = res.extras.get("walk_forward")
                 if wf is not None:
                     st.markdown(f"**Out-of-sample test** (thresholds tuned before {wf['split_date'].date()}, tested after)")
                     st.dataframe(format_metrics(wf["out_of_sample"]), width="stretch")
-                    plotly(ix.walk_forward(wf), key="walk_forward")
+                    plotly(figure(res, "walk_forward", lambda: ix.walk_forward(wf)), key="walk_forward")
         with st.expander(f"Trade list ({len(bt.trades)} trades)"):
             tf = bt.trades_frame()
             st.dataframe(tf, width="stretch", hide_index=True, column_config={
@@ -571,33 +636,55 @@ with tab_analyse:
 
 
 # ============================================================================= TRADE DESK
-DESK_PRESETS = {**PRESET_WATCHLISTS, "All available tickers": None}
+def _parse_tickers(text: str) -> tuple:
+    return tuple(dict.fromkeys(t.upper() for t in str(text).replace(",", " ").split() if t))
 
 
-def _desk_universe(choice: str | None) -> str:
-    if choice == "All available tickers":
-        return " ".join(available_universe(source))
-    if choice in PRESET_WATCHLISTS:
-        return PRESET_WATCHLISTS[choice]
-    return PRESET_WATCHLISTS["Sample pack (offline)"] if _is_offline() else PRESET_WATCHLISTS["Mega caps"]
+def universe_picker(key: str, text_key: str, default: str, label: str = "Universe", text_label: str = "Tickers") -> str:
+    """Pre-built universes as one row of chips that scrolls sideways, filling an editable ticker box below.
+    Returns the ticker box's text (what will actually be used)."""
+    src = "sample" if _is_offline() else source
+    names = universe_names(src)
+    st.session_state.setdefault(text_key, default)
+
+    def apply() -> None:
+        name = st.session_state.get(key)
+        if name:
+            st.session_state[text_key] = " ".join(get_universe(name, src))
+    with st.container(key=f"uscroll_{key}"):
+        st.pills(label, names, selection_mode="single", key=key, on_change=apply,
+                 help="Scroll sideways for more. Picking one fills the box below; edit it freely.")
+    text = st.text_input(text_label + " (space or comma separated)", key=text_key)
+    n = len(_parse_tickers(text))
+    etfs = [t for t in _parse_tickers(text) if t in set(get_universe("Sector ETFs") + get_universe("Index & bond ETFs"))]
+    st.caption(f"{n} tickers" + (" · ETFs have no fundamentals, so they are scored on technicals only" if etfs else "")
+               + ("" if _is_offline() or n <= 25 else " · live data for this many takes a few minutes the first time "
+                  "(then 15 minutes from memory, prices cached on disk)"))
+    return text
 
 
 def _load_many(tickers, label: str):
-    """Analyse several tickers (cached) with a progress bar; returns (results, failures)."""
-    results, failures = [], []
+    """Analyse several tickers (each cached) with a progress bar, in parallel threads when the data is live (downloads
+    overlap). Returns (results in the tickers' order, failures)."""
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+    ctx = get_script_run_ctx()
     bar = st.progress(0.0, text=label)
-    for i, t in enumerate(tickers):
-        try:
-            results.append(_light(t, horizon, risk, max_loss, cash, holdings, min(years, 6), source))
-        except Exception as exc:  # noqa: BLE001 - one bad ticker must not stop the desk
-            failures.append((t, f"{type(exc).__name__}: {str(exc)[:140]}"))
-        bar.progress((i + 1) / max(len(tickers), 1), text=f"{label} {t}")
+    src = "sample" if _is_offline() else source
+    results, errors = map_tickers(
+        lambda t: _light(t, horizon, risk, max_loss, cash, holdings, min(years, 6), source, NONCE), tickers, source=src,
+        on_done=lambda t, k, n: bar.progress(k / max(n, 1), text=f"{label} {t} ({k}/{n})"),
+        initializer=lambda: add_script_run_ctx(threading.current_thread(), ctx))
     bar.empty()
-    return results, failures
+    return list(results.values()), list(errors.items())
 
 
-def render_side(side: str, results) -> None:
-    funded, watch, table = allocate_ideas(results, side, SETTINGS, include_watch=True, with_stats=True)
+def render_side(side: str, desk: dict) -> None:
+    results = desk["results"]
+    plans = desk.setdefault("plans", {})            # funding the ideas replays every setup's history: do it once
+    pkey = (side, tuple(sorted(asdict(SETTINGS).items())))
+    if pkey not in plans:
+        plans[pkey] = allocate_ideas(results, side, SETTINGS, include_watch=True, with_stats=True)
+    funded, watch, table = plans[pkey]
     by = {r.ticker: r for r in results}
     prof = results[0].profile
     used = sum(p.notional for p in funded)
@@ -641,18 +728,12 @@ with tab_desk:
                f"{max_loss:g}% of the account per position. Each idea gets an entry, a stop-loss, two take-profit levels, a trailing "
                "and a time stop, and the record of those exact rules on the stock's own history. Change the targets and the "
                "risk caps under *Trade management* in the sidebar.")
-    d_tab_long, d_tab_short, d_tab_mon = st.tabs(["📈 Long (buy)", "📉 Short (sell short)", "🛡️ Position monitor (stop-loss lookout)"])
+    d_tab_long, d_tab_short = st.tabs(["📈 Long (buy)", "📉 Short (sell short)"])
     with d_tab_long:
-        dc1, dc2 = st.columns([1.2, 2])
-        with dc1:
-            dpre = st.pills("Universe", list(DESK_PRESETS), selection_mode="single", key="desk_preset")
-        with dc2:
-            desk_text = st.text_input("Tickers to scan (space or comma separated)", value=_desk_universe(dpre), key="desk_text")
-        n_scan = len([t for t in desk_text.replace(",", " ").split() if t])
-        if not _is_offline() and n_scan > 25:
-            st.caption(f"{n_scan} tickers with live data takes a few minutes the first time (results are cached for an hour).")
+        desk_text = universe_picker("desk_preset", "desk_text", OFFLINE_DEFAULT_LIST if _is_offline() else " ".join(get_universe("Mega caps")),
+                                    text_label="Tickers to scan")
         if st.button("Find trades now", type="primary", key="desk_go", disabled=not ACCOUNT_OK):
-            tick = tuple(dict.fromkeys(t.upper() for t in desk_text.replace(",", " ").split() if t))
+            tick = _parse_tickers(desk_text)
             results, failures = _load_many(tick, "Analysing")
             st.session_state["desk"] = {"tickers": tick, "failures": failures, "results": results}
         desk = st.session_state.get("desk")
@@ -663,70 +744,16 @@ with tab_desk:
                      r.profile.horizon != horizon or r.profile.max_loss_pct != max_loss or r.profile.holdings_value != float(holdings)]
             if stale:
                 st.info("Your profile changed since the scan: press **Find trades now** to re-size the tickets.")
-            render_side("long", desk["results"])
+            render_side("long", desk)
         elif not desk:
             st.info("Pick a universe and press **Find trades now**. Lighthouse scores every ticker, keeps the actionable setups, and "
                     "funds the strongest ones from your cash until the cash, the idea count or the total-risk cap runs out.")
     with d_tab_short:
         desk = st.session_state.get("desk")
         if desk and desk["results"]:
-            render_side("short", desk["results"])
+            render_side("short", desk)
         else:
             st.info("Run **Find trades now** on the Long tab first; the same scan feeds both sides.")
-    with d_tab_mon:
-        st.markdown("Enter the positions you hold. Lighthouse replays each one since its entry with the plan's rules and tells you "
-                    "whether the stop or a target was hit, how close price is to the stop, where the (trailing) stop should be now, and "
-                    "whether the verdict still supports the trade.")
-        default_rows = (pd.DataFrame([{"ticker": "MSFT", "side": "long", "entry_price": 73.90, "shares": 30, "entry_date": date(2017, 9, 1),
-                                       "stop": None, "target": None}]) if _is_offline() else
-                        pd.DataFrame([{"ticker": "", "side": "long", "entry_price": None, "shares": None, "entry_date": None,
-                                       "stop": None, "target": None}]))
-        rows = st.data_editor(default_rows, num_rows="dynamic", width="stretch", key="mon_rows", column_config={
-            "ticker": st.column_config.TextColumn("Ticker", required=True),
-            "side": st.column_config.SelectboxColumn("Side", options=["long", "short"], required=True),
-            "entry_price": st.column_config.NumberColumn("Entry $", min_value=0.0, format="$%.2f", required=True),
-            "shares": st.column_config.NumberColumn("Shares", min_value=1, step=1, format="%d", required=True),
-            "entry_date": st.column_config.DateColumn("Entry date", required=True),
-            "stop": st.column_config.NumberColumn("Your stop $ (optional)", min_value=0.0, format="$%.2f"),
-            "target": st.column_config.NumberColumn("Your target $ (optional)", min_value=0.0, format="$%.2f")})
-        if st.button("Check my positions", type="primary", key="mon_go", disabled=not ACCOUNT_OK):
-            out, details = [], []
-            for row in rows.to_dict("records"):
-                t = str(row.get("ticker") or "").upper().strip()
-                if not t or not row.get("entry_price") or not row.get("shares") or row.get("entry_date") is None or pd.isna(row.get("entry_date")):
-                    continue
-                try:
-                    r_ = _light(t, horizon, risk, max_loss, cash, holdings, max(years, 3), source)
-                    ms = monitor_position(r_, row.get("side") or "long", float(row["entry_price"]), int(row["shares"]), row["entry_date"],
-                                          stop=None if row.get("stop") is None or pd.isna(row.get("stop")) else float(row["stop"]),
-                                          targets=None if row.get("target") is None or pd.isna(row.get("target")) else [float(row["target"])],
-                                          settings=SETTINGS)
-                    out.append({"ticker": ms.ticker, "side": ms.side, "status": ms.status, "last": ms.last_price, "P&L": ms.pnl,
-                                "P&L %": ms.pnl_pct, "R now": ms.r_multiple, "stop now": ms.current_stop,
-                                "to stop %": ms.distance_to_stop_pct * 100, "to stop (ATR)": ms.distance_to_stop_atr,
-                                "target 1": ms.targets[0][1] if ms.targets else None, "sessions held": ms.days_held,
-                                "verdict now": ms.verdict_now, "as of": ms.as_of})
-                    details.append(ms)
-                except Exception as exc:  # noqa: BLE001
-                    out.append({"ticker": t, "side": row.get("side"), "status": f"error: {type(exc).__name__}: {str(exc)[:120]}"})
-            st.session_state["monitor"] = (pd.DataFrame(out), details)
-        mon = st.session_state.get("monitor")
-        if mon is not None:
-            mdf, details = mon
-            if len(mdf):
-                st.dataframe(mdf, hide_index=True, width="stretch", column_config={
-                    "last": st.column_config.NumberColumn("Last", format="$%.2f"), "P&L": st.column_config.NumberColumn("P&L", format="$%.0f"),
-                    "P&L %": st.column_config.NumberColumn("P&L %", format="%+.1f%%"), "R now": st.column_config.NumberColumn("R now", format="%+.2f"),
-                    "stop now": st.column_config.NumberColumn("Stop now", format="$%.2f"),
-                    "to stop %": st.column_config.NumberColumn("To stop", format="%.1f%%"),
-                    "to stop (ATR)": st.column_config.NumberColumn("To stop (ATR)", format="%.2f"),
-                    "target 1": st.column_config.NumberColumn("Target 1", format="$%.2f")})
-            icon = {"STOP HIT": "🛑", "NEAR STOP": "⚠️", "TARGET 2 HIT": "🎯", "TARGET 1 HIT": "✅", "TIME STOP DUE": "⏱️", "OK": "🟢"}
-            for ms in details:
-                st.markdown(f"{icon.get(ms.status, '•')} **{ms.ticker} {ms.side} · {ms.status}**: {esc(ms.action)} "
-                            f"*(initial stop {esc(money(ms.initial_stop, 2))}, {esc(ms.stop_note)})*")
-                for a in ms.alerts:
-                    st.caption("⚠️ " + esc(a))
 
 
 # ============================================================================= PORTFOLIO BUILDER
@@ -769,13 +796,13 @@ def render_portfolio(res, key: str) -> None:
     st.download_button("Download orders (CSV)", show.to_csv(), file_name=f"lighthouse_portfolio_{res.method}.csv", key=f"dl_pf_{key}")
     c1, c2 = st.columns(2)
     with c1:
-        plotly(ix.allocation_chart(tab), key=f"pf_alloc_{key}")
+        plotly(figure(res, "alloc", lambda: ix.allocation_chart(tab)), key=f"pf_alloc_{key}")
     with c2:
-        plotly(ix.correlation_heatmap(r["correlation"]), key=f"pf_corr_{key}")
+        plotly(figure(res, "corr", lambda: ix.correlation_heatmap(r["correlation"])), key=f"pf_corr_{key}")
     if res.comparison is not None:
         st.markdown("**Walk-forward test** (weights re-estimated each rebalance from past data only, traded at the next close, costs included)")
         st.dataframe(format_metrics(res.comparison), width="stretch")
-        plotly(ix.equity_curves(res.comparison_runs), key=f"pf_eq_{key}")
+        plotly(figure(res, "equity", lambda: ix.equity_curves(res.comparison_runs)), key=f"pf_eq_{key}")
     if len(r["stress"]):
         st.markdown("**Stress test**: today's weights through past market crashes covered by the data")
         st.dataframe(r["stress"], hide_index=True, width="stretch", column_config={
@@ -841,20 +868,16 @@ with tab_port:
         goal = pc2.selectbox("Goal", list(pf.GOALS), format_func=lambda g: pf.GOALS[g].label, index=1, key="pf_goal")
         g = pf.GOALS[goal]
         pc3.caption(esc(g.description) + f" Method: {pf.METHODS[g.method]}.")
-        u1, u2 = st.columns([1.2, 2])
-        upre = u1.pills("Universe", ["All available tickers", "My list"], selection_mode="single", default="All available tickers", key="pf_upre")
-        utext = u2.text_input("Universe tickers", value=" ".join(available_universe(source)), key="pf_utext",
-                              disabled=upre != "My list")
+        utext = universe_picker("pf_upre", "pf_utext", " ".join(available_universe("sample" if _is_offline() else source)),
+                                label="Universe to choose from", text_label="Universe tickers")
         g1, g2, g3, g4, g5 = st.columns(5)
         n_st = g1.number_input("Number of stocks", 2, 40, g.n_stocks, key=f"pf_n_{goal}")
         per_sec = g2.number_input("Max stocks per sector", 1, 10, 3, key="pf_persec")
         gmax = g3.slider("Max per stock", 0.05, 1.0, float(g.max_weight), 0.05, key=f"pf_gmax_{goal}")
         gsec = g4.slider("Max per sector", 0.1, 1.0, float(g.max_sector_weight or 1.0), 0.05, key=f"pf_gsec_{goal}")
         gtv = g5.slider("Target volatility (%/yr, 0 = none)", 0, 40, int(round((g.target_vol or 0) * 100)), 1, key=f"pf_gtv_{goal}")
-        if not _is_offline() and upre != "My list":
-            st.caption("The full large-cap universe with live data takes a few minutes the first time (cached for an hour).")
         if st.button("Build the goal portfolio", type="primary", key="pf_goal_go"):
-            tick = tuple(dict.fromkeys(t.upper() for t in (utext if upre == "My list" else " ".join(available_universe(source))).replace(",", " ").split() if t))
+            tick = _parse_tickers(utext)
             with st.spinner("Ranking the universe, optimising, and re-running the selection month by month for the walk-forward test ..."):
                 try:
                     st.session_state["pf_goal_res"] = _goal(goal, tick, int(n_st), int(per_sec), gmax, gsec if gsec < 1.0 else None,
@@ -873,14 +896,12 @@ with tab_port:
 with tab_screen:
     st.markdown("### Rank a watchlist")
     st.caption("Every ticker is scored with your profile; the table is sortable, and selecting a row opens a summary card.")
-    preset = st.pills("Presets", list(PRESET_WATCHLISTS), selection_mode="single", key="wl_preset", label_visibility="collapsed")
-    default_wl = PRESET_WATCHLISTS["Sample pack (offline)"] if _is_offline() else PRESET_WATCHLISTS["Mega caps"]
-    wl = st.text_input("Tickers (space or comma separated)", value=PRESET_WATCHLISTS.get(preset, default_wl) if preset else default_wl, key="wl_text")
+    wl = universe_picker("wl_preset", "wl_text", OFFLINE_DEFAULT_LIST if _is_offline() else " ".join(get_universe("Mega caps")))
     if st.button("Rank watchlist", type="primary", key="rank", disabled=not ACCOUNT_OK):
-        tickers = tuple(dict.fromkeys(t.upper() for t in wl.replace(",", " ").split() if t))
+        tickers = _parse_tickers(wl)
         with st.spinner(f"Analysing {len(tickers)} tickers ..."):
             try:
-                st.session_state["screen_df"] = _screen(tickers, horizon, risk, max_loss, cash, holdings, min(years, 6), source)
+                st.session_state["screen_df"] = _screen(tickers, horizon, risk, max_loss, cash, holdings, min(years, 6), source, NONCE)
             except Exception as exc:  # noqa: BLE001
                 show_error(exc, ", ".join(tickers))
     sdf = st.session_state.get("screen_df")
@@ -890,7 +911,10 @@ with tab_screen:
         if len(bad):
             st.warning("Could not score: " + "; ".join(f"**{r.ticker}** ({r.error})" for r in bad.itertuples()), icon="⚠️")
         if ok:
-            plotly(ix.screener(sdf), key="screener")
+            cached = st.session_state.get("screen_fig")
+            if not cached or cached[0] is not sdf:
+                cached = st.session_state["screen_fig"] = (sdf, ix.screener(sdf))
+            plotly(cached[1], key="screener")
         cols_ = [c for c in ["ticker", "name", "verdict", "score", "fundamental", "technical", "regime", "position_pct", "shares", "cost",
                              "price", "stop", "pe", "roe", "rev_growth", "sector"] if c in sdf.columns]
         show = sdf[cols_].copy()
@@ -981,11 +1005,11 @@ with tab_about:
         st.markdown("""
 1. **Collect & clean** daily prices, the S&P 500 and fundamentals (live sources first, then cache, then the bundled sample pack).
 2. **Fundamental beacons** (13): valuation, quality and growth ratios scored against sector norms.
-3. **Technical beacons** (6): trend, RSI, MACD, Bollinger %B, volume confirmation, 52-week-high proximity.
+3. **Technical beacons** (6): trend, RSI, MACD, position in the low-lag price bands (%B), volume confirmation, 52-week-high proximity.
 4. **Market weather**: Bull/Bear × Calm/Turbulent for the S&P 500 removes points, raises the entry bar and halves sizes in bear markets.
 5. **Decision**: horizon-weighted blend → verdict → position size from the *smallest* of three rules (max-loss, volatility target, concentration cap), paid from the **cash you have**.
 6. **Honest evaluation**: point-in-time backtest vs buy & hold and the S&P 500, layer attribution, sensitivity grid, walk-forward test.
-7. **Trade desk**: long and short tickets with an entry limit, stop-loss, two take-profit levels (multiples of the risk, *R*), breakeven and trailing stops, a time stop, and the record of those exact rules on the stock's own history; a position monitor re-checks your open trades.
+7. **Trade desk**: long and short tickets with an entry limit, stop-loss, two take-profit levels (multiples of the risk, *R*), breakeven and trailing stops, a time stop, and a *when to get out* table: every exit, for a profit or a loss, with its price, its result for the whole position and how often it happened on the stock's own history.
 8. **Portfolio builder**: Ledoit-Wolf risk model; equal weight, inverse volatility, risk parity, minimum variance, maximum Sharpe (Bayes-Stein returns) or hierarchical risk parity; stock and sector caps; a volatility target; VaR, expected shortfall, beta, risk contributions and stress tests; every method walk-forward tested.
 """)
     with a2:

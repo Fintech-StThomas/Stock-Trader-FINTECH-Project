@@ -1,14 +1,14 @@
 # Lighthouse report: Microsoft Corporation (MSFT)
-*As of 2017-11-10 · price $83.87 · investor: long-term, balanced risk, $25,000 cash to invest, max loss 2.0% of the account per position*
+*Signals as of 2017-11-10 · price $83.87 (close) · investor: long-term, balanced risk, $25,000 cash to invest, max loss 2.0% of the account per position*
 
-## Verdict: **Strong Buy** — Lighthouse score 73 / 100
-Open or add to a position - the evidence lines up across fundamentals, technicals and the market backdrop.
+## Verdict: **Buy** — Lighthouse score 71 / 100
+Open a position at the suggested size; the balance of evidence is positive.
 
 ### How the score is built
 - Fundamental score **63** × weight 60% = 38.0
-- Technical score **88** × weight 40% = 35.2
+- Technical score **83** × weight 40% = 33.1
 - Market-weather adjustment: **0** (Bull / Calm)
-- **Composite = 73.2** → Strong Buy (bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)
+- **Composite = 71.1** → Buy (bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)
 
 ### Fundamental beacons (score 63)
 *Technology · Software - Infrastructure · data: offline_fixture (approximate, from memory of 10-K filings; demonstration only) (2017-11-10)*
@@ -29,13 +29,13 @@ Open or add to a position - the evidence lines up across fundamentals, technical
 | Revenue growth (YoY) | revenue 5.4% | 🟡 | +0.03 | 12% | +0.2 | Revenue growing around the pace of the economy. |
 | EPS growth (YoY) | EPS 29.0% | 🟢 | +1.00 | 12% | +6.2 | Earnings per share are growing faster than the market's long-run ~8%. |
 
-### Technical beacons (score 88)
+### Technical beacons (score 83)
 | signal | reading | light | vote | weight | points | why |
 |---|---|---|---|---|---|---|
 | Trend (50/200-day SMA) | price +19.2% vs 200-SMA; Golden Cross (50 > 200) | 🟢 | +1.00 | 35% | +17.5 | Price is above its 200-day average and the 50-day sits above the 200-day: the long-term trend is up. |
 | Momentum (RSI 14) | RSI 74.9 | 🟢 | +0.67 | 15% | +5.1 | RSI above 70 is overbought: momentum is strong but stretched, so the signal fades. |
 | MACD (12/26/9) | histogram +0.06 (+0.05 ATR) | 🟡 | +0.05 | 10% | +0.3 | MACD line is above its signal line: short-term momentum is accelerating upward. |
-| Bollinger Bands (20, 2σ) | %B 0.72 | 🟢 | +0.43 | 10% | +2.2 | Price sits in the upper half of its Bollinger Bands: buyers are in control without over-extension. |
+| Price bands (Hull 20, 2σ) | %B 0.19 | 🔴 | -0.62 | 10% | -3.1 | Price sits in the lower half of its bands: sellers are in control. |
 | Volume confirmation (OBV, 20/60-day) | volume 1.20x avg; OBV up | 🟢 | +0.70 | 10% | +3.5 | Recent volume is 1.20x its 3-month average and on-balance volume is rising: the move is confirmed by participation. |
 | 52-week high proximity | -0.8% from 52-week high | 🟢 | +0.96 | 20% | +9.6 | Trading at or near its 52-week high: a breakout zone where trend-followers add exposure. |
 
@@ -43,13 +43,13 @@ Open or add to a position - the evidence lines up across fundamentals, technical
 Market weather is Bull / Calm: the S&P 500 is above its 200-day average (up-trend) and realised volatility (5%) is near or below its one-year norm (7%).
 
 ### Position plan
-- Buy **21 shares** near $83.87 = **$1,761** of your $25,000 cash (7.1% of the $25,000 account); $23,239 stays in cash.
-- Exit level **$64.73** (22.8% below): worst case ≈ $402 (1.61% of the account, limit 2%) if the stop fills at its price; an overnight gap through the stop can lose more.
+- Buy **19 shares** near $83.87 = **$1,594** of your $25,000 cash (6.5% of the $25,000 account); $23,406 stays in cash.
+- Exit level **$64.73** (22.8% below): worst case ≈ $364 (1.45% of the account, limit 2%) if the stop fills at its price; an overnight gap through the stop can lose more.
 - Size was limited by the **max-loss rule**.
   - Exit level 22.8% below the current price at $64.73 (200-day SMA minus 8% buffer).
   - Max-loss rule: losing 2% of the account ($500) at the stop caps the position at 8.8% of the account.
   - Volatility rule: 16% realised vol vs a 15% target caps the position at 93.9% of the account.
-  - Scaled by conviction 0.81 (score 73) and market-regime multiplier 1.
+  - Scaled by conviction 0.75 (score 71) and market-regime multiplier 1.
 
 ### How this rule behaved in the past (2002-09-04 → 2017-11-10)
 Long-only, reviewed monthly at the close, filled at the next open, 10 bps commission + slippage per side, statements lagged 90 days. Returns are for the capital allocated to this stock.
@@ -88,7 +88,7 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 | Tuned in-sample (55/30) | 67.2% | 8.8% | 13.7% | 0.54 | -26.5% | 3 |
 | Buy & hold | 263.3% | 23.6% | 22.2% | 0.98 | -18.0% | n/a |
 
-**Sensitivity**: across 25 entry/exit threshold pairs the Sharpe ratio ranges from 0.05 (entry 60/exit 45) to 0.20 (entry 65/exit 25); median 0.17.
+**Sensitivity**: across 25 entry/exit threshold pairs the Sharpe ratio ranges from 0.08 (entry 55/exit 45) to 0.20 (entry 65/exit 25); median 0.16.
 
 ### Data notes and warnings
 - OFFLINE DATA (sample): series ends 2017-11-10; connect to the internet for live prices

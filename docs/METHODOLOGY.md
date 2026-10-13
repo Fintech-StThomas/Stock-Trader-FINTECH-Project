@@ -12,7 +12,9 @@ This document exists so that the team can defend every number in the product. It
 | Fundamentals | Yahoo snapshot (trailing/forward P/E, PEG, P/B, EV/EBITDA, ROE, margins, D/E, current ratio, FCF, growth) plus annual and quarterly statements | One valuation ratio and one quality/growth measure are required; we use several so a missing field never breaks the score |
 | Cleaning | Sort, de-duplicate dates, drop rows without a positive close, fill missing O/H/L from the close, enforce High ≥ max(O,C) and Low ≤ min(O,C), disable volume if >50% missing, flag >50% one-day moves | Each step is counted and shown to the user (`CleaningReport`) |
 | Offline pack | Real data shipped in open-source packages (Microsoft OHLCV 1986-2017 from `pmdarima`, 19 S&P stocks and the index 1990-2022 from `skfolio`) | The notebook and tests must run end-to-end without internet; provenance in `scripts/build_sample_pack.py` |
-| Caching | Last live download cached in `data/cache/` for 20 hours | Yahoo rate-limits; the product stays usable |
+| Caching | Last live download cached in `data/cache/` for at most 20 hours, and (in `auto`) only until the next session close (16:00 New York) after the download; files are written atomically and each ticker is downloaded by one thread at a time | Yahoo rate-limits; the product stays usable; a finished session is never missing from the cache; parallel loads never read a half-written file |
+| Unfinished sessions | During market hours today's daily bar is left out of every indicator, and never cached; a note says so | Its close, range and volume are not final (a partial day's volume reads as a collapse), and the rules were tested on finished days |
+| Order price | "Buy now" tickets and the position plan are priced from the feed's latest quote with its timestamp and market state (Yahoo chart metadata: `regularMarketPrice`, `regularMarketTime`, trading periods); the last close when there is none, when it is older than the data, or when it is more than 25% from the close (a split or a bad tick) | The decision is made on finished sessions, the order on the price you can trade at. Yahoo quotes can lag by up to 15 minutes on some exchanges |
 
 ## 2. Fundamental beacons
 
@@ -47,18 +49,26 @@ All indicators are causal (rolling windows, `ewm(adjust=False)`): the value on d
 | Trend | 0.5·clip((Close/SMA200 − 1)/10%) + 0.5·clip((SMA50/SMA200 − 1)/5%) | Continuous Golden/Death Cross: fewer whipsaws than a binary cross | 35% / 20% |
 | RSI(14) | linear from −1 at 30 to +1 at 70, then fading (+1 → −1 from 70 to 100) | Confirms momentum; extremes signal exhaustion | 15% / 20% |
 | MACD(12/26/9) | histogram / ATR, clipped | Momentum acceleration, scale-free | 10% / 20% |
-| Bollinger %B (20, 2σ) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits in its recent range; above the band = over-extended | 10% / 15% |
+| Price bands %B (Hull 20, 2σ) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits around its low-lag centre line; above the band = over-extended | 10% / 15% |
 | Volume | 0.5·sign(20-day return)·clip((vol20/vol60 − 1)/0.5, 0, 1) + 0.5·sign(OBV − SMA20(OBV)) | A move on expanding volume is more trustworthy; excluded (grey) when volume is unavailable | 10% / 15% |
 | 52-week high | +1 at the high, 0 at 20% below, −1 at 40% below | Breakout proximity; momentum literature | 20% / 10% |
 
 Technical score = 50 + 50 × weighted mean, with weights re-normalised over available beacons. Long-term weights lean on slow beacons (trend, breakout); short-term on oscillators.
 
-**Why the Bollinger Bands trail the price.** The bands are the 20-day simple moving average (the *middle band*, drawn dashed on
-every chart) ± 2 population standard deviations of the same 20 closes, as John Bollinger defines them. A trailing 20-day average
-lags price by (20 − 1) / 2 = 9.5 sessions, and after a sharp move the band width keeps growing until the move leaves the
-20-day window. On the sample data the middle band lines up best with the close from 9–10 sessions earlier, exactly as
-theory says. Centring the bands on the price would use the next ~10 days of prices, which is look-ahead, so they are not
-shifted.
+**Price bands: low lag instead of Bollinger's.** Classic Bollinger Bands are a 20-day simple moving average ± 2σ of the
+same closes. A trailing 20-day average lags price by (20 − 1) / 2 = 9.5 sessions (the sample data agree: the middle band
+lines up best with the close from 9 sessions earlier), so the bands trail every move. Lighthouse uses a 20-day Hull moving
+average (Hull 2005: WMA(2·WMA(10) − WMA(20), 4)) as the centre and ± 2 standard deviations of the closes around it over
+the same 20 sessions. On the 20 sample stocks the centre's best-matching lag is 3.0 sessions instead of 9.2, at about
+twice the roughness; a rolling-regression endpoint lagged 2.1 but was rougher still, and a 10-day SMA lagged 4.2. The
+bands are causal (nothing is shifted forward; the truncation test covers them), and the *price bands* beacon scores %B
+on them exactly as it scored Bollinger's %B.
+
+Switching the beacon from Bollinger's bands to these was tested before it was made: on the 20 sample stocks over 15
+years the long-term rule's average Sharpe went 0.323 → 0.322 and the short-term rule's −0.134 → −0.127 (better on 21 of
+40 stock-horizon pairs), and over the full 1990-2022 cross-ticker test the balanced profile's average Sharpe went
+0.394 → 0.399 (better on 9 stocks, worse on 10). In other words a wash on returns; the gain is a chart and a beacon that
+describe the price as it is now. The classic bands were removed in October 2026.
 
 ## 4. Market weather (regime)
 
@@ -107,7 +117,7 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 ## 8. Results and interpretation
 
-See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 6.4%, vol 12.7%, Sharpe 0.39, max DD −32%; conservative vol 8.8%, max DD −23%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 4/20.
+See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 6.5%, vol 12.7%, Sharpe 0.40, max DD −32%; conservative vol 8.8%, max DD −23%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 3/20.
 
 Interpretation: on a universe of survivors that compounded at 13% a year, a rule that is sometimes in cash cannot win on return. The product's value is that it delivers *the risk profile the investor asked for* — a balanced investor who said "15% volatility, lose at most 2% per idea" actually gets ~13% volatility and a defined worst case — while keeping most of the up-trend exposure. We state this plainly rather than hiding it behind a cherry-picked ticker.
 
@@ -132,9 +142,20 @@ Gaps fill at the open; when a stop and a target fall in the same session the sto
 money on that stock is flagged in red. Shorts are simulated on the dividend-adjusted series, so the dividends a short seller
 owes are reflected; borrow fees are not.
 
-**Position monitor.** An open position is replayed from the session after its entry with the same rules. The monitor reports a
-stop or target hit (with the date), how far price is from the stop (in % and ATR; "near stop" within 0.5 ATR), the current
-breakeven or trailing stop, a due time stop, and whether the latest verdict has turned against the trade.
+**When to get out.** Every ticket lists its exits with a trigger, the result for the *whole* position if the trade ends
+that way, and how often (and how fast) the setup test's trades ended that way on that stock: the stop (−1R); target 1 (the
+partial sold there, which is also the result if the rest is then stopped at breakeven); the trailing stop (between target 1
+and target 2); target 2 (the best planned outcome); the time stop (between the stop and target 1); and a verdict turning
+against the trade at the weekly (short horizon) or monthly (long horizon) review. The exits are decided, and the stop
+order placed, when the trade is entered.
+
+**Position replay (CLI `monitor`).** An open position is replayed from the session after its entry with the same rules,
+assuming the plan was followed: the shares sold at target 1 are the ticket's split (half by default, all of a single
+share), every later exit closes what is left. P&L is realised on those fills (the fill price, so a gap through a target
+or a stop counts at the open) and unrealised only on the shares still held, at the last close; R is that total over the
+initial risk of the whole position. It also reports how far price is from the current (breakeven or trailing) stop, a
+due time stop and whether the verdict has turned against the trade. The app has no position-entry screen: the tickets
+carry the exits instead.
 
 **Short-sale facts shown on short tickets.** Regulation T initial margin is 150% of the short value (the sale proceeds plus a
 50% deposit). FINRA Rule 4210 maintenance for a short stock at $5 or more is the greater of $5 per share or 30% of market
@@ -159,7 +180,14 @@ account or an IRA), borrowable shares, and the payment of dividends in lieu.
 **Goals.** *Capital preservation* picks the 10 calmest stocks and uses minimum variance with a 12% volatility target. *Balanced*
 picks the 10 best technical scores (≥ 45) and uses risk parity. *Growth* picks the 8 strongest 12-1 month momentum names in an
 up-trend and uses maximum Sharpe. *Maximum diversification* picks 15 names (technical score ≥ 45) and uses HRP. At most 3 stocks
-per sector and sector weight caps apply. The walk-forward test **re-selects** the stocks every rebalance with only the data
+per sector and sector weight caps apply. A ticker outside the curated sector list gets the sector its fundamentals
+snapshot reports (Yahoo's `info["sector"]`, cached); one with no sector at all (ETFs, unknown symbols) is labelled
+"Unknown" and is exempt from both the 3-per-sector limit and the sector weight caps, because "Unknown" is not a sector.
+Before this rule, every unlabelled ticker shared one "Unknown" sector, so a custom universe produced at most 3 picks.
+When a universe spans too few sectors to fill the goal (a sector list such as "Technology"), the per-sector limit is raised
+to ⌈stocks wanted / sectors⌉, and a sector weight cap that the sectors cannot satisfy is dropped; both are noted on the
+result.
+All 122 curated labels were checked against Yahoo's live `info["sector"]` in October 2026 and match. The walk-forward test **re-selects** the stocks every rebalance with only the data
 available then, so it does not benefit from knowing today's winners. That matters: the back-cast of today's picks over the
 last year is inflated by how they were chosen, so the app shows it for risk only and uses the walk-forward test for performance.
 
@@ -175,7 +203,7 @@ the most estimation-sensitive.
 
 | Issue | Effect | Fix |
 |---|---|---|
-| Bollinger middle band computed but never drawn | The bands appeared to float around nothing | Dashed 20-day SMA on both chart sets, plus the lag explanation above |
+| Bollinger middle band computed but never drawn | The bands appeared to float around nothing | Dashed 20-day SMA on both chart sets (the classic bands were later replaced by low-lag price bands, §3) |
 | Market-weather shading never appeared in the interactive charts | Plotly silently drops shapes aimed at a subplot that has no trace yet; the legend listed regimes that were not drawn | Shapes are added with `exclude_empty_subplots=False` |
 | Sortino ratio used the standard deviation of the negative returns only | Wrong formula (overstated or understated depending on the series) | Downside deviation below the risk-free rate over **all** periods (Sortino & Price 1994) |
 | Profit factor summed unweighted trade returns | A small trade counted as much as a large one | Gross profit / gross loss of size-weighted P&L |
@@ -188,12 +216,53 @@ the most estimation-sensitive.
 The changes do not alter the strategy backtest itself. Regenerating `reports/examples/MSFT` reproduced every return,
 drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor columns changed.
 
-## 12. Q&A preparation
+### Second October 2026 session
 
-* **Why these indicators?** Trend (200-day) is the most robust timing signal in the literature; RSI/MACD/Bollinger cover momentum, acceleration and range; volume validates moves; 52-week high is the simplest breakout measure. Fundamentals cover the three questions an analyst asks: is it cheap, is it good, is it growing.
+| Issue | Effect | Fix |
+|---|---|---|
+| Tickers outside the curated sector list all became "Unknown" | Goal portfolios on custom universes stopped at 3 stocks; sector caps were infeasible or forced concentration | Sector from the fundamentals snapshot; "Unknown" exempt from per-sector limits |
+| Position replay valued every share at the last price | After target 1 (half sold) or a stop, P&L and R ignored the fills already taken (one test case: $299 reported, $231 realised) | Realised P&L on the exits, unrealised on the open shares |
+| A bar for a session still trading was used as a finished day | Signals, especially volume, moved during the day; a partial bar could sit in the cache for 20 hours | Unfinished bar left out and never cached; orders priced from a timestamped quote |
+| A cache written before a session closed was reused after it | A finished session could be missing for most of a day | The cache expires at the first session close after the download |
+| The app's "Position monitor" asked the investor to type in positions | Not what the tickets are for: the sell decision belongs to the plan | Removed; every ticket shows *When to get out* |
+| Bollinger Bands trailed the price by ~10 sessions | The chart and the beacon described where price was two weeks earlier | Hull-MA price bands (~3 sessions); the classic bands are gone from the score and every chart (§3) |
+| The README's cross-ticker table had no generating script | Its provenance could not be checked | `scripts/cross_ticker_evaluation.py` rebuilds it (it reproduced the old file byte for byte before the band change) |
+| The CLI `monitor` dropped today's unfinished bar | A position entered today could not be replayed, and a stop hit today was not reported | `analyze(keep_partial=True)` keeps today's bar (stock and benchmark) for the replay only |
+| A benchmark with no rows in the stock's window crashed the analysis | E.g. live prices with the S&P 500 falling back to the 2022 sample file | `load_prices` raises when the window is empty and `align` when the frames do not overlap; the regime rules are then switched off with a warning |
+| A quote was requested even after the prices had fallen back to old data | An extra network timeout per ticker, and today's price paired with stale signals | A separate quote is fetched only for current prices |
+
+## 12. Speed
+
+Measured offline with Streamlit's test harness on the sample pack (before → after this session's work): first page load
+1.75 → 0.70 s; a click with an analysis on screen 2.88 → 0.43 s; with desk and portfolio results on screen 5.69 → 0.58 s;
+a trade-desk scan of 8 tickers 6.66 → 1.53 s; a deep evaluation (layers, sensitivity grid, walk-forward) 7.9 → 1.4 s.
+A cold live screen of the 12 mega caps took 41 s one ticker at a time and 8 s with 8 threads. What made the difference:
+
+* **pandas copies `attrs` into every derived object** (a deep copy, every operation). The price frame carried the cleaning
+  report and the quote, so indicator maths ran several times slower than it should. `analyze` now computes on attr-free
+  frames and puts the metadata back on the result.
+* **`lighthouse/memo.py`** memoises indicators, beacon scores, technical scores and the regime table on a content
+  fingerprint of the input and on the parameters that can change them (trading thresholds and costs are excluded), and
+  returns copies. A deep evaluation's ~80 backtests differ only in thresholds and now share one computation.
+* **Plotly**: `add_vrect` / `add_hline` re-validate the whole layout on every call; the regime shading of a long history
+  took 2.6 s. All shapes are now set in one layout update. The app keeps each figure on the result it was drawn from,
+  so a click re-uses it, and the desk funds its ideas once per scan and settings.
+* **Streamlit caches**: large read-only results use `st.cache_resource` (`st.cache_data` pickles megabytes on every hit).
+* **Threads for the network** (`lighthouse/parallel.py`): live multi-ticker work runs in up to 8 threads; offline work
+  stays serial because Python threads only add contention to pure CPU work.
+* **Imports**: the app no longer loads matplotlib (`palette.py` holds the shared colours), and scipy loads only when an
+  optimiser runs.
+
+Every published number is unchanged by these changes: the cross-ticker table and the MSFT example report regenerate
+byte for byte. What is still slow: a portfolio walk-forward test (6 methods × ~120 monthly optimisations, about 1.5 s
+for 8 stocks), and a cold live scan, which is bound by Yahoo's response time (fundamentals are 7 requests per ticker).
+
+## 13. Q&A preparation
+
+* **Why these indicators?** Trend (200-day) is the most robust timing signal in the literature; RSI/MACD/price bands cover momentum, acceleration and range; volume validates moves; 52-week high is the simplest breakout measure. Fundamentals cover the three questions an analyst asks: is it cheap, is it good, is it growing.
 * **Why should they predict returns?** Trend and momentum persistence are documented anomalies; quality and value premia are documented factors. We do not claim short-term prediction; we claim better risk-adjusted participation.
 * **Why these thresholds?** Chosen *before* tuning for interpretability (60 = clearly positive evidence; 35 = clearly negative), then checked with a sensitivity grid: results form a plateau and in-sample tuning did not improve out-of-sample results.
 * **Different market conditions?** The regime table shows the rule loses roughly half as much as buy-and-hold in Bear/Turbulent markets and keeps 60-65% exposure in Bull/Calm markets.
-* **Sensitivity?** Sharpe across 20 threshold pairs on Microsoft ranged 0.05-0.20 (default 0.18); the biggest sensitivity is the review frequency and the stop design, which is why both are documented above.
+* **Sensitivity?** Sharpe across 25 threshold pairs on Microsoft ranged 0.08-0.20 (median 0.16, default 0.18); the biggest sensitivity is the review frequency and the stop design, which is why both are documented above.
 * **Biggest weaknesses?** Whipsaw losses in long sideways markets; sector norms are assumptions; short fundamental history; survivorship in our test universe; no transaction-tax modelling.
 * **What did GenAI contribute?** Code scaffolding, indicator implementations and the experiment harness. The team decided the customer, the signals, the weights, the exit design, what to reject, and how to present results honestly.

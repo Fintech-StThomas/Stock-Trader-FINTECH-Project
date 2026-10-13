@@ -10,7 +10,7 @@ Beacons
 trend      Price vs 200-day SMA and 50-day vs 200-day SMA (Golden / Death Cross)
 rsi        14-day RSI: confirms momentum between 30-70, flags exhaustion beyond
 macd       MACD histogram normalised by ATR (momentum acceleration)
-bollinger  Position inside the Bollinger Bands (%B): trend confirmation vs. over-extension
+bands      Position inside the low-lag price bands (%B, Hull MA centre): trend confirmation vs. over-extension
 volume     Volume confirmation: expanding volume behind the move + OBV trend
 breakout   Distance from the 52-week high (breakout proximity)
 """
@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from . import indicators as ind
+from . import memo
 from .config import StrategyParams, TECHNICAL_WEIGHTS
 
 
@@ -57,9 +58,16 @@ class Beacon:
 # Indicator table
 # --------------------------------------------------------------------------- #
 def compute_indicators(prices: pd.DataFrame, params: Optional[StrategyParams] = None) -> pd.DataFrame:
-    """Return a copy of `prices` with all indicator columns added (all causal)."""
+    """Return a copy of `prices` with all indicator columns added (all causal). Memoised on the data and parameters."""
     p = params or StrategyParams()
+    return memo.memoize(("indicators", memo.frame_fingerprint(prices), memo.params_key(p)), lambda: _compute_indicators(prices, p))
+
+
+def _compute_indicators(prices: pd.DataFrame, p: StrategyParams) -> pd.DataFrame:
     df = prices.copy()
+    # pandas deep-copies `attrs` into every derived object; the price frame carries the cleaning report and the quote,
+    # which made indicator maths several times slower. The indicator table does not need them.
+    df.attrs = {}
     close, high, low = df["Close"], df["High"], df["Low"]
     volume = df["Volume"] if "Volume" in df else pd.Series(np.nan, index=df.index)
 
@@ -67,7 +75,7 @@ def compute_indicators(prices: pd.DataFrame, params: Optional[StrategyParams] = 
     df["sma_slow"] = ind.sma(close, p.sma_slow)
     df["rsi"] = ind.rsi(close, p.rsi_window)
     df["macd"], df["macd_signal"], df["macd_hist"] = ind.macd(close, p.macd_fast, p.macd_slow, p.macd_signal)
-    df["bb_mid"], df["bb_upper"], df["bb_lower"], df["pct_b"], df["bb_width"] = ind.bollinger(close, p.bb_window, p.bb_std)
+    df["band_mid"], df["band_upper"], df["band_lower"], df["pct_b"] = ind.lowlag_bands(close, p.band_window, p.band_std)
     df["atr"] = ind.atr(high, low, close, p.atr_window)
     df["atr_pct"] = df["atr"] / close
     df["realized_vol"] = ind.realized_vol(close, p.vol_window, p.trading_days)
@@ -98,8 +106,12 @@ def _clip(x, lo=-1.0, hi=1.0):
 
 
 def beacon_scores(ind_df: pd.DataFrame, params: Optional[StrategyParams] = None) -> pd.DataFrame:
-    """Per-date score of every technical beacon. NaN where an indicator is undefined."""
+    """Per-date score of every technical beacon. NaN where an indicator is undefined. Memoised like the indicators."""
     p = params or StrategyParams()
+    return memo.memoize(("beacons", memo.frame_fingerprint(ind_df), memo.params_key(p)), lambda: _beacon_scores(ind_df, p))
+
+
+def _beacon_scores(ind_df: pd.DataFrame, p: StrategyParams) -> pd.DataFrame:
     close = ind_df["Close"]
     out = pd.DataFrame(index=ind_df.index)
 
@@ -123,13 +135,13 @@ def beacon_scores(ind_df: pd.DataFrame, params: Optional[StrategyParams] = None)
     # 3) MACD histogram scaled by ATR (one ATR of histogram = full conviction).
     out["macd"] = _clip(ind_df["macd_hist"] / ind_df["atr"].replace(0.0, np.nan))
 
-    # 4) Bollinger %B: 0.5 = neutral; above the upper band = over-extended.
+    # 4) Price-band %B: 0.5 = on the centre line; above the upper band = over-extended.
     b = ind_df["pct_b"]
     core_b = _clip((b - 0.5) * 2.0)
     over_b = _clip(0.5 - (b - 1.0) * 2.0)      # 1.0 -> +0.5, 1.25 -> 0, 1.75 -> -1
     under_b = _clip(-0.5 + (0.0 - b) * 2.0)    # 0.0 -> -0.5, 0.25 below -> 0
-    bb_score = core_b.where(b <= 1.0, over_b).where(b >= 0.0, under_b)
-    out["bollinger"] = bb_score.where(b.notna())
+    band_score = core_b.where(b <= 1.0, over_b).where(b >= 0.0, under_b)
+    out["bands"] = band_score.where(b.notna())
 
     # 5) Volume confirmation: expanding volume behind the 20-day move (+/-) and OBV trend.
     if ind_df["vol_ratio"].notna().any():
@@ -156,6 +168,12 @@ def technical_score(ind_df: pd.DataFrame, horizon: str = "long",
     renormalised, so a missing volume feed never silently biases the score.
     """
     w = weights or TECHNICAL_WEIGHTS[horizon]
+    p = params or StrategyParams()
+    key = ("technical_score", memo.frame_fingerprint(ind_df), tuple(sorted(w.items())), memo.params_key(p))
+    return memo.memoize(key, lambda: _technical_score(ind_df, w, p))
+
+
+def _technical_score(ind_df: pd.DataFrame, w: Dict[str, float], params: StrategyParams) -> pd.Series:
     scores = beacon_scores(ind_df, params)
     wser = pd.Series(w)
     cols = [c for c in wser.index if c in scores.columns]
@@ -219,18 +237,18 @@ def latest_beacons(ind_df: pd.DataFrame, horizon: str = "long",
         "MACD line is above its signal line: short-term momentum is accelerating upward."
         if h > 0 else "MACD line is below its signal line: short-term momentum is fading or negative."))
 
-    # bollinger
+    # price bands
     b = row["pct_b"]
     if b > 1:
-        why = "Price closed above the upper Bollinger Band: extended, with higher odds of a pause or pull-back."
+        why = "Price closed above the upper band: extended, with higher odds of a pause or pull-back."
     elif b < 0:
-        why = "Price closed below the lower Bollinger Band: washed out, which can precede a rebound but confirms weakness."
+        why = "Price closed below the lower band: washed out, which can precede a rebound but confirms weakness."
     elif b >= 0.5:
-        why = "Price sits in the upper half of its Bollinger Bands: buyers are in control without over-extension."
+        why = "Price sits in the upper half of its bands: buyers are in control without over-extension."
     else:
-        why = "Price sits in the lower half of its Bollinger Bands: sellers are in control."
-    beacons.append(Beacon("bollinger", f"Bollinger Bands ({p.bb_window}, {p.bb_std:g}σ)", "technical",
-                          f"%B {b:.2f}", float(sc["bollinger"]), w["bollinger"], why))
+        why = "Price sits in the lower half of its bands: sellers are in control."
+    beacons.append(Beacon("bands", f"Price bands (Hull {p.band_window}, {p.band_std:g}σ)", "technical",
+                          f"%B {b:.2f}", float(sc["bands"]), w["bands"], why))
 
     # volume
     if pd.notna(sc["volume"]):

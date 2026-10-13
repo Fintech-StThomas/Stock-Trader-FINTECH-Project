@@ -1,7 +1,7 @@
 """Plain-English report generation (Markdown)."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -69,7 +69,9 @@ def build_report(result, include_backtest: bool = True) -> str:
     d, f, prof = result.decision, result.fundamentals, result.profile
     L: List[str] = []
     L.append(f"# Lighthouse report: {f.name or d.ticker} ({d.ticker})")
-    L.append(f"*As of {d.as_of} · price ${d.price:,.2f} · investor: {prof.describe()}*\n")
+    q = getattr(result, "quote", None)
+    priced = f"price {q.describe()}" if q is not None else f"price ${d.price:,.2f} (close)"
+    L.append(f"*Signals as of {d.as_of} · {priced} · investor: {prof.describe()}*\n")
     L.append(f"## Verdict: **{d.verdict}** — Lighthouse score {d.composite_score:.0f} / 100")
     L.append(d.plan.action + "\n")
 

@@ -17,7 +17,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .charts import SERIES, STATUS, REGIME_FILL, INK2, GRID
+from .palette import SERIES, STATUS, REGIME_FILL, INK2, GRID
 from .config import VERDICT_BANDS
 
 VERDICT_COLOR = {"Strong Buy": STATUS["green"], "Buy": "#1baf7a", "Hold": STATUS["amber"], "Reduce": "#ec835a", "Sell": STATUS["red"]}
@@ -63,12 +63,21 @@ def _regime_spans(regimes: Optional[pd.DataFrame], index: pd.Index) -> List[Tupl
 def _shade_regimes(fig: go.Figure, regimes: Optional[pd.DataFrame], index: pd.Index, row: int = 1) -> List[Tuple[str, str]]:
     """Draw the regime rectangles behind panel `row`; returns the (label, colour) pairs used, for `_regime_legend`."""
     used: Dict[str, str] = {}
+    try:
+        sub = fig.get_subplot(row, 1)
+        xref, yref = sub.xaxis.plotly_name.replace("axis", ""), sub.yaxis.plotly_name.replace("axis", "")
+    except Exception:  # noqa: BLE001 - a figure without subplots
+        xref, yref = "x", "y"
+    shapes = []
     for x0, x1, label, color in _regime_spans(regimes, index):
-        # exclude_empty_subplots=False: the shading is drawn before the panel's traces, and Plotly's default
-        # (True) silently drops shapes aimed at a subplot that has no trace yet.
-        fig.add_vrect(x0=x0, x1=x1, fillcolor=color, opacity=0.55, layer="below", line_width=0, row=row, col=1,
-                      exclude_empty_subplots=False)
+        # one layout update for all the spans: fig.add_vrect re-validates the whole layout on every call, which took
+        # seconds for a long history. Shapes set directly are also never dropped for a subplot without traces yet
+        # (the add_vrect default that once hid the shading).
+        shapes.append(dict(type="rect", xref=xref, yref=f"{yref} domain", x0=x0, x1=x1, y0=0, y1=1, fillcolor=color,
+                           opacity=0.55, layer="below", line_width=0))
         used[label] = color
+    if shapes:
+        fig.update_layout(shapes=list(fig.layout.shapes or ()) + shapes)
     return list(used.items())
 
 
@@ -178,28 +187,39 @@ def score_breakdown(decision, height: Optional[int] = None, beacons=None) -> go.
 # --------------------------------------------------------------------------- #
 # Price dashboard
 # --------------------------------------------------------------------------- #
+def _band_spec(p) -> dict:
+    """Columns and labels of the price-band overlay: a Hull-MA centre +/- k standard deviations of the closes around it."""
+    return dict(up="band_upper", lo="band_lower", mid="band_mid", name=f"Price bands (±{p.band_std:g}σ)",
+                mid_name=f"Band centre (Hull MA {p.band_window})", short=f"Hull {p.band_window}",
+                title=f"price bands (Hull MA {p.band_window} ± {p.band_std:g}σ)", extra="price bands")
+
+
+def _add_bands(fig, ind: pd.DataFrame, spec: dict, alpha: float, **rc) -> None:
+    fig.add_trace(go.Scatter(x=ind.index, y=ind[spec["up"]], line=dict(width=0), hoverinfo="skip", showlegend=False), **rc)
+    fig.add_trace(go.Scatter(x=ind.index, y=ind[spec["lo"]], line=dict(width=0), fill="tonexty",
+                             fillcolor=f"rgba(158,197,244,{alpha})", name=spec["name"], hoverinfo="skip"), **rc)
+    # The centre line is added after the lower band so the fill above still runs upper-to-lower.
+    fig.add_trace(go.Scatter(x=ind.index, y=ind[spec["mid"]], name=spec["mid_name"],
+                             line=dict(color=SERIES["band_mid"], width=1.2, dash="dash"),
+                             customdata=np.column_stack([ind[spec["up"]], ind[spec["lo"]]]),
+                             hovertemplate=spec["short"] + " %{y:,.2f}<br>bands %{customdata[1]:,.2f} – %{customdata[0]:,.2f}"
+                                           f"<extra>{spec['extra']}</extra>"), **rc)
+
+
 def dashboard(result, last_days: int = 756, height: Optional[int] = None) -> go.Figure:
     """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons."""
     ind = result.indicators.tail(last_days)
     p = result.params
+    spec = _band_spec(p)
     has_vol = ind["Volume"].notna().any()
     rows = 4 if has_vol else 3
     heights = [0.5, 0.14, 0.18, 0.18] if has_vol else [0.56, 0.22, 0.22]
-    titles = [f"Price, trend and Bollinger Bands (SMA {p.bb_window} ± {p.bb_std:g}σ, trailing)"] + (["Volume"] if has_vol else []) + \
+    titles = [f"Price, trend and {spec['title']}"] + (["Volume"] if has_vol else []) + \
              [f"RSI ({p.rsi_window}) · dashed = {p.rsi_overbought:.0f} / {p.rsi_oversold:.0f}", f"MACD ({p.macd_fast}/{p.macd_slow}/{p.macd_signal})"]
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.045, row_heights=heights, subplot_titles=titles)
 
     used = _shade_regimes(fig, result.regimes, ind.index, row=1)
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_upper"], line=dict(width=0), hoverinfo="skip", showlegend=False), row=1, col=1)
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_lower"], line=dict(width=0), fill="tonexty", fillcolor="rgba(158,197,244,0.35)",
-                             name=f"Bollinger bands (±{p.bb_std:g}σ)", hoverinfo="skip"), row=1, col=1)
-    # The middle band is the SMA the bands are built around. It is added after the lower band so the fill above
-    # still runs upper-to-lower. Like every trailing average it lags price by about (window - 1) / 2 sessions.
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_mid"], name=f"Bollinger middle (SMA {p.bb_window})",
-                             line=dict(color=SERIES["band_mid"], width=1.2, dash="dash"),
-                             customdata=np.column_stack([ind["bb_upper"], ind["bb_lower"]]),
-                             hovertemplate=f"SMA {p.bb_window} " + "%{y:,.2f}<br>bands %{customdata[1]:,.2f} – %{customdata[0]:,.2f}"
-                                           "<extra>Bollinger</extra>"), row=1, col=1)
+    _add_bands(fig, ind, spec, 0.35, row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
                              hovertemplate="close $%{y:,.2f}<extra></extra>"), row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["sma_fast"], name=f"SMA {p.sma_fast}", line=dict(color=SERIES["sma_fast"], width=1.3),
@@ -400,14 +420,10 @@ def all_figures(result) -> Dict[str, go.Figure]:
 # Trade desk
 # --------------------------------------------------------------------------- #
 def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Figure:
-    """Recent price with the ticket's levels: entry, stop, targets (and the 20-day Bollinger middle for context)."""
+    """Recent price with the ticket's levels: entry, stop, targets (and the price bands for context)."""
     ind = result.indicators.tail(last_days)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_upper"], line=dict(width=0), hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_lower"], line=dict(width=0), fill="tonexty", fillcolor="rgba(158,197,244,0.25)",
-                             name="Bollinger bands", hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_mid"], name="SMA 20", line=dict(color=SERIES["band_mid"], width=1, dash="dash"),
-                             hovertemplate="SMA 20 %{y:,.2f}<extra></extra>"))
+    _add_bands(fig, ind, _band_spec(result.params), 0.25)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
                              hovertemplate="close $%{y:,.2f}<extra></extra>"))
     levels = [("entry", plan.price, INK2, "solid")]
@@ -415,9 +431,12 @@ def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Fig
         levels.append(("stop", plan.stop, STATUS["red"], "dash"))
     for k, t in enumerate(plan.targets):
         levels.append((f"target {k + 1} ({t.r_multiple:g}R)", t.price, STATUS["green"], "dot"))
-    for label, y, color, dash in levels:
-        fig.add_hline(y=y, line=dict(color=color, width=1.4, dash=dash), annotation_text=f"{label} ${y:,.2f}",
-                      annotation_position="right", annotation_font=dict(size=11, color=color))
+    # one layout update (fig.add_hline re-validates the whole layout on every call)
+    fig.update_layout(
+        shapes=[dict(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=y, y1=y, line=dict(color=color, width=1.4, dash=dash))
+                for _, y, color, dash in levels],
+        annotations=[dict(xref="x domain", yref="y", x=1, y=y, xanchor="left", yanchor="middle", showarrow=False,
+                          text=f"{label} ${y:,.2f}", font=dict(size=11, color=color)) for label, y, color, _ in levels])
     side = "LONG" if plan.side == "long" else "SHORT"
     _base_layout(fig, title=f"{plan.ticker} · {side} ticket levels · data to {plan.as_of}", height=height)
     fig.update_layout(margin=dict(r=150))

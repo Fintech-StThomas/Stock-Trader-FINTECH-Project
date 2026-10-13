@@ -80,25 +80,25 @@ def test_fresh_cache_must_cover_the_requested_window(tmp_path, monkeypatch):
     assert len(data_mod._from_cache("ZZZ", max_age_hours=None)) == len(idx)       # stale fallback accepts anything
 
 
-def test_dashboard_draws_the_bollinger_middle_band_and_the_regime_shading():
+def test_dashboard_draws_the_band_centre_and_the_regime_shading():
     pytest.importorskip("plotly")
     from lighthouse import interactive as ix
     r = analyze("AAPL", source="sample", years=6)
     fig = ix.dashboard(r, last_days=252)
-    mid = [t for t in fig.data if t.name and t.name.startswith("Bollinger middle")]
-    assert len(mid) == 1
-    assert np.allclose(np.asarray(mid[0].y, dtype=float), r.indicators["bb_mid"].tail(252).values)
+    centre = [t for t in fig.data if t.name and t.name.startswith("Band centre (Hull MA")]
+    assert len(centre) == 1 and not any(t.name and "Bollinger" in t.name for t in fig.data)
+    assert np.allclose(np.asarray(centre[0].y, dtype=float), r.indicators["band_mid"].tail(252).values, equal_nan=True)
     rects = [s for s in fig.layout.shapes if s.type == "rect"]
     assert rects, "2022 was a bear market: the regime shading must be drawn"
     bt = ix.backtest(r.backtest, r.regimes)
     assert any(s.type == "rect" for s in bt.layout.shapes)
 
 
-def test_static_dashboard_draws_the_bollinger_middle_band():
+def test_static_dashboard_draws_the_band_centre():
     from lighthouse.charts import plot_dashboard
     import matplotlib.pyplot as plt
     r = analyze("AAPL", source="sample", years=6)
     fig = plot_dashboard(r, last_days=252)
     labels = [ln.get_label() for ln in fig.axes[0].get_lines()]
     plt.close(fig)
-    assert any(lb.startswith("Bollinger middle") for lb in labels)
+    assert any(lb.startswith("Band centre (Hull MA") for lb in labels)

@@ -12,10 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from . import indicators as ind
+from . import memo
 from .config import StrategyParams
 
 
@@ -50,9 +50,14 @@ class RegimeSnapshot:
 
 
 def regime_table(benchmark: pd.DataFrame, params: Optional[StrategyParams] = None) -> pd.DataFrame:
-    """Daily regime classification of the benchmark (all columns causal)."""
+    """Daily regime classification of the benchmark (all columns causal). Memoised on the data and parameters."""
     p = params or StrategyParams()
-    close = benchmark["Close"]
+    return memo.memoize(("regime", memo.frame_fingerprint(benchmark), memo.params_key(p)), lambda: _regime_table(benchmark, p))
+
+
+def _regime_table(benchmark: pd.DataFrame, p: StrategyParams) -> pd.DataFrame:
+    close = benchmark["Close"].copy()
+    close.attrs = {}      # see technicals.compute_indicators: attrs are deep-copied by every pandas operation
     df = pd.DataFrame(index=benchmark.index)
     df["close"] = close
     df["sma"] = ind.sma(close, p.regime_sma)

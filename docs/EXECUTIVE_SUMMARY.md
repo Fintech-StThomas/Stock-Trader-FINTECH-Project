@@ -27,7 +27,7 @@ cash they can invest now and, optionally, the value of the stocks they already h
    operating margin, debt/equity, free-cash-flow yield, current ratio, revenue growth, EPS growth), each compared with
    a sector norm or an absolute band and voting between −1 and +1. Valuation weighs 40%, quality 35%, growth 25%.
 3. **Technical analysis** — six beacons: trend (50/200-day SMA, Golden/Death Cross), RSI(14), MACD(12/26/9),
-   Bollinger %B, volume confirmation (OBV and 20/60-day volume ratio) and distance from the 52-week high.
+   position in low-lag price bands (%B), volume confirmation (OBV and 20/60-day volume ratio) and distance from the 52-week high.
 4. **Market weather** — the S&P 500 is classified Bull/Bear (above/below its 200-day average) and Calm/Turbulent
    (realised volatility vs. its one-year norm). Bear markets cost points and halve new positions; Bear/Turbulent
    blocks new entries.
@@ -41,7 +41,8 @@ cash they can invest now and, optionally, the value of the stocks they already h
 7. **Watchlist ranking** — the same engine applied to a list of tickers.
 8. **Trade desk** — long and short tickets sized from the investor's cash: limit entry, stop-loss, two take-profit
    levels in multiples of the risk, breakeven and trailing stops, a time stop, a cap on total open risk, and how those
-   exact rules did on each stock's history. A position monitor flags stop hits and positions close to their stop.
+   exact rules did on each stock's history. Each ticket lists every way out, for a profit or a loss, with the price,
+   the result and how often it happened before; orders are priced from a timestamped live quote.
 9. **Portfolio builder** — a basket (the investor's or one picked for a goal) allocated by risk parity, minimum
    variance, hierarchical risk parity, maximum Sharpe or simpler rules on a shrunk covariance matrix, with VaR,
    expected shortfall, beta, risk contributions, stress tests and a walk-forward test of every method.
@@ -64,8 +65,8 @@ its 200-day average. Short-term investors get a weekly review and an ATR trailin
 ## Key results (what we found, honestly)
 
 Example: Microsoft, long-term balanced investor, $25,000 portfolio, 2% max loss (offline sample, as of Nov 2017):
-**Strong Buy, score 73** (fundamental 63, technical 88, market Bull/Calm). Plan: 21 shares ≈ $1,768 (7.1% of the
-portfolio), exit level $64.73, worst case $403 — the max-loss rule, not the risk preset, limited the size because
+**Buy, score 71** (fundamental 63, technical 83, market Bull/Calm). Plan: 19 shares ≈ $1,594 (6.5% of the
+portfolio), exit level $64.73, worst case $364 — the max-loss rule, not the risk preset, limited the size because
 the exit sits 23% below the price.
 
 Rule tested on 20 S&P 500 stocks, December 1990 – December 2022 (10 bps costs per side, next-day fills):
@@ -73,13 +74,13 @@ Rule tested on 20 S&P 500 stocks, December 1990 – December 2022 (10 bps costs 
 | | CAGR | Volatility | Sharpe | Max drawdown |
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
-| Lighthouse signals + regime, fully invested when in | 10.1% | — | 0.44 | −58% |
-| **Lighthouse, balanced profile (vol-targeted)** | 6.4% | 12.7% | 0.39 | **−32%** |
-| Lighthouse, conservative profile | 4.6% | 8.8% | 0.32 | −23% |
+| Lighthouse signals + regime, fully invested when in | 10.2% | — | 0.45 | −57% |
+| **Lighthouse, balanced profile (vol-targeted)** | 6.5% | 12.7% | 0.40 | **−32%** |
+| Lighthouse, conservative profile | 4.6% | 8.8% | 0.33 | −23% |
 
 Lighthouse cut the maximum drawdown and the volatility of **every one of the 20 stocks**, kept the balanced
-profile's realised volatility close to its 15% target, and averaged 13 trades per stock in 32 years with a 55% win
-rate. It did **not** beat buy-and-hold on raw return or Sharpe ratio for most names (4 of 20 on Sharpe): these are
+profile's realised volatility close to its 15% target, and averaged 12 trades per stock in 32 years with a 57% win
+rate. It did **not** beat buy-and-hold on raw return or Sharpe ratio for most names (3 of 20 on Sharpe): these are
 survivors that compounded relentlessly, and any rule that is sometimes in cash trails them. Its value is
 risk-managed exposure: in Bear/Turbulent markets the Microsoft rule lost 17% annualised while buy-and-hold lost 31%.
 The out-of-sample test shows that tuning thresholds on the first 60% of history adds nothing on the last 40% — the

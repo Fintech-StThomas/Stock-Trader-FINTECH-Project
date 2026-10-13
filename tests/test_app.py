@@ -75,7 +75,7 @@ def _offline_app():
     return at
 
 
-def test_app_trade_desk_and_position_monitor_offline():
+def test_app_trade_desk_offline():
     at = _offline_app()
     at.button(key="desk_go").click()
     at.run()
@@ -83,10 +83,10 @@ def test_app_trade_desk_and_position_monitor_offline():
     text = " ".join(str(m.value) for m in at.markdown)
     assert "BUY " in text and "SELL SHORT" in text           # long and short tickets from the 2022 sample pack
     assert "The plan" in text and "stop order" in text
-    at.button(key="mon_go").click()
-    at.run()
-    assert not at.exception, at.exception
-    assert any("MSFT long" in str(m.value) for m in at.markdown)
+    assert "When to get out" in text                          # every ticket says where to take the loss and the profit
+    exits = [t.value for t in at.table if "Exit" in getattr(t.value, "columns", [])]
+    assert exits and {"Stop-loss (before target 1)", "Target 2: the rest"} <= set(exits[0]["Exit"])
+    assert not any("Position monitor" in str(t.label) for t in at.tabs)   # removed: the tickets carry the exits
 
 
 def test_app_portfolio_builder_offline():

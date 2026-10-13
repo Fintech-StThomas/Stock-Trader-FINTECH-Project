@@ -19,7 +19,7 @@ This notebook runs the full product end-to-end:
 
 1. **Data collection & cleaning** — prices, volume, fundamentals, the S&P 500 benchmark
 2. **Fundamental analysis** — valuation, quality and growth *beacons*
-3. **Technical analysis** — six beacons (trend, RSI, MACD, Bollinger, volume, 52-week breakout)
+3. **Technical analysis** — six beacons (trend, RSI, MACD, price bands, volume, 52-week breakout)
 4. **Market weather** — bull/bear × calm/turbulent regime detection
 5. **Decision** — explainable score → verdict → position size, exit level and max loss
 6. **Strategy testing** — point-in-time backtest vs. buy-and-hold and the S&P 500, layer attribution, sensitivity, out-of-sample test
@@ -94,7 +94,7 @@ beacon_frame_df(f_beacons)""")
 md("""## 4 · Technical analysis
 
 Six beacons, all computed with **causal** indicators (no future data leaks into any value): trend (50/200-day SMA, Golden/Death
-Cross), RSI(14), MACD(12/26/9), Bollinger %B, volume confirmation (OBV + 20/60-day volume ratio) and distance from the 52-week high.
+Cross), RSI(14), MACD(12/26/9), position in the low-lag price bands (%B around a 20-day Hull moving average), volume confirmation (OBV + 20/60-day volume ratio) and distance from the 52-week high.
 The weights depend on the horizon: long-term investors lean on trend and breakouts; short-term on momentum oscillators.""")
 code("""from lighthouse.technicals import compute_indicators, technical_score, latest_beacons
 ind = compute_indicators(prices, params)
@@ -219,6 +219,8 @@ md("""## Limitations and risks (read before acting)
 * **Costs are simple** (5 bps commission + 5 bps slippage per side), taxes are ignored, the strategy backtest checks stops at the close.
 * **Not investment advice.** Lighthouse is a decision-support tool: it shows you the evidence and its reasoning; the decision is yours.
 """)
+for i, c in enumerate(cells):
+    c["id"] = f"cell-{i:02d}"      # stable ids: rebuilding an unchanged notebook gives an identical file
 nb["cells"] = cells
 nb["metadata"] = {"kernelspec": {"name": "python3", "display_name": "Python 3", "language": "python"},
                   "language_info": {"name": "python"}, "colab": {"name": "Lighthouse.ipynb", "toc_visible": True}}

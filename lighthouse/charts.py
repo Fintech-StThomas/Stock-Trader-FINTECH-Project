@@ -21,13 +21,11 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Patch
 
-SERIES = {"strategy": "#2a78d6", "buy_hold": "#eb6834", "benchmark": "#1baf7a", "price": "#2a78d6",
-          "sma_fast": "#eb6834", "sma_slow": "#4a3aa7", "band": "#9ec5f4", "band_mid": "#1c5cab"}
-STATUS = {"green": "#0ca30c", "amber": "#fab219", "red": "#d03b3b", "grey": "#9a9892"}
-INK, INK2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
-REGIME_FILL = {"Bear / Turbulent": "#f6d5d5", "Bear / Calm": "#fbe9e3", "Bull / Turbulent": "#fff3d6"}
-SEQ_BLUE = LinearSegmentedColormap.from_list("lh_blue", ["#cde2fb", "#86b6ef", "#3987e5", "#1c5cab", "#0d366b"])
-DIVERGING = LinearSegmentedColormap.from_list("lh_div", ["#d03b3b", "#f0efec", "#2a78d6"])
+from .palette import (DIVERGING_STOPS, GRID, INK, INK2, REGIME_FILL, SEQ_BLUE_STOPS, SERIES, STATUS,  # noqa: F401
+                      SURFACE)
+
+SEQ_BLUE = LinearSegmentedColormap.from_list("lh_blue", SEQ_BLUE_STOPS)
+DIVERGING = LinearSegmentedColormap.from_list("lh_div", DIVERGING_STOPS)
 
 plt.rcParams.update({
     "figure.facecolor": SURFACE, "axes.facecolor": SURFACE, "axes.edgecolor": GRID, "axes.labelcolor": INK2,
@@ -70,8 +68,8 @@ def plot_dashboard(result, last_days: int = 756):
     axes = list(np.atleast_1d(axes))
     ax = axes[0]
     _shade_regimes(ax, result.regimes, ind.index)
-    ax.fill_between(ind.index, ind["bb_lower"], ind["bb_upper"], color=SERIES["band"], alpha=0.35, lw=0, label=f"Bollinger bands (±{p.bb_std:g}σ)")
-    ax.plot(ind.index, ind["bb_mid"], color=SERIES["band_mid"], lw=1.0, ls="--", label=f"Bollinger middle (SMA {p.bb_window})")
+    ax.fill_between(ind.index, ind["band_lower"], ind["band_upper"], color=SERIES["band"], alpha=0.35, lw=0, label=f"Price bands (±{p.band_std:g}σ)")
+    ax.plot(ind.index, ind["band_mid"], color=SERIES["band_mid"], lw=1.0, ls="--", label=f"Band centre (Hull MA {p.band_window})")
     ax.plot(ind.index, ind["Close"], color=SERIES["price"], lw=1.6, label="Close")
     ax.plot(ind.index, ind["sma_fast"], color=SERIES["sma_fast"], lw=1.4, label=f"SMA {p.sma_fast}")
     ax.plot(ind.index, ind["sma_slow"], color=SERIES["sma_slow"], lw=1.4, label=f"SMA {p.sma_slow}")
@@ -87,7 +85,7 @@ def plot_dashboard(result, last_days: int = 756):
     for lab, col in REGIME_FILL.items():
         handles.append(Patch(color=col)); labels.append(lab)
     ax.legend(handles, labels, ncol=4, loc="upper left", fontsize=8)
-    _style(ax, f"{result.ticker} · price, trend and Bollinger Bands (SMA {p.bb_window} ± {p.bb_std:g}σ, trailing) · verdict {result.decision.verdict} ({result.decision.composite_score:.0f}/100)")
+    _style(ax, f"{result.ticker} · price, trend and price bands (Hull MA {p.band_window} ± {p.band_std:g}σ) · verdict {result.decision.verdict} ({result.decision.composite_score:.0f}/100)")
     ax.set_ylabel("price")
     i = 1
     if has_vol:

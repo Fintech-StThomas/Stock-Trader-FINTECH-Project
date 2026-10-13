@@ -16,5 +16,5 @@ from .config import InvestorProfile, StrategyParams, VERDICT_BANDS
 from .engine import analyze, AnalysisResult
 from .screener import screen
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = ["analyze", "AnalysisResult", "screen", "InvestorProfile", "StrategyParams", "VERDICT_BANDS"]

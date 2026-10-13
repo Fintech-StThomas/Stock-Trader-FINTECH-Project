@@ -7,21 +7,24 @@ import pandas as pd
 
 from .config import InvestorProfile, StrategyParams
 from .engine import analyze
+from .parallel import map_tickers
 
 
 def screen(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, params: Optional[StrategyParams] = None,
            years: float = 5, source: str = "auto", with_backtest: bool = False, benchmark: str = "^GSPC",
-           progress: bool = True) -> pd.DataFrame:
-    """Rank a watchlist by Lighthouse score. Tickers that fail to load are reported, not dropped silently."""
+           progress: bool = True, max_workers: Optional[int] = None) -> pd.DataFrame:
+    """Rank a watchlist by Lighthouse score. Tickers that fail to load are reported, not dropped silently.
+    Live tickers load in parallel threads (`max_workers`, default up to 8)."""
+    tickers = list(tickers)               # walked twice below: a generator would be used up by the first pass
+    done = (lambda t, k, n: print(f"  analysed {t} ({k}/{n})", flush=True)) if progress else None
+    results, errors = map_tickers(lambda t: analyze(t, profile, params, years=years, source=source, run_backtest_=with_backtest,
+                                                    benchmark=benchmark), tickers, max_workers, source, done)
     rows: List[dict] = []
-    for t in tickers:
-        t = t.upper().strip()
-        if not t:
-            continue
-        if progress:
-            print(f"  analysing {t} ...", flush=True)
+    for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip()):
         try:
-            r = analyze(t, profile, params, years=years, source=source, run_backtest_=with_backtest, benchmark=benchmark)
+            if t in errors:
+                raise RuntimeError(errors[t])
+            r = results[t]
             d, f = r.decision, r.fundamentals
             row = {
                 "ticker": t, "name": f.name or t, "verdict": d.verdict, "score": round(d.composite_score, 1),
@@ -38,7 +41,8 @@ def screen(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, pa
                 row.update({"bt_cagr": m["cagr"], "bt_sharpe": m["sharpe"], "bt_max_dd": m["max_drawdown"], "bt_trades": m["n_trades"]})
             rows.append(row)
         except Exception as exc:  # noqa: BLE001 - one bad ticker must not kill the screen
-            rows.append({"ticker": t, "name": t, "verdict": "n/a", "score": None, "error": f"{type(exc).__name__}: {str(exc)[:160]}"})
+            msg = errors.get(t) or f"{type(exc).__name__}: {str(exc)[:160]}"
+            rows.append({"ticker": t, "name": t, "verdict": "n/a", "score": None, "error": msg})
     df = pd.DataFrame(rows)
     if "score" in df:
         df = df.sort_values("score", ascending=False, na_position="last").reset_index(drop=True)

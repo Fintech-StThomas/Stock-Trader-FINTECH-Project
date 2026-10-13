@@ -30,16 +30,14 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import leaves_list, linkage
-from scipy.optimize import minimize
-from scipy.spatial.distance import squareform
 
 from .backtest import compute_metrics
 from .config import StrategyParams
 from .data import DataUnavailable, load_prices
 from .indicators import max_drawdown
+from .parallel import map_tickers
 from .technicals import compute_indicators, technical_score
-from .universe import sector_of
+from .universe import UNKNOWN_SECTOR, sectors_for
 
 TRADING_DAYS = 252
 METHODS: Dict[str, str] = {
@@ -91,11 +89,18 @@ class PortfolioConstraints:
         if n * self.min_weight > 1 + 1e-9:
             raise ValueError(f"{n} stocks with a {self.min_weight:.0%} minimum exceed 100%: lower the minimum")
         if self.max_sector_weight is not None and sectors is not None:
-            counts = pd.Series(list(sectors)).value_counts()
-            room = sum(min(self.max_sector_weight, c * self.max_weight) for c in counts)
-            if room < 1 - 1e-9:
+            if sector_room(sectors, self.max_sector_weight, self.max_weight) < 1 - 1e-9:
+                counts = pd.Series(list(sectors)).value_counts()
                 raise ValueError(f"the sector cap of {self.max_sector_weight:.0%} cannot be met with these sectors "
                                  f"({', '.join(f'{s}: {c}' for s, c in counts.items())}): add sectors or raise the cap")
+
+
+def sector_room(sectors: Sequence[str], sector_cap: float, max_weight: float) -> float:
+    """The most weight the caps allow in total. A stock with an unknown sector is not counted against any sector cap,
+    so it only adds its own per-stock cap."""
+    known = [s for s in sectors if s != UNKNOWN_SECTOR]
+    counts = pd.Series(known, dtype=object).value_counts()
+    return float(sum(min(sector_cap, c * max_weight) for c in counts) + (len(sectors) - len(known)) * max_weight)
 
 
 @dataclass
@@ -121,15 +126,13 @@ def load_universe(tickers: Iterable[str], years: float = 10, source: str = "auto
     """Load and align prices. Tickers that fail, are too short, or whose data ends well before the others' are left
     out (and reported), so one stale series cannot cut everyone's history short."""
     frames, excluded, sources = {}, {}, {}
-    for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip()):
-        try:
-            df = load_prices(t, years=years, source=source)
-            if len(df) < min_days:
-                excluded[t] = f"only {len(df)} trading days"
-                continue
-            frames[t], sources[t] = df, str(df.attrs.get("source"))
-        except Exception as exc:  # noqa: BLE001 - one bad ticker must not kill the portfolio
-            excluded[t] = f"{type(exc).__name__}: {str(exc)[:120]}"
+    loaded, errors = map_tickers(lambda t: load_prices(t, years=years, source=source), tickers, source=source)
+    excluded.update(errors)                  # one bad ticker must not kill the portfolio
+    for t, df in loaded.items():
+        if len(df) < min_days:
+            excluded[t] = f"only {len(df)} trading days"
+            continue
+        frames[t], sources[t] = df, str(df.attrs.get("source"))
     if not frames:
         raise DataUnavailable("no ticker in the basket could be loaded: " + "; ".join(f"{k} ({v})" for k, v in excluded.items()))
     latest = max(df.index[-1] for df in frames.values())
@@ -147,7 +150,7 @@ def load_universe(tickers: Iterable[str], years: float = 10, source: str = "auto
             bench = b.reindex(closes.index.union(b.index)).ffill().reindex(closes.index)
         except DataUnavailable:
             bench = None
-    return PriceUniverse(closes=closes, frames=frames, sectors={t: sector_of(t) for t in closes.columns}, benchmark=bench,
+    return PriceUniverse(closes=closes, frames=frames, sectors=sectors_for(closes.columns, source), benchmark=bench,
                          excluded=excluded, sources=sources)
 
 
@@ -208,15 +211,18 @@ def estimate(window: pd.DataFrame) -> Estimates:
 # Optimisers
 # --------------------------------------------------------------------------- #
 def _sector_matrix(sectors: Optional[Sequence[str]], n: int) -> Tuple[List[str], np.ndarray]:
+    """Membership matrix (sector x stock) for the sector caps. Stocks with an unknown sector belong to no row."""
     if sectors is None:
         return [], np.zeros((0, n))
-    names = sorted(set(sectors))
+    names = sorted(set(sectors) - {UNKNOWN_SECTOR})
+    if not names:
+        return [], np.zeros((0, n))
     return names, np.array([[1.0 if s == name else 0.0 for s in sectors] for name in names])
 
 
 def _weight_constraints(n: int, cons: PortfolioConstraints, sectors: Optional[Sequence[str]]) -> list:
     out = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0, "jac": lambda w: np.ones_like(w)}]
-    if cons.max_sector_weight is not None and sectors is not None:
+    if cons.max_sector_weight is not None and sectors is not None and len(_sector_matrix(sectors, n)[0]):
         _, m = _sector_matrix(sectors, n)
         cap = cons.max_sector_weight
         out.append({"type": "ineq", "fun": lambda w, m=m: cap - m @ w, "jac": lambda w, m=m: -m})
@@ -234,6 +240,7 @@ def _feasible(w: np.ndarray, cons: PortfolioConstraints, sectors: Optional[Seque
 
 
 def _solve(fun, jac, x0: np.ndarray, cons: PortfolioConstraints, sectors: Optional[Sequence[str]]) -> np.ndarray:
+    from scipy.optimize import minimize   # imported on first use: scipy adds ~0.25 s to start-up
     n = len(x0)
     res = minimize(fun, x0, jac=jac, method="SLSQP", bounds=[(cons.min_weight, cons.max_weight)] * n,
                    constraints=_weight_constraints(n, cons, sectors), options={"maxiter": 500, "ftol": 1e-12})
@@ -259,6 +266,7 @@ def _min_variance(cov: np.ndarray, cons, sectors) -> np.ndarray:
 
 def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tuple[np.ndarray, str]:
     """Tangency portfolio via the convex reformulation: min y'Σy s.t. (mu - rf)'y = 1, y >= 0, caps scaled by sum(y)."""
+    from scipy.optimize import minimize
     n = len(mu)
     ex = mu - rf
     if not (ex > 0).any():
@@ -268,7 +276,7 @@ def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tu
          {"type": "ineq", "fun": lambda y: cons.max_weight * np.sum(y) - y, "jac": lambda y: cons.max_weight * np.ones((n, n)) - np.eye(n)}]
     if cons.min_weight > 0:
         c.append({"type": "ineq", "fun": lambda y: y - cons.min_weight * np.sum(y), "jac": lambda y: np.eye(n) - cons.min_weight * np.ones((n, n))})
-    if cons.max_sector_weight is not None and sectors is not None:
+    if cons.max_sector_weight is not None and sectors is not None and len(_sector_matrix(sectors, n)[0]):
         _, m = _sector_matrix(sectors, n)
         c.append({"type": "ineq", "fun": lambda y, m=m: cons.max_sector_weight * np.sum(y) - m @ y,
                   "jac": lambda y, m=m: cons.max_sector_weight * np.ones((len(m), n)) - m})
@@ -288,6 +296,7 @@ def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tu
 
 
 def _risk_parity(cov: np.ndarray, cons, sectors) -> Tuple[np.ndarray, str]:
+    from scipy.optimize import minimize
     n = len(cov)
     # Spinu (2013): the minimiser of 1/2 y'Σy - (1/n) Σ log y gives equal risk contributions after normalising
     fun = lambda y: 0.5 * float(y @ cov @ y) - float(np.sum(np.log(y))) / n          # noqa: E731
@@ -310,6 +319,8 @@ def _risk_parity(cov: np.ndarray, cons, sectors) -> Tuple[np.ndarray, str]:
 def _hrp(cov: np.ndarray) -> np.ndarray:
     """López de Prado (2016): single-linkage clustering on the correlation distance sqrt((1 - rho) / 2), quasi-diagonal
     ordering, then recursive bisection with inverse-variance weights inside each cluster."""
+    from scipy.cluster.hierarchy import leaves_list, linkage
+    from scipy.spatial.distance import squareform
     n = len(cov)
     if n == 1:
         return np.ones(1)
@@ -652,9 +663,9 @@ def select(panels: Dict[str, pd.DataFrame], t: int, goal: Goal, sectors: Dict[st
         score = score[tech >= goal.min_technical]
     picked, per = [], {}
     for tk in score.sort_values(ascending=False).index:
-        s = sectors.get(tk, "Unknown")
-        if per.get(s, 0) >= max_per_sector:
-            continue
+        s = sectors.get(tk, UNKNOWN_SECTOR)
+        if s != UNKNOWN_SECTOR and per.get(s, 0) >= max_per_sector:
+            continue                     # an unknown sector is not a sector: it never counts against the limit
         picked.append(tk)
         per[s] = per.get(s, 0) + 1
         if len(picked) >= goal.n_stocks:
@@ -667,10 +678,8 @@ def _goal_constraints(goal: Goal, picked: Sequence[str], sectors: Dict[str, str]
     n = max(len(picked), 1)
     max_w = max(cons.max_weight, 1.0 / n)
     sec = cons.max_sector_weight
-    if sec is not None:
-        counts = pd.Series([sectors.get(t, "Unknown") for t in picked]).value_counts()
-        if sum(min(sec, c * max_w) for c in counts) < 1 - 1e-9:
-            sec = None
+    if sec is not None and sector_room([sectors.get(t, UNKNOWN_SECTOR) for t in picked], sec, max_w) < 1 - 1e-9:
+        sec = None
     return PortfolioConstraints(max_weight=max_w, min_weight=0.0, max_sector_weight=sec, target_vol=cons.target_vol)
 
 
@@ -698,7 +707,7 @@ class PortfolioResult:
 
     def table(self) -> pd.DataFrame:
         a = self.allocation.copy()
-        a["sector"] = [self.universe.sectors.get(t, "Unknown") for t in a.index]
+        a["sector"] = [self.universe.sectors.get(t, UNKNOWN_SECTOR) for t in a.index]
         a["risk_share"] = self.risk["risk_contributions"].reindex(a.index)
         a["volatility"] = pd.Series(self.estimates.vol, index=self.weights.index).reindex(a.index)
         return a
@@ -712,6 +721,14 @@ def _finish(universe: PriceUniverse, picked: List[str], method: str, cons: Portf
     est = estimate(window)
     w, more = optimize(window, method, cons, sectors, risk_free_rate, est=est)
     notes = notes + more
+    unfinished = sorted({(universe.frames[t].attrs.get("partial_bar") or {}).get("date") for t in picked} - {None})
+    if unfinished:
+        notes.append(f"Orders are sized from the {universe.closes.index[-1].date()} closes: today's session "
+                     f"({unfinished[0]}) is still trading, so check each live price before you place the orders.")
+    unknown = [t for t in picked if universe.sectors.get(t, UNKNOWN_SECTOR) == UNKNOWN_SECTOR]
+    if unknown:
+        notes.append(f"No sector found for {', '.join(unknown)} (not in the curated list and none in the fundamentals, "
+                     "e.g. an ETF): not counted against the per-sector limits.")
     invested = vol_target_scale(w.to_numpy(), est.cov, cons.target_vol)
     if invested < 1.0:
         notes.append(f"Volatility target {cons.target_vol:.0%}: the stocks' mix is expected to run at "
@@ -777,15 +794,35 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
     uni = universe or load_universe(tickers or available_universe(source), years=years, source=source)
     panels = selection_panels(uni)
     t_last = len(uni.closes) - 1
+    notes = [f"Left out {t}: {why}" for t, why in uni.excluded.items()]
+    # A universe chosen for one or two sectors (e.g. "Technology") cannot fill the goal under the per-sector limit:
+    # raise the limit just enough. Stocks without a sector are never limited, so they count toward the room.
+    labels = [uni.sectors.get(t, UNKNOWN_SECTOR) for t in uni.tickers]
+    counts = pd.Series([x for x in labels if x != UNKNOWN_SECTOR], dtype=object).value_counts()
+    n_unknown = len(labels) - int(counts.sum())
+
+    def room(limit: int) -> int:
+        return int(counts.clip(upper=limit).sum()) + n_unknown
+    if len(counts) and room(max_per_sector) < g.n_stocks and room(int(counts.max())) > room(max_per_sector):
+        raised = max_per_sector
+        while room(raised) < g.n_stocks and raised < int(counts.max()):
+            raised += 1
+        extra = f" (plus {n_unknown} without one)" if n_unknown else ""
+        notes.append(f"This universe has {len(counts)} sector{'s' if len(counts) > 1 else ''}{extra}: too few for "
+                     f"{g.n_stocks} stocks at {max_per_sector} per sector, so up to {raised} stocks per sector are allowed.")
+        max_per_sector = raised
     picked = select(panels, t_last, g, uni.sectors, max_per_sector)
     if len(picked) < 2:
         raise ValueError(f"only {len(picked)} stock(s) qualify for the '{g.label}' goal right now; widen the universe")
-    notes = [f"Left out {t}: {why}" for t, why in uni.excluded.items()]
     if len(picked) < g.n_stocks:
         notes.append(f"Only {len(picked)} stocks qualified (asked for {g.n_stocks}).")
     cons_now = _goal_constraints(g, picked, uni.sectors, cons)
-    if cons_now.max_weight > cons.max_weight + 1e-9 or (cons.max_sector_weight and cons_now.max_sector_weight is None):
-        notes.append("Caps were relaxed so the weights can add up to 100% with this few stocks.")
+    if cons_now.max_weight > cons.max_weight + 1e-9:
+        notes.append(f"The per-stock cap was raised to {cons_now.max_weight:.0%} so the weights can add up to 100% with "
+                     f"{len(picked)} stocks.")
+    if cons.max_sector_weight and cons_now.max_sector_weight is None:
+        notes.append(f"The {cons.max_sector_weight:.0%} sector cap was dropped: these stocks' sectors cannot hold 100% "
+                     "under it.")
     res = _finish(uni, picked, g.method, cons_now, capital, min(lookback, len(uni.returns)), risk_free_rate, notes)
     row = {k: panels[k].iloc[t_last] for k in ("technical", "momentum", "low_vol", "uptrend")}
     sel = pd.DataFrame(row).loc[picked]

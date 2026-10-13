@@ -7,6 +7,8 @@
   python -m lighthouse monitor MSFT --side long --entry 73.9 --shares 30 --date 2017-09-01 --source sample
   python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000 --target-vol 0.12
   python -m lighthouse portfolio --goal balanced --cash 10000                           # Lighthouse picks the stocks
+  python -m lighthouse trade --universe semiconductors --cash 5000                      # a pre-built universe
+  python -m lighthouse universes                                                         # list the pre-built universes
 """
 from __future__ import annotations
 
@@ -59,8 +61,11 @@ def main(argv=None) -> int:
     a1.add_argument("--as-of", help="YYYY-MM-DD: what would Lighthouse have said on that day?")
     a1.add_argument("--fundamentals-json", help="JSON fixture/override file for fundamentals")
 
-    a2 = sub.add_parser("screen", help="rank a watchlist"); common(a2)
-    a2.add_argument("tickers", nargs="+"); a2.add_argument("--csv", help="write the ranking to this file")
+    def universe_opt(sp):
+        sp.add_argument("--universe", help="add a pre-built universe's tickers (see: python -m lighthouse universes)")
+
+    a2 = sub.add_parser("screen", help="rank a watchlist"); common(a2); universe_opt(a2)
+    a2.add_argument("tickers", nargs="*"); a2.add_argument("--csv", help="write the ranking to this file")
 
     a3 = sub.add_parser("backtest", help="backtest the rule on one ticker"); common(a3)
     a3.add_argument("ticker"); a3.add_argument("--evaluate", action="store_true")
@@ -72,15 +77,17 @@ def main(argv=None) -> int:
         sp.add_argument("--time-stop", type=int, default=None, help="sessions (default: 40 short horizon / 252 long)")
 
     a4 = sub.add_parser("trade", help="trade tickets for your cash across one or more tickers"); common(a4); trade_opts(a4)
-    a4.add_argument("tickers", nargs="+")
+    universe_opt(a4)
+    a4.add_argument("tickers", nargs="*")
     a4.add_argument("--max-ideas", type=int, default=5)
     a4.add_argument("--max-total-risk", type=float, default=6.0, help="cap on all ideas' planned loss, %% of the account")
 
-    a5 = sub.add_parser("monitor", help="check an open position against its plan (stop-loss lookout)"); common(a5); trade_opts(a5)
+    a5 = sub.add_parser("monitor", help="replay an open position against its plan (exits taken, P&L, stop now)"); common(a5); trade_opts(a5)
     a5.add_argument("ticker"); a5.add_argument("--entry", type=float, required=True); a5.add_argument("--shares", type=int, required=True)
     a5.add_argument("--date", required=True, help="entry date YYYY-MM-DD"); a5.add_argument("--stop", type=float)
 
     a6 = sub.add_parser("portfolio", help="allocate a basket, or build one for a goal, with a risk report"); common(a6)
+    universe_opt(a6)
     a6.add_argument("tickers", nargs="*")
     a6.add_argument("--method", default="risk_parity", help="equal_weight | inverse_vol | risk_parity | min_variance | max_sharpe | hrp")
     a6.add_argument("--goal", help="preservation | balanced | growth | diversified (Lighthouse picks the stocks)")
@@ -88,8 +95,24 @@ def main(argv=None) -> int:
     a6.add_argument("--target-vol", type=float, default=None, help="annual, e.g. 0.12; holds cash above it")
     a6.add_argument("--n", type=int, default=None, help="number of stocks for --goal")
 
+    sub.add_parser("universes", help="list the pre-built universes")
+
     a = ap.parse_args(argv)
     pd.set_option("display.width", 160); pd.set_option("display.max_columns", 30)
+
+    from .universe import get_universe, universe_names
+    if a.cmd == "universes":
+        for name in universe_names("auto"):
+            tick = get_universe(name)
+            print(f"{name} ({len(tick)}): {' '.join(tick)}")
+        return 0
+    if getattr(a, "universe", None):
+        try:
+            a.tickers = list(dict.fromkeys([t.upper() for t in a.tickers] + get_universe(a.universe, a.source)))
+        except ValueError as exc:
+            print(exc, file=sys.stderr); return 1
+    if a.cmd in {"trade", "screen"} and not a.tickers:
+        print("give tickers, or --universe NAME", file=sys.stderr); return 1
 
     if a.cmd in {"analyze", "backtest"}:
         res = analyze(a.ticker, _profile(a), _params(a), years=a.years, source=a.source,
@@ -114,30 +137,38 @@ def main(argv=None) -> int:
         return 0
 
     if a.cmd in {"trade", "monitor"}:
-        from .tradeplan import TradeSettings, allocate_ideas, ideas_table, monitor_position
+        from .tradeplan import TradeSettings, allocate_ideas, monitor_position, signed_usd
         s = TradeSettings(reward_multiples=tuple(sorted(a.targets)), partial_exit=a.partial, time_stop_days=a.time_stop,
                           **({"max_ideas": a.max_ideas, "max_total_risk_pct": a.max_total_risk} if a.cmd == "trade" else {}))
         prof = _profile(a)
         if a.cmd == "monitor":
-            res = analyze(a.ticker, prof, _params(a), years=a.years, source=a.source, run_backtest_=False)
+            # keep today's bar: a stop hit during today's session must show, and an entry made today must replay
+            res = analyze(a.ticker, prof, _params(a), years=a.years, source=a.source, run_backtest_=False, keep_partial=True)
             ms = monitor_position(res, a.side, a.entry, a.shares, a.date, stop=a.stop, settings=s)
             print(f"{ms.ticker} {ms.side} · {ms.status}\n{ms.action}")
-            print(f"last ${ms.last_price:,.2f} · P&L ${ms.pnl:,.0f} ({ms.pnl_pct:+.1f}%, {ms.r_multiple:+.2f}R) · stop now "
-                  f"${ms.current_stop:,.2f} ({ms.stop_note})")
+            for day, n, px, why in ms.exits:
+                print(f"  {day}: {why}, {n} shares at ${px:,.2f}")
+            print(f"last ${ms.last_price:,.2f} · P&L {signed_usd(ms.pnl)} ({ms.pnl_pct:+.1f}%, {ms.r_multiple:+.2f}R): "
+                  f"realised {signed_usd(ms.realised_pnl)}, unrealised {signed_usd(ms.unrealised_pnl)} on {ms.shares_open} open shares · "
+                  f"stop now ${ms.current_stop:,.2f} ({ms.stop_note})")
             for x in ms.alerts:
                 print("! " + x)
             return 0
-        results = []
-        for t in a.tickers:
-            try:
-                results.append(analyze(t, prof, _params(a), years=a.years, source=a.source, run_backtest_=False))
-            except Exception as exc:  # noqa: BLE001
-                print(f"{t}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        from .engine import analyze_many
+        by, errors = analyze_many(a.tickers, prof, _params(a), years=a.years, source=a.source, run_backtest_=False)
+        for t, e in errors.items():
+            print(f"{t}: {e}", file=sys.stderr)
+        results = list(by.values())
         funded, watch, table = allocate_ideas(results, a.side, s, with_stats=True)
         print(prof.describe())
         for pl in funded:
             print(f"\n=== {pl.side.upper()} {pl.ticker}: {pl.shares} shares ===")
             print("\n".join(f"{i}. {x}" for i, x in enumerate(pl.management_steps(), 1)))
+            print("when to get out:")
+            for x in pl.exit_plan():
+                lvl = f" at ${x.price:,.2f} ({x.move_pct:+.1f}%)" if x.price is not None else ""
+                res_ = f" -> {signed_usd(x.pnl)} ({x.r:+.2f}R) if the trade ends here" if x.pnl is not None else ""
+                print(f"  - {x.name}{lvl}{res_}" + (f" · history: {x.history}" if x.history else ""))
             if pl.stats:
                 print(f"history: {pl.stats.n_trades} trades, win {pl.stats.win_rate:.0%}, {pl.stats.avg_r:+.2f}R per trade")
             for w in pl.warnings[:2]:
