@@ -62,8 +62,9 @@ class InvestorProfile:
     """What the investor tells Lighthouse about themselves."""
     horizon: str = "long"            # "long" (6-24 months+) or "short" (weeks to a few months)
     risk: str = "balanced"           # "conservative" | "balanced" | "aggressive"
-    max_loss_pct: float = 2.0        # max acceptable loss on ONE position, as % of total portfolio
-    portfolio_value: float = 10_000  # used to turn % sizing into dollars and shares
+    max_loss_pct: float = 2.0        # max acceptable loss on ONE position, as % of the total account
+    portfolio_value: float = 10_000  # TOTAL account value = cash + stocks already held; the risk limits are % of this
+    cash_available: Optional[float] = None   # cash you can invest right now; None = the whole account is cash
     # optional expert overrides of the risk preset (None = use the preset)
     max_position_override: Optional[float] = None
     target_vol_override: Optional[float] = None
@@ -80,8 +81,37 @@ class InvestorProfile:
             raise ValueError("max_loss_pct must be in (0, 100]")
         if self.portfolio_value <= 0:
             raise ValueError("portfolio_value must be positive")
+        if self.cash_available is not None:
+            if self.cash_available < 0:
+                raise ValueError("cash_available cannot be negative")
+            if self.cash_available > self.portfolio_value + 1e-9:
+                raise ValueError("cash_available cannot exceed portfolio_value (the account = cash + holdings)")
+
+    @classmethod
+    def from_cash(cls, cash: float, holdings_value: float = 0.0, **kw) -> "InvestorProfile":
+        """Profile from what the investor actually has: cash to invest now plus the value of stocks already held."""
+        if cash < 0 or holdings_value < 0:
+            raise ValueError("cash and holdings_value cannot be negative")
+        return cls(portfolio_value=float(cash) + float(holdings_value), cash_available=float(cash), **kw)
 
     # convenience accessors --------------------------------------------------
+    @property
+    def account_value(self) -> float:
+        return float(self.portfolio_value)
+
+    @property
+    def cash(self) -> float:
+        """Spendable cash: caps what a new position may cost."""
+        return float(self.portfolio_value if self.cash_available is None else self.cash_available)
+
+    @property
+    def holdings_value(self) -> float:
+        return self.account_value - self.cash
+
+    @property
+    def max_loss_value(self) -> float:
+        return self.account_value * self.max_loss_pct / 100.0
+
     @property
     def fundamental_weight(self) -> float:
         return HORIZON_WEIGHTS[self.horizon][0]
@@ -113,8 +143,11 @@ class InvestorProfile:
         return InvestorProfile(**d)
 
     def describe(self) -> str:
-        return (f"{self.horizon}-term, {self.risk} risk, max loss {self.max_loss_pct:.1f}% of a "
-                f"${self.portfolio_value:,.0f} portfolio")
+        if self.cash_available is None or abs(self.cash - self.account_value) < 0.5:
+            money = f"${self.cash:,.0f} cash to invest"
+        else:
+            money = f"${self.cash:,.0f} cash to invest in a ${self.account_value:,.0f} account"
+        return f"{self.horizon}-term, {self.risk} risk, {money}, max loss {self.max_loss_pct:.1f}% of the account per position"
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -24,6 +24,8 @@ This notebook runs the full product end-to-end:
 5. **Decision** — explainable score → verdict → position size, exit level and max loss
 6. **Strategy testing** — point-in-time backtest vs. buy-and-hold and the S&P 500, layer attribution, sensitivity, out-of-sample test
 7. **Watchlist ranking**
+8. **Trade ticket** — what to buy (or short) right now with your cash: entry, stop-loss, take-profit levels, and how those exact rules did historically
+9. **Portfolio builder** — allocate a basket (risk parity, minimum variance, HRP, ...), measure its risk, and test the method out-of-sample
 
 > Runs on Google Colab or any Jupyter. With internet access it downloads live data; without it, it falls back to the bundled
 > historical sample pack (Microsoft 1986–2017 with volume, 19 other S&P stocks 1990–2022, S&P 500 index) so it always runs end to end.
@@ -51,14 +53,15 @@ Everything a non-programmer needs to change lives in this one cell.""")
 code("""TICKER          = "MSFT"        # any US-listed ticker, e.g. "AAPL", "NVDA", "JPM"
 HORIZON         = "long"        # "long" (6-24+ months, fundamentals weigh 60%) or "short" (weeks-months, technicals weigh 70%)
 RISK            = "balanced"    # "conservative" | "balanced" | "aggressive"
-MAX_LOSS_PCT    = 2.0           # the most you accept losing on THIS position, as % of your whole portfolio
-PORTFOLIO_VALUE = 25_000        # $, used to turn percentages into dollars and shares
+MAX_LOSS_PCT    = 2.0           # the most you accept losing on THIS position, as % of your whole account
+CASH_AVAILABLE  = 10_000        # $ you can invest right now: new positions are paid from this cash only
+HOLDINGS_VALUE  = 15_000        # $ value of stocks you already hold (0 if none); risk limits are a % of cash + holdings
 YEARS           = 15            # years of history to analyse and backtest (15 covers at least one full bear market)
 WATCHLIST       = ["MSFT", "AAPL", "JNJ", "XOM", "JPM", "UNH"]   # for the ranking section
 DATA_SOURCE     = "auto"        # "auto" = live (Yahoo Finance, then Stooq) with offline fallback; "sample" = bundled pack
 
 from lighthouse import InvestorProfile, StrategyParams
-profile = InvestorProfile(horizon=HORIZON, risk=RISK, max_loss_pct=MAX_LOSS_PCT, portfolio_value=PORTFOLIO_VALUE)
+profile = InvestorProfile.from_cash(CASH_AVAILABLE, HOLDINGS_VALUE, horizon=HORIZON, risk=RISK, max_loss_pct=MAX_LOSS_PCT)
 params  = StrategyParams.for_horizon(HORIZON)      # the trading rule preset for this horizon (editable: params.copy(entry_score=65))
 print(profile.describe()); print(params.to_dict())""")
 md("""## 2 · Data collection and cleaning
@@ -129,7 +132,7 @@ The verdict and the position size depend on who is asking — that is the point 
 code("""rows = []
 for h in ["long", "short"]:
     for rk in ["conservative", "balanced", "aggressive"]:
-        pr = InvestorProfile(horizon=h, risk=rk, max_loss_pct=MAX_LOSS_PCT, portfolio_value=PORTFOLIO_VALUE)
+        pr = InvestorProfile.from_cash(CASH_AVAILABLE, HOLDINGS_VALUE, horizon=h, risk=rk, max_loss_pct=MAX_LOSS_PCT)
         rr = analyze(TICKER, pr, years=YEARS, source=DATA_SOURCE, run_backtest_=False)
         rows.append({"horizon": h, "risk": rk, "verdict": rr.decision.verdict, "score": round(rr.decision.composite_score, 1),
                      "position %": round(rr.decision.plan.position_pct, 1), "exit level": rr.decision.plan.stop_price and round(rr.decision.plan.stop_price, 2),
@@ -167,7 +170,39 @@ code("""from lighthouse import screen
 ranking = screen(WATCHLIST, profile, params, years=min(YEARS, 6), source=DATA_SOURCE, progress=False)
 display(ranking[["ticker", "name", "verdict", "score", "fundamental", "technical", "regime", "position_pct", "price", "stop", "error"]])
 fig = ch.plot_screener(ranking); plt.show()""")
-md("""## 9 · The full written report
+md("""## 9 · Trade ticket: buy or short it right now
+
+The ticket sizes the trade from your **cash**, sets the stop-loss, two take-profit levels (in multiples of the risk, *R*),
+a trailing stop and a time stop, and replays those exact rules on the stock's own history. Shorts mirror the long rules and
+always use the tactical short-horizon stop.""")
+code("""from lighthouse.tradeplan import build_trade_plan, TradeSettings
+settings = TradeSettings(reward_multiples=(2, 3), partial_exit=0.5)
+for side in ("long", "short"):
+    ticket = build_trade_plan(result, side, settings)
+    print(f"--- {side.upper()}: {ticket.status} ---")
+    print("\\n".join(f"{i}. {step}" for i, step in enumerate(ticket.management_steps(), 1)))
+    if ticket.stats:
+        st_ = ticket.stats
+        print(f"history: {st_.n_trades} trades, win rate {st_.win_rate:.0%}, {st_.avg_r:+.2f}R per trade, profit factor {st_.profit_factor:.2f}")
+    print()""")
+md("""## 10 · Portfolio builder: let Lighthouse work out the percentages
+
+Give it a basket; it estimates the risk (Ledoit-Wolf shrunk covariance), allocates with the method you choose, turns the
+weights into whole shares for your cash, reports the risk (volatility, VaR, expected shortfall, beta, risk contributions,
+stress tests) and walk-forward tests **every** allocation method on the same basket so you can see which one actually held up.""")
+code("""from lighthouse import portfolio as pf
+basket = ["AAPL", "JNJ", "XOM", "JPM", "KO", "PG", "UNH", "WMT"]
+port = pf.build_portfolio(basket, "risk_parity", pf.PortfolioConstraints(max_weight=0.25, target_vol=0.12),
+                          capital=CASH_AVAILABLE, years=10, source=DATA_SOURCE)
+print("\\n".join(port.notes))
+display(port.table().round(3))
+print({k: round(v, 4) for k, v in port.risk.items() if isinstance(v, float)})
+format_metrics(port.comparison)""")
+code("""# Or let Lighthouse pick the stocks for a goal: "preservation", "balanced", "growth" or "diversified"
+goal = pf.goal_portfolio("balanced", capital=CASH_AVAILABLE, years=10, source=DATA_SOURCE)
+display(goal.selection.round(3)); display(goal.table().round(3))
+format_metrics(goal.comparison)""")
+md("""## 11 · The full written report
 Everything above, in plain English, ready to save or share.""")
 code("""from IPython.display import Markdown
 Markdown(result.report())""")
@@ -181,7 +216,7 @@ md("""## Limitations and risks (read before acting)
   explicit worst-case loss — judge it on Sharpe, drawdown and the regime table, not on total return alone.
 * **Sector norms are assumptions**, not live peer data. Edit them in `lighthouse/fundamentals.py` if you disagree.
 * **Fundamental history is short** (Yahoo provides ~4-5 annual statements), so the point-in-time gate only acts in recent years.
-* **Costs are simple** (10 bps round trip per side), taxes are ignored, stops are checked at the close.
+* **Costs are simple** (5 bps commission + 5 bps slippage per side), taxes are ignored, the strategy backtest checks stops at the close.
 * **Not investment advice.** Lighthouse is a decision-support tool: it shows you the evidence and its reasoning; the decision is yours.
 """)
 nb["cells"] = cells

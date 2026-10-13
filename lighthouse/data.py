@@ -185,21 +185,39 @@ def _cache_path(kind: str, ticker: str) -> Path:
     return CACHE_DIR / kind / f"{safe}.{ 'csv' if kind == 'prices' else 'json'}"
 
 
-def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOURS) -> pd.DataFrame:
+def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOURS,
+                need_start: Optional[datetime] = None) -> pd.DataFrame:
+    """Cached prices. With `need_start`, the cache must also cover the requested window: a short download
+    (e.g. a 6-year watchlist run) must not silently stand in for a later 10-year analysis."""
     path = _cache_path("prices", ticker)
     if not path.exists():
         raise DataUnavailable("no cache")
     age_h = (datetime.now() - datetime.fromtimestamp(path.stat().st_mtime)).total_seconds() / 3600
     if max_age_hours is not None and age_h > max_age_hours:
         raise DataUnavailable("cache stale")
-    return pd.read_csv(path, parse_dates=["Date"], index_col="Date")
+    df = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
+    if need_start is not None and len(df):
+        meta = path.with_suffix(".meta.json")
+        requested = None
+        try:
+            requested = pd.Timestamp(json.loads(meta.read_text())["requested_start"]) if meta.exists() else None
+        except (OSError, ValueError, KeyError):
+            requested = None
+        tolerance = pd.Timedelta(days=7)   # weekends and holidays at the start of the window
+        covered = (requested is not None and requested <= pd.Timestamp(need_start) + tolerance) or \
+                  (pd.Timestamp(df.index[0]) <= pd.Timestamp(need_start) + tolerance)
+        if not covered:
+            raise DataUnavailable(f"cache starts {pd.Timestamp(df.index[0]).date()}, after the requested {pd.Timestamp(need_start).date()}")
+    return df
 
 
-def _to_cache(ticker: str, df: pd.DataFrame) -> None:
+def _to_cache(ticker: str, df: pd.DataFrame, requested_start: Optional[datetime] = None) -> None:
     try:
         path = _cache_path("prices", ticker)
         path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(path)
+        if requested_start is not None:
+            path.with_suffix(".meta.json").write_text(json.dumps({"requested_start": pd.Timestamp(requested_start).isoformat()}))
     except OSError:
         pass
 
@@ -242,7 +260,7 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
             elif src == "stooq":
                 raw = _from_stooq(ticker, start_dt, end_dt)
             elif src == "cache":
-                raw = _from_cache(ticker) if use_cache else None
+                raw = _from_cache(ticker, need_start=start_dt) if use_cache else None
             elif src == "stale-cache":
                 raw = _from_cache(ticker, max_age_hours=None) if use_cache else None
             elif src == "sample":
@@ -261,7 +279,7 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
         raise DataUnavailable(f"could not load prices for {ticker}. Tried -> " + " | ".join(attempts))
 
     if used in {"yfinance", "stooq"} and use_cache:
-        _to_cache(ticker, _normalize_index(raw))
+        _to_cache(ticker, _normalize_index(raw), requested_start=start_dt)
 
     df, report = clean_prices(raw, ticker, used)
     if used in {"sample", "stale-cache"}:
@@ -417,9 +435,18 @@ def _snapshot_from_yfinance(ticker: str, info: dict, hist: StatementHistory, pri
     cr = g("currentRatio")
     if cr is None and _f(last.get("current_assets")) and _f(last.get("current_liabilities")):
         cr = last["current_assets"] / last["current_liabilities"]
-    div = g("dividendYield")
-    if div is not None and div > 0.3:      # newer yfinance versions report percent, older report a fraction
-        div = div / 100.0
+    # dividend yield: Yahoo's `dividendYield` switched from a fraction to a percent (0.0073 -> 0.73), so it is
+    # ambiguous for small yields. Prefer the unambiguous annual dividend per share / price, then the trailing fraction.
+    div = None
+    rate = g("dividendRate")
+    if rate is not None and price:
+        div = rate / price
+    if div is None:
+        div = g("trailingAnnualDividendYield")
+    if div is None:
+        div = g("dividendYield")
+        if div is not None and div > 0.3:   # only a percent reading can exceed 30%; anything smaller stays ambiguous
+            div = div / 100.0
 
     return FundamentalSnapshot(
         ticker=ticker, name=info.get("shortName") or info.get("longName") or ticker,

@@ -63,3 +63,55 @@ def test_watchlist_figures_build():
     cmp_ = ix.compare_prices({"MSFT": r.prices["Close"], "S&P 500": r.benchmark["Close"]})
     assert len(cmp_.data) == 2
     assert abs(cmp_.data[0].y[0] - 100) < 1e-9
+
+
+def _offline_app():
+    at = AppTest.from_file(APP, default_timeout=600)
+    at.run()
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.sidebar.number_input(key="cash").set_value(5000)
+    at.sidebar.number_input(key="holdings").set_value(20000)
+    at.run()
+    return at
+
+
+def test_app_trade_desk_and_position_monitor_offline():
+    at = _offline_app()
+    at.button(key="desk_go").click()
+    at.run()
+    assert not at.exception, at.exception
+    text = " ".join(str(m.value) for m in at.markdown)
+    assert "BUY " in text and "SELL SHORT" in text           # long and short tickets from the 2022 sample pack
+    assert "The plan" in text and "stop order" in text
+    at.button(key="mon_go").click()
+    at.run()
+    assert not at.exception, at.exception
+    assert any("MSFT long" in str(m.value) for m in at.markdown)
+
+
+def test_app_portfolio_builder_offline():
+    at = _offline_app()
+    at.button(key="pf_go").click()
+    at.run()
+    assert not at.exception, at.exception
+    text = " ".join(str(m.value) for m in at.markdown)
+    assert "Orders for your cash" in text and "Walk-forward test" in text
+    at.radio(key="pf_mode").set_value("Build for a goal: Lighthouse chooses")
+    at.run()
+    at.button(key="pf_goal_go").click()
+    at.run()
+    assert not at.exception, at.exception
+    assert any("Balanced risk and reward" in str(m.value) for m in at.markdown)
+
+
+def test_trade_and_portfolio_figures_build():
+    from lighthouse.tradeplan import build_trade_plan
+    from lighthouse import portfolio as pf
+    r = analyze("MSFT", InvestorProfile.from_cash(5_000, 20_000), source="sample", years=6, run_backtest_=False)
+    fig = ix.trade_chart(r, build_trade_plan(r, "long", with_stats=False))
+    assert any(t.name == "Close" for t in fig.data) and len(fig.layout.shapes) >= 3   # entry, stop, targets
+    fig.to_json()
+    port = pf.build_portfolio(["AAPL", "JNJ", "XOM", "KO", "PG"], "hrp", capital=10_000, source="sample", years=6)
+    for f in (ix.allocation_chart(port.table()), ix.correlation_heatmap(port.risk["correlation"]), ix.equity_curves(port.comparison_runs)):
+        assert len(f.data) >= 1
+        f.to_json()
