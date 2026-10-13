@@ -67,7 +67,7 @@ def test_unknown_sectors_do_not_cap_a_goal_portfolio_at_three_stocks(tmp_cache):
     assert len(picked) == g.n_stocks == 10            # was 3: every unknown ticker shared one "Unknown" sector
     r = goal_portfolio("preservation", capital=10_000, universe=uni, run_backtest=False)
     assert len(r.weights) == 10
-    assert not any("relaxed" in n for n in r.notes)   # the 35% sector cap no longer has to be dropped
+    assert not any("sector cap was dropped" in n for n in r.notes)   # the 35% sector cap still applies
     assert any("No sector found" in n for n in r.notes)
 
 
@@ -97,3 +97,15 @@ def test_prebuilt_universes():
     assert "MSFT" in get_universe(SAMPLE_UNIVERSE_NAME) and "^GSPC" not in get_universe(SAMPLE_UNIVERSE_NAME)
     with pytest.raises(ValueError, match="unknown universe"):
         get_universe("no such list")
+
+
+def test_a_single_sector_universe_still_fills_the_goal(tmp_cache):
+    tickers = CUSTOM[:12]
+    uni = _synthetic_universe(tickers, {t: "Technology" for t in tickers})
+    r = goal_portfolio("preservation", capital=10_000, universe=uni, run_backtest=False)
+    assert len(r.weights) == GOALS["preservation"].n_stocks          # not 3: the per-sector limit is raised to 10
+    assert any("spans 1 sector" in n and "up to 10 stocks" in n for n in r.notes)
+    assert any("sector cap was dropped" in n for n in r.notes)        # one sector cannot hold 100% under 35%
+    mixed = _synthetic_universe(tickers, {t: ("Energy" if i < 6 else "Utilities") for i, t in enumerate(tickers)})
+    r2 = goal_portfolio("preservation", capital=10_000, universe=mixed, run_backtest=False)
+    assert len(r2.weights) == 10 and any("up to 5 stocks" in n for n in r2.notes)

@@ -789,15 +789,27 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
     uni = universe or load_universe(tickers or available_universe(source), years=years, source=source)
     panels = selection_panels(uni)
     t_last = len(uni.closes) - 1
+    notes = [f"Left out {t}: {why}" for t, why in uni.excluded.items()]
+    known = {sec for sec in uni.sectors.values() if sec != UNKNOWN_SECTOR}
+    if known and len(known) * max_per_sector < g.n_stocks and len(uni.tickers) > max_per_sector * len(known):
+        # a universe chosen for one or two sectors (e.g. "Technology"): the per-sector limit would cap the goal at a few
+        # stocks, so raise it just enough to fill the goal from the sectors there are
+        raised = math.ceil(g.n_stocks / len(known))
+        notes.append(f"This universe spans {len(known)} sector{'s' if len(known) > 1 else ''}, so up to {raised} stocks per "
+                     f"sector are allowed (the usual limit is {max_per_sector}).")
+        max_per_sector = raised
     picked = select(panels, t_last, g, uni.sectors, max_per_sector)
     if len(picked) < 2:
         raise ValueError(f"only {len(picked)} stock(s) qualify for the '{g.label}' goal right now; widen the universe")
-    notes = [f"Left out {t}: {why}" for t, why in uni.excluded.items()]
     if len(picked) < g.n_stocks:
         notes.append(f"Only {len(picked)} stocks qualified (asked for {g.n_stocks}).")
     cons_now = _goal_constraints(g, picked, uni.sectors, cons)
-    if cons_now.max_weight > cons.max_weight + 1e-9 or (cons.max_sector_weight and cons_now.max_sector_weight is None):
-        notes.append("Caps were relaxed so the weights can add up to 100% with this few stocks.")
+    if cons_now.max_weight > cons.max_weight + 1e-9:
+        notes.append(f"The per-stock cap was raised to {cons_now.max_weight:.0%} so the weights can add up to 100% with "
+                     f"{len(picked)} stocks.")
+    if cons.max_sector_weight and cons_now.max_sector_weight is None:
+        notes.append(f"The {cons.max_sector_weight:.0%} sector cap was dropped: these stocks' sectors cannot hold 100% "
+                     "under it.")
     res = _finish(uni, picked, g.method, cons_now, capital, min(lookback, len(uni.returns)), risk_free_rate, notes)
     row = {k: panels[k].iloc[t_last] for k in ("technical", "momentum", "low_vol", "uptrend")}
     sel = pd.DataFrame(row).loc[picked]

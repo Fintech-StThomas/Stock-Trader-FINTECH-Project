@@ -185,6 +185,9 @@ per sector and sector weight caps apply. A ticker outside the curated sector lis
 snapshot reports (Yahoo's `info["sector"]`, cached); one with no sector at all (ETFs, unknown symbols) is labelled
 "Unknown" and is exempt from both the 3-per-sector limit and the sector weight caps, because "Unknown" is not a sector.
 Before this rule, every unlabelled ticker shared one "Unknown" sector, so a custom universe produced at most 3 picks.
+When a universe spans too few sectors to fill the goal (a sector list such as "Technology"), the per-sector limit is raised
+to ⌈stocks wanted / sectors⌉, and a sector weight cap that the sectors cannot satisfy is dropped; both are noted on the
+result.
 All 122 curated labels were checked against Yahoo's live `info["sector"]` in October 2026 and match. The walk-forward test **re-selects** the stocks every rebalance with only the data
 available then, so it does not benefit from knowing today's winners. That matters: the back-cast of today's picks over the
 last year is inflated by how they were chosen, so the app shows it for risk only and uses the walk-forward test for performance.
