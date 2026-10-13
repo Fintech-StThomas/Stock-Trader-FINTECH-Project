@@ -32,7 +32,7 @@ def format_metrics(df: pd.DataFrame) -> pd.DataFrame:
     pct = {"total_return": "Total return", "cagr": "CAGR", "volatility": "Volatility", "max_drawdown": "Max drawdown",
            "win_rate": "Win rate", "avg_win": "Avg win", "avg_loss": "Avg loss", "exposure": "Time invested",
            "strategy_ann_return": "Strategy ann. return", "buy_hold_ann_return": "Buy & hold ann. return",
-           "share_of_time": "Share of time", "avg_exposure": "Avg exposure"}
+           "share_of_time": "Share of time", "avg_exposure": "Avg exposure", "turnover_annual": "Turnover / yr"}
     for c in df.columns:
         if c in pct:
             out[pct[c]] = df[c].map(lambda v: "n/a" if pd.isna(v) else f"{v * 100:.1f}%")
@@ -117,10 +117,12 @@ def build_report(result, include_backtest: bool = True) -> str:
     pl = d.plan
     L.append("### Position plan")
     if pl.position_pct > 0:
-        L.append(f"- Buy about **{pl.shares} shares** (~${pl.position_value:,.0f}, {pl.position_pct:.1f}% of the portfolio) near ${pl.entry_price:,.2f}.")
+        L.append(f"- Buy **{pl.shares} shares** near ${pl.entry_price:,.2f} = **${pl.cost:,.0f}** of your ${prof.cash:,.0f} cash "
+                 f"({pl.position_pct:.1f}% of the ${prof.account_value:,.0f} account); ${pl.cash_left:,.0f} stays in cash.")
         if pl.stop_price:
             L.append(f"- Exit level **${pl.stop_price:,.2f}** ({pl.stop_pct * 100:.1f}% below): worst case ≈ ${pl.max_loss_value:,.0f} "
-                     f"({pl.max_loss_value / prof.portfolio_value * 100:.2f}% of the portfolio, limit {prof.max_loss_pct:g}%).")
+                     f"({pl.max_loss_value / prof.account_value * 100:.2f}% of the account, limit {prof.max_loss_pct:g}%) if the stop "
+                     "fills at its price; an overnight gap through the stop can lose more.")
         L.append(f"- Size was limited by the **{pl.binding_constraint}**.")
     else:
         L.append(f"- No new capital. {pl.action}")

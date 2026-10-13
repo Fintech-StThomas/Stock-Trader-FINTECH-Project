@@ -15,9 +15,9 @@ wrong?** — and shows its work.
 
 ## What the product does
 
-The investor enters a ticker and four facts about themselves: horizon (long or short), risk tolerance
-(conservative / balanced / aggressive), the most they accept losing on one position (as % of the portfolio) and their
-portfolio size. Lighthouse then runs automatically:
+The investor enters a ticker and a few facts about themselves: horizon (long or short), risk tolerance
+(conservative / balanced / aggressive), the most they accept losing on one position (as % of the whole account), the
+cash they can invest now and, optionally, the value of the stocks they already hold. Lighthouse then runs automatically:
 
 1. **Collects and cleans the data** — ten-plus years of daily prices and volume, the S&P 500, and fundamentals
    (valuation ratios, profitability, leverage, cash flow, growth, up to five years of annual statements). Every
@@ -39,6 +39,12 @@ portfolio size. Lighthouse then runs automatically:
 6. **Honest evidence** — a point-in-time backtest of the trading rule versus buy-and-hold and the S&P 500, with
    layer attribution, a threshold-sensitivity grid, an out-of-sample test and a breakdown by market regime.
 7. **Watchlist ranking** — the same engine applied to a list of tickers.
+8. **Trade desk** — long and short tickets sized from the investor's cash: limit entry, stop-loss, two take-profit
+   levels in multiples of the risk, breakeven and trailing stops, a time stop, a cap on total open risk, and how those
+   exact rules did on each stock's history. A position monitor flags stop hits and positions close to their stop.
+9. **Portfolio builder** — a basket (the investor's or one picked for a goal) allocated by risk parity, minimum
+   variance, hierarchical risk parity, maximum Sharpe or simpler rules on a shrunk covariance matrix, with VaR,
+   expected shortfall, beta, risk contributions, stress tests and a walk-forward test of every method.
 
 It ships as a Colab/Jupyter notebook, a command-line tool and a point-and-click Streamlit app. A non-programmer
 changes nothing but the inputs cell.

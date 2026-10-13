@@ -105,7 +105,11 @@ def compute_metrics(equity: pd.Series, risk_free_rate: float = 0.02, trading_day
     vol = float(r.std(ddof=0) * np.sqrt(trading_days))
     excess = r.mean() * trading_days - risk_free_rate
     sharpe = float(excess / vol) if vol > 0 else float("nan")
-    downside = r[r < 0].std(ddof=0) * np.sqrt(trading_days)
+    # Sortino & Price (1994): downside deviation below the target (here the risk-free rate), averaged over ALL
+    # periods - not the standard deviation of the negative returns alone, which measures how losses vary around
+    # their own average rather than how far returns fall short of the target.
+    shortfall = np.minimum(r - risk_free_rate / trading_days, 0.0)
+    downside = float(np.sqrt(np.mean(shortfall ** 2)) * np.sqrt(trading_days))
     sortino = float(excess / downside) if downside > 0 else float("nan")
     mdd = max_drawdown(eq)
     calmar = float(cagr / abs(mdd)) if mdd < 0 else float("nan")
@@ -120,7 +124,9 @@ def trade_metrics(trades: Sequence[Trade]) -> Dict[str, float]:
                 "profit_factor": float("nan"), "avg_holding_days": float("nan"), "best_trade": float("nan"), "worst_trade": float("nan")}
     rets = np.array([t.return_pct for t in trades])
     wins, losses = rets[rets > 0], rets[rets <= 0]
-    gross_win, gross_loss = wins.sum(), -losses.sum()
+    # profit factor = gross profit / gross loss in money terms, so each trade is weighted by its size
+    pnl = np.array([t.pnl_pct for t in trades])
+    gross_win, gross_loss = pnl[pnl > 0].sum(), -pnl[pnl <= 0].sum()
     return {"n_trades": n, "win_rate": float(len(wins) / n),
             "avg_win": float(wins.mean()) if len(wins) else float("nan"),
             "avg_loss": float(losses.mean()) if len(losses) else float("nan"),

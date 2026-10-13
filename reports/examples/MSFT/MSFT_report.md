@@ -1,5 +1,5 @@
 # Lighthouse report: Microsoft Corporation (MSFT)
-*As of 2017-11-10 · price $83.87 · investor: long-term, balanced risk, max loss 2.0% of a $25,000 portfolio*
+*As of 2017-11-10 · price $83.87 · investor: long-term, balanced risk, $25,000 cash to invest, max loss 2.0% of the account per position*
 
 ## Verdict: **Strong Buy** — Lighthouse score 73 / 100
 Open or add to a position - the evidence lines up across fundamentals, technicals and the market backdrop.
@@ -43,12 +43,12 @@ Open or add to a position - the evidence lines up across fundamentals, technical
 Market weather is Bull / Calm: the S&P 500 is above its 200-day average (up-trend) and realised volatility (5%) is near or below its one-year norm (7%).
 
 ### Position plan
-- Buy about **21 shares** (~$1,768, 7.1% of the portfolio) near $83.87.
-- Exit level **$64.73** (22.8% below): worst case ≈ $403 (1.61% of the portfolio, limit 2%).
+- Buy **21 shares** near $83.87 = **$1,761** of your $25,000 cash (7.1% of the $25,000 account); $23,239 stays in cash.
+- Exit level **$64.73** (22.8% below): worst case ≈ $402 (1.61% of the account, limit 2%) if the stop fills at its price; an overnight gap through the stop can lose more.
 - Size was limited by the **max-loss rule**.
   - Exit level 22.8% below the current price at $64.73 (200-day SMA minus 8% buffer).
-  - Max-loss rule: losing 2% of the portfolio at the stop caps the position at 8.8%.
-  - Volatility rule: 16% realised vol vs a 15% target caps the position at 93.9%.
+  - Max-loss rule: losing 2% of the account ($500) at the stop caps the position at 8.8% of the account.
+  - Volatility rule: 16% realised vol vs a 15% target caps the position at 93.9% of the account.
   - Scaled by conviction 0.81 (score 73) and market-regime multiplier 1.
 
 ### How this rule behaved in the past (2002-09-04 → 2017-11-10)
@@ -56,9 +56,9 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 
 |  | Total return | CAGR | Volatility | Sharpe | Sortino | Max drawdown | Calmar | Trades | Win rate | Avg win | Avg loss | Profit Factor | Time invested | Years |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Lighthouse strategy | 70.9% | 3.6% | 13.1% | 0.18 | 0.21 | -28.7% | 0.13 | 7 | 57.1% | 30.0% | -2.7% | 15.05 | 53.9% | 15.2 |
-| Buy & hold | 362.4% | 10.6% | 26.2% | 0.44 | 0.62 | -59.1% | 0.18 | n/a | n/a | n/a | n/a | n/a | n/a | 15.2 |
-| S&P 500 | 189.0% | 7.2% | 18.6% | 0.36 | 0.45 | -56.8% | 0.13 | n/a | n/a | n/a | n/a | n/a | n/a | 15.2 |
+| Lighthouse strategy | 70.9% | 3.6% | 13.1% | 0.18 | 0.26 | -28.7% | 0.13 | 7 | 57.1% | 30.0% | -2.7% | 25.42 | 53.9% | 15.2 |
+| Buy & hold | 362.4% | 10.6% | 26.2% | 0.44 | 0.65 | -59.1% | 0.18 | n/a | n/a | n/a | n/a | n/a | n/a | 15.2 |
+| S&P 500 | 189.0% | 7.2% | 18.6% | 0.36 | 0.51 | -56.8% | 0.13 | n/a | n/a | n/a | n/a | n/a | n/a | 15.2 |
 
 **What each layer contributes**
 

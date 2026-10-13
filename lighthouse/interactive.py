@@ -64,7 +64,10 @@ def _shade_regimes(fig: go.Figure, regimes: Optional[pd.DataFrame], index: pd.In
     """Draw the regime rectangles behind panel `row`; returns the (label, colour) pairs used, for `_regime_legend`."""
     used: Dict[str, str] = {}
     for x0, x1, label, color in _regime_spans(regimes, index):
-        fig.add_vrect(x0=x0, x1=x1, fillcolor=color, opacity=0.55, layer="below", line_width=0, row=row, col=1)
+        # exclude_empty_subplots=False: the shading is drawn before the panel's traces, and Plotly's default
+        # (True) silently drops shapes aimed at a subplot that has no trace yet.
+        fig.add_vrect(x0=x0, x1=x1, fillcolor=color, opacity=0.55, layer="below", line_width=0, row=row, col=1,
+                      exclude_empty_subplots=False)
         used[label] = color
     return list(used.items())
 
@@ -182,14 +185,21 @@ def dashboard(result, last_days: int = 756, height: Optional[int] = None) -> go.
     has_vol = ind["Volume"].notna().any()
     rows = 4 if has_vol else 3
     heights = [0.5, 0.14, 0.18, 0.18] if has_vol else [0.56, 0.22, 0.22]
-    titles = ["Price, trend and Bollinger Bands"] + (["Volume"] if has_vol else []) + \
+    titles = [f"Price, trend and Bollinger Bands (SMA {p.bb_window} ± {p.bb_std:g}σ, trailing)"] + (["Volume"] if has_vol else []) + \
              [f"RSI ({p.rsi_window}) · dashed = {p.rsi_overbought:.0f} / {p.rsi_oversold:.0f}", f"MACD ({p.macd_fast}/{p.macd_slow}/{p.macd_signal})"]
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.045, row_heights=heights, subplot_titles=titles)
 
     used = _shade_regimes(fig, result.regimes, ind.index, row=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_upper"], line=dict(width=0), hoverinfo="skip", showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_lower"], line=dict(width=0), fill="tonexty", fillcolor="rgba(158,197,244,0.35)",
-                             name=f"Bollinger ({p.bb_window}, {p.bb_std:g}σ)", hoverinfo="skip"), row=1, col=1)
+                             name=f"Bollinger bands (±{p.bb_std:g}σ)", hoverinfo="skip"), row=1, col=1)
+    # The middle band is the SMA the bands are built around. It is added after the lower band so the fill above
+    # still runs upper-to-lower. Like every trailing average it lags price by about (window - 1) / 2 sessions.
+    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_mid"], name=f"Bollinger middle (SMA {p.bb_window})",
+                             line=dict(color=SERIES["band_mid"], width=1.2, dash="dash"),
+                             customdata=np.column_stack([ind["bb_upper"], ind["bb_lower"]]),
+                             hovertemplate=f"SMA {p.bb_window} " + "%{y:,.2f}<br>bands %{customdata[1]:,.2f} – %{customdata[0]:,.2f}"
+                                           "<extra>Bollinger</extra>"), row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
                              hovertemplate="close $%{y:,.2f}<extra></extra>"), row=1, col=1)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["sma_fast"], name=f"SMA {p.sma_fast}", line=dict(color=SERIES["sma_fast"], width=1.3),
@@ -384,3 +394,84 @@ def all_figures(result) -> Dict[str, go.Figure]:
     if result.extras.get("walk_forward") is not None:
         figs["walk_forward"] = walk_forward(result.extras["walk_forward"])
     return figs
+
+
+# --------------------------------------------------------------------------- #
+# Trade desk
+# --------------------------------------------------------------------------- #
+def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Figure:
+    """Recent price with the ticket's levels: entry, stop, targets (and the 20-day Bollinger middle for context)."""
+    ind = result.indicators.tail(last_days)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_upper"], line=dict(width=0), hoverinfo="skip", showlegend=False))
+    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_lower"], line=dict(width=0), fill="tonexty", fillcolor="rgba(158,197,244,0.25)",
+                             name="Bollinger bands", hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=ind.index, y=ind["bb_mid"], name="SMA 20", line=dict(color=SERIES["band_mid"], width=1, dash="dash"),
+                             hovertemplate="SMA 20 %{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
+                             hovertemplate="close $%{y:,.2f}<extra></extra>"))
+    levels = [("entry", plan.price, INK2, "solid")]
+    if plan.stop is not None:
+        levels.append(("stop", plan.stop, STATUS["red"], "dash"))
+    for k, t in enumerate(plan.targets):
+        levels.append((f"target {k + 1} ({t.r_multiple:g}R)", t.price, STATUS["green"], "dot"))
+    for label, y, color, dash in levels:
+        fig.add_hline(y=y, line=dict(color=color, width=1.4, dash=dash), annotation_text=f"{label} ${y:,.2f}",
+                      annotation_position="right", annotation_font=dict(size=11, color=color))
+    side = "LONG" if plan.side == "long" else "SHORT"
+    _base_layout(fig, title=f"{plan.ticker} · {side} ticket levels · data to {plan.as_of}", height=height)
+    fig.update_layout(margin=dict(r=150))
+    fig.update_yaxes(title="price ($)")
+    return fig
+
+
+# --------------------------------------------------------------------------- #
+# Portfolio builder
+# --------------------------------------------------------------------------- #
+def allocation_chart(table: pd.DataFrame, height: Optional[int] = None) -> go.Figure:
+    """Capital weight next to risk share for every holding: where the money is vs where the risk is."""
+    d = table.sort_values("target_weight")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(y=d.index, x=d["target_weight"] * 100, orientation="h", name="share of capital",
+                         marker=dict(color=SERIES["strategy"]), hovertemplate="%{y}: %{x:.1f}% of capital<extra></extra>"))
+    fig.add_trace(go.Bar(y=d.index, x=d["risk_share"] * 100, orientation="h", name="share of risk",
+                         marker=dict(color=SERIES["buy_hold"]), hovertemplate="%{y}: %{x:.1f}% of the risk<extra></extra>"))
+    _base_layout(fig, title="Where the money is vs where the risk is", height=height or int(28 * len(d) + 140),
+                 barmode="group", hovermode="closest")
+    fig.update_xaxes(title="% of capital (cash excluded) · % of portfolio volatility")
+    return fig
+
+
+def correlation_heatmap(corr: pd.DataFrame, height: Optional[int] = None) -> go.Figure:
+    n = len(corr)
+    fig = go.Figure(go.Heatmap(
+        z=corr.values, x=list(corr.columns), y=list(corr.index), zmin=-1, zmax=1,
+        colorscale=[[0, "#d03b3b"], [0.5, "#f0efec"], [1, "#2a78d6"]], colorbar=dict(title="ρ", thickness=12),
+        text=[[f"{v:.2f}" for v in row] for row in corr.values], texttemplate="%{text}" if n <= 15 else None,
+        hovertemplate="%{y} vs %{x}: %{z:.2f}<extra></extra>"))
+    _base_layout(fig, title="Correlation of daily returns (lower = better diversification)", height=height or max(320, 28 * n + 120),
+                 hovermode="closest")
+    fig.update_yaxes(autorange="reversed")
+    return fig
+
+
+def equity_curves(runs: Dict[str, object], height: int = 520) -> go.Figure:
+    """Walk-forward growth of $1 (log) and drawdown for several portfolio backtests."""
+    from .indicators import drawdown
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.07, row_heights=[0.68, 0.32],
+                        subplot_titles=["Growth of $1, walk-forward (log scale)", "Drawdown from peak"])
+    palette = [SERIES["strategy"], "#4a3aa7", SERIES["buy_hold"], "#d03b3b", "#fab219", "#1c5cab", "#ec835a", SERIES["benchmark"]]
+    for i, (key, bt) in enumerate(runs.items()):
+        color = SERIES["benchmark"] if key == "benchmark" else palette[i % len(palette)]
+        eq = bt.equity
+        fig.add_trace(go.Scatter(x=eq.index, y=eq, name=bt.label, line=dict(color=color, width=1.6),
+                                 hovertemplate="%{y:.2f}x<extra>" + bt.label + "</extra>"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=eq.index, y=drawdown(eq), name=bt.label, line=dict(color=color, width=1), showlegend=False,
+                                 hovertemplate="%{y:.1%}<extra>" + bt.label + "</extra>"), row=2, col=1)
+    _base_layout(fig, height=height)
+    fig.update_layout(legend=dict(y=1.06), margin=dict(t=80))
+    fig.update_yaxes(type="log", row=1, col=1)
+    fig.update_yaxes(tickformat=".0%", row=2, col=1)
+    for ann in fig.layout.annotations:
+        ann.update(x=0, xanchor="left", font=dict(size=12, color=INK2))
+    return fig

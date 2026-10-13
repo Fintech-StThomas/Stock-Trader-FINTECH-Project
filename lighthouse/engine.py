@@ -91,7 +91,7 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     Parameters
     ----------
     ticker       : e.g. "MSFT"
-    profile      : the investor's horizon / risk tolerance / max loss / portfolio size
+    profile      : the investor's horizon / risk tolerance / max loss / account value and cash available
     years        : history to analyse and backtest
     benchmark    : market index for regime detection and comparison
     source       : "auto" (live with offline fallbacks), "yfinance", "stooq", "cache", "sample"

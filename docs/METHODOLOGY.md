@@ -53,6 +53,13 @@ All indicators are causal (rolling windows, `ewm(adjust=False)`): the value on d
 
 Technical score = 50 + 50 × weighted mean, with weights re-normalised over available beacons. Long-term weights lean on slow beacons (trend, breakout); short-term on oscillators.
 
+**Why the Bollinger Bands trail the price.** The bands are the 20-day simple moving average (the *middle band*, drawn dashed on
+every chart) ± 2 population standard deviations of the same 20 closes, as John Bollinger defines them. A trailing 20-day average
+lags price by (20 − 1) / 2 = 9.5 sessions, and after a sharp move the band width keeps growing until the move leaves the
+20-day window. On the sample data the middle band lines up best with the close from 9–10 sessions earlier, exactly as
+theory says. Centring the bands on the price would use the next ~10 days of prices, which is look-ahead, so they are not
+shifted.
+
 ## 4. Market weather (regime)
 
 * Trend: S&P 500 above / below its 200-day SMA → Bull / Bear.
@@ -66,7 +73,10 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 * Composite = 0.60·F + 0.40·T (long) or 0.30·F + 0.70·T (short) − weather penalty. Missing fundamentals → technical only, with a warning.
 * Verdict bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell. Bands are symmetric around 50 with a wider Hold zone so small changes do not flip the verdict.
 * Exit level: long horizon = 200-day SMA × (1 − 8%); short horizon = 2.5× ATR(14) trailing (2.0 aggressive, 3.0 conservative). The live plan and the backtest use the same exit, so what the user sees is what was tested.
-* Size = min(max-loss rule, volatility rule, concentration cap) × conviction × regime multiplier:
+* The investor gives **cash available to invest now** and the value of stocks already held. Risk limits (max loss, concentration
+  cap) are a % of the whole account (cash + holdings), the professional convention; a new position is paid from cash only,
+  so the cash is a hard cap ("cash available" becomes the binding rule when it is the smallest).
+* Size = min(max-loss rule, volatility rule, concentration cap) × conviction × regime multiplier, capped by the cash:
   * Max-loss rule: position % = max loss % / distance to the exit level. The investor's number, not ours.
   * Volatility rule: target vol (10 / 15 / 25%) / 60-day realised vol.
   * Concentration cap: 10 / 20 / 35%.
@@ -101,7 +111,84 @@ See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Avera
 
 Interpretation: on a universe of survivors that compounded at 13% a year, a rule that is sometimes in cash cannot win on return. The product's value is that it delivers *the risk profile the investor asked for* — a balanced investor who said "15% volatility, lose at most 2% per idea" actually gets ~13% volatility and a defined worst case — while keeping most of the up-trend exposure. We state this plainly rather than hiding it behind a cherry-picked ticker.
 
-## 9. Q&A preparation
+## 9. Trade tickets: long and short (`lighthouse/tradeplan.py`)
+
+| Item | Rule | Reasoning |
+|---|---|---|
+| Long setup | Actionable when the verdict is Buy / Strong Buy **and** the trend beacon is positive (the backtested entry gate) | The ticket only fires on what was tested |
+| Short setup | Actionable when the composite ≤ 40, the trend beacon is negative, the technical score ≤ 40, and the market is not Bull / Calm | Mirror of the long rule around 50 (Buy ≥ 60 ↔ short ≤ 40; Bear / Turbulent blocks longs ↔ Bull / Calm blocks shorts); bull markets halve short size |
+| Watch list | Positive (negative) evidence without the trend confirmation, or a Hold with a strong technical score | Levels are shown; no order |
+| Stop-loss | Longs: the horizon's stop (200-day SMA − 8% long term, 2.5 × ATR short term). **Shorts always use the short-horizon ATR stop** | A short's loss is open-ended and borrow fees accrue daily; a wide SMA stop would make its targets meaningless |
+| Size | The three risk rules as % of the account × conviction × regime, capped by the cash; shorts are capped at 1:1 collateral (Regulation T would allow 2:1) | Same engine as the Position plan, so the long ticket and the plan agree |
+| Entry | Limit order at the last price; skip if price has run 0.5 × ATR beyond it | Do not chase |
+| Targets | Target 1 = entry ± 2R, target 2 = entry ± 3R (R = entry-to-stop distance; editable) | R-multiples express reward in units of risk; a 2R target needs a win rate above 1/3 to pay |
+| Management | Sell 50% at target 1, move the stop on the rest to breakeven, then trail it at the best close ∓ k × ATR (chandelier exit); time stop after 40 (short horizon) / 252 (long) sessions | Locks in gains, caps dead money |
+| Portfolio heat | Ideas are funded best-first until the cash, the idea count (5) or the total planned risk (6% of the account) runs out; leftovers smaller than 25% of an idea's full size are not funded | Limits correlated losses across many open trades |
+
+**Historical setup test.** For every past day the stock met the (point-in-time) setup rule, the trade is entered at the next
+session's open (the close for close-only data) and managed with exactly the rules above, one trade at a time, after costs.
+Gaps fill at the open; when a stop and a target fall in the same session the stop is assumed first. Results are in R
+(expectancy, win rate, profit factor, share of trades reaching target 1 / stopped / timed out). A ticket whose rules lost
+money on that stock is flagged in red. Shorts are simulated on the dividend-adjusted series, so the dividends a short seller
+owes are reflected; borrow fees are not.
+
+**Position monitor.** An open position is replayed from the session after its entry with the same rules. The monitor reports a
+stop or target hit (with the date), how far price is from the stop (in % and ATR; "near stop" within 0.5 ATR), the current
+breakeven or trailing stop, a due time stop, and whether the latest verdict has turned against the trade.
+
+**Short-sale facts shown on short tickets.** Regulation T initial margin is 150% of the short value (the sale proceeds plus a
+50% deposit). FINRA Rule 4210 maintenance for a short stock at $5 or more is the greater of $5 per share or 30% of market
+value (below $5: the greater of $2.50 per share or 100%). SEC Rule 201: after a 10% fall from the prior close, shorts may only
+be sold above the national best bid for the rest of that day and the next. Shorting needs a margin account (not a cash
+account or an IRA), borrowable shares, and the payment of dividends in lieu.
+
+## 10. Portfolio construction and risk (`lighthouse/portfolio.py`)
+
+| Step | Choice | Reasoning |
+|---|---|---|
+| Returns | Daily simple returns on the common dates of the basket; series ending > 10 days before the others are left out (and reported) | One stale series must not cut everyone's history |
+| Covariance | Ledoit-Wolf (2004) shrinkage toward a scaled identity, estimated on the last 252 sessions (editable) | The sample covariance is noisy and ill-conditioned; verified against scikit-learn |
+| Expected returns | Only Maximum Sharpe uses them: Bayes-Stein (Jorion 1986) shrinkage toward the minimum-variance portfolio's mean | Historical means are the noisiest input in finance |
+| Methods | Equal weight; inverse volatility; equal risk contribution (Spinu 2013 convex form); minimum variance; maximum Sharpe (convex reformulation); hierarchical risk parity (López de Prado 2016: single-linkage on √((1−ρ)/2), quasi-diagonal order, recursive bisection) | From assumption-free (1/N) to estimation-heavy (max Sharpe), so the walk-forward table shows what estimation buys |
+| Constraints | Long-only, fully invested, per-stock min/max, optional per-sector cap, solved inside the optimiser (heuristic methods are projected onto the caps by least squares) | Feasibility is checked first, with a plain-English error |
+| Volatility target | If expected volatility exceeds the target, the excess is held in cash | Delivers the risk the investor asked for |
+| Orders | Whole shares by flooring, then the leftover cash buys one share at a time for the position furthest below target | Never overspends; a cash buffer is never spent |
+| Risk report | Expected volatility (shrunk covariance); historical-simulation VaR and expected shortfall at 95% for 1 day and 1 month (overlapping 21-session windows); beta, correlation and tracking error vs the S&P 500; back-cast max drawdown; risk contributions; diversification ratio; effective number of stocks (1/Σw²); stress tests through the dot-com bust, the GFC, 2011, Q4 2018, the COVID crash and 2022 (S&P 500 closing peak to trough) when covered by the data | Each answers "how bad can it get?" in a different way |
+| Walk-forward test | Monthly (or quarterly) rebalance; weights from the trailing window only; trades executed at the **next** day's close; 10 bps per unit of turnover; weights drift between rebalances; cash earns 0% | No look-ahead (unit-tested by truncation) |
+
+**Goals.** *Capital preservation* picks the 10 calmest stocks and uses minimum variance with a 12% volatility target. *Balanced*
+picks the 10 best technical scores (≥ 45) and uses risk parity. *Growth* picks the 8 strongest 12-1 month momentum names in an
+up-trend and uses maximum Sharpe. *Maximum diversification* picks 15 names (technical score ≥ 45) and uses HRP. At most 3 stocks
+per sector and sector weight caps apply. The walk-forward test **re-selects** the stocks every rebalance with only the data
+available then, so it does not benefit from knowing today's winners. That matters: the back-cast of today's picks over the
+last year is inflated by how they were chosen, so the app shows it for risk only and uses the walk-forward test for performance.
+
+**What the evidence says.** On the app's default basket (AAPL, JNJ, XOM, JPM, KO, PG, UNH, WMT; offline sample data;
+walk-forward from late 2012 to December 2022; 25% cap; 10 bps costs) plain equal weight had the best Sharpe (0.84). Risk
+parity was close (0.82) with lower volatility (15.1% vs 15.7%). Minimum variance had the smallest drawdown (−25.8% vs
+−30.8%). Maximum Sharpe turned over 3.6× a year without beating 1/N (Sharpe 0.73). All six beat the S&P 500's 0.53 over
+the window, a result that owes much to survivorship (these are 2022's survivors). This matches DeMiguel, Garlappi & Uppal (2009): estimation error
+eats most of the theoretical gain from optimisation, which is why risk parity is the default and maximum Sharpe is labelled
+the most estimation-sensitive.
+
+## 11. Corrections made in the October 2026 code review
+
+| Issue | Effect | Fix |
+|---|---|---|
+| Bollinger middle band computed but never drawn | The bands appeared to float around nothing | Dashed 20-day SMA on both chart sets, plus the lag explanation above |
+| Market-weather shading never appeared in the interactive charts | Plotly silently drops shapes aimed at a subplot that has no trace yet; the legend listed regimes that were not drawn | Shapes are added with `exclude_empty_subplots=False` |
+| Sortino ratio used the standard deviation of the negative returns only | Wrong formula (overstated or understated depending on the series) | Downside deviation below the risk-free rate over **all** periods (Sortino & Price 1994) |
+| Profit factor summed unweighted trade returns | A small trade counted as much as a large one | Gross profit / gross loss of size-weighted P&L |
+| Stop distance clamped at 60% when sizing | For a stock far above its 200-day SMA, the real loss at the stop could exceed the investor's limit | No upper clamp (the 1% floor stays; it only makes positions smaller) |
+| CLI `--horizon short` kept the long-horizon rule | Weekly review and ATR stop were never applied from the command line | The CLI starts from `StrategyParams.for_horizon` |
+| A fresh price cache was reused even when it covered a shorter window | A 6-year watchlist download could silently shorten a later 10-year analysis | The cache records the requested start and must cover the new request |
+| Dividend yield guessed percent vs fraction from the value | Yields under 0.3% read as percent were 100× too high | Uses annual dividend per share ÷ price first |
+| Position plan sized from "portfolio value" | Implied the whole portfolio was cash to deploy | Sized from cash available; risk limits on the whole account |
+
+The changes do not alter the strategy backtest itself. Regenerating `reports/examples/MSFT` reproduced every return,
+drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor columns changed.
+
+## 12. Q&A preparation
 
 * **Why these indicators?** Trend (200-day) is the most robust timing signal in the literature; RSI/MACD/Bollinger cover momentum, acceleration and range; volume validates moves; 52-week high is the simplest breakout measure. Fundamentals cover the three questions an analyst asks: is it cheap, is it good, is it growing.
 * **Why should they predict returns?** Trend and momentum persistence are documented anomalies; quality and value premia are documented factors. We do not claim short-term prediction; we claim better risk-adjusted participation.
