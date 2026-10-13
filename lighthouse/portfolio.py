@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -517,7 +517,7 @@ def _rebalance_flags(index: pd.DatetimeIndex, freq: str) -> np.ndarray:
 
 
 def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[..., Tuple[np.ndarray, float]], lookback: int = 252,
-                     rebalance: str = "monthly", cost_bps: float = 10.0, risk_free_rate: float = 0.02,
+                     rebalance: str = "monthly", cost_bps: float = 10.0, risk_free_rate: Union[float, pd.Series] = 0.02,
                      label: str = "portfolio", pass_holdings: bool = False) -> PortfolioBacktest:
     """Walk forward: on each rebalance day t, `weight_fn(t)` sees returns up to and including day t and returns
     (risky weights, invested fraction); with `pass_holdings` it is called as `weight_fn(t, w)` with the weights held
@@ -564,6 +564,12 @@ def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[..., Tuple[np.nd
                              turnover=tv, metrics=m, label=label)
 
 
+def _metrics_rf(risk_free: Optional[pd.Series], risk_free_rate: float):
+    """The rate behind walk-forward Sharpe ratios: the daily T-bill when given (rates moved from ~0% to 5% over the
+    last decade), else the fixed rate. The optimiser's maximum-Sharpe method always uses the fixed (today's) rate."""
+    return risk_free if risk_free is not None and len(risk_free) else risk_free_rate
+
+
 def method_weight_fn(returns: pd.DataFrame, method: str, cons: PortfolioConstraints, sectors: Optional[Sequence[str]],
                      lookback: int, risk_free_rate: float) -> Callable[[int], Tuple[np.ndarray, float]]:
     def fn(t: int):
@@ -576,7 +582,8 @@ def method_weight_fn(returns: pd.DataFrame, method: str, cons: PortfolioConstrai
 
 def compare_methods(universe: PriceUniverse, methods: Optional[Sequence[str]] = None,
                     constraints: Optional[PortfolioConstraints] = None, lookback: int = 252, rebalance: str = "monthly",
-                    cost_bps: float = 10.0, risk_free_rate: float = 0.02) -> Tuple[pd.DataFrame, Dict[str, PortfolioBacktest]]:
+                    cost_bps: float = 10.0, risk_free_rate: float = 0.02,
+                    risk_free: Optional[pd.Series] = None) -> Tuple[pd.DataFrame, Dict[str, PortfolioBacktest]]:
     """Walk-forward every allocation method on the same basket: the evidence for choosing one."""
     rets = universe.returns
     cons = constraints or PortfolioConstraints()
@@ -584,12 +591,12 @@ def compare_methods(universe: PriceUniverse, methods: Optional[Sequence[str]] = 
     runs: Dict[str, PortfolioBacktest] = {}
     for m in methods or list(METHODS):
         runs[m] = backtest_weights(rets, method_weight_fn(rets, m, cons, sectors, lookback, risk_free_rate), lookback,
-                                   rebalance, cost_bps, risk_free_rate, METHODS[m])
+                                   rebalance, cost_bps, _metrics_rf(risk_free, risk_free_rate), METHODS[m])
     rows = {METHODS[m]: bt.metrics for m, bt in runs.items()}
     if universe.benchmark is not None and runs:
         first = next(iter(runs.values())).equity.index
         b = universe.benchmark.reindex(first)
-        rows["S&P 500 (buy & hold)"] = compute_metrics(b / b.iloc[0], risk_free_rate, TRADING_DAYS)
+        rows["S&P 500 (buy & hold)"] = compute_metrics(b / b.iloc[0], _metrics_rf(risk_free, risk_free_rate), TRADING_DAYS)
         runs["benchmark"] = PortfolioBacktest(b / b.iloc[0], pd.DataFrame(), pd.Series(dtype=float), rows["S&P 500 (buy & hold)"], "S&P 500")
     table = pd.DataFrame(rows).T
     cols = ["cagr", "volatility", "sharpe", "sortino", "max_drawdown", "calmar", "turnover_annual", "years"]
@@ -765,7 +772,8 @@ def _finish(universe: PriceUniverse, picked: List[str], method: str, cons: Portf
 def build_portfolio(tickers: Iterable[str], method: str = "risk_parity", constraints: Optional[PortfolioConstraints] = None,
                     capital: float = 10_000, years: float = 10, source: str = "auto", lookback: int = 252,
                     rebalance: str = "monthly", cost_bps: float = 10.0, risk_free_rate: float = 0.02,
-                    run_backtest: bool = True, compare: bool = True, universe: Optional[PriceUniverse] = None) -> PortfolioResult:
+                    run_backtest: bool = True, compare: bool = True, universe: Optional[PriceUniverse] = None,
+                    risk_free: Optional[pd.Series] = None) -> PortfolioResult:
     """Allocate YOUR basket: weights, shares for `capital`, risk report, and a walk-forward test of the method
     (plus every other method for comparison)."""
     cons = constraints or PortfolioConstraints()
@@ -778,12 +786,13 @@ def build_portfolio(tickers: Iterable[str], method: str = "risk_parity", constra
     if run_backtest:
         try:
             if compare:
-                res.comparison, res.comparison_runs = compare_methods(uni, None, cons, lookback, rebalance, cost_bps, risk_free_rate)
+                res.comparison, res.comparison_runs = compare_methods(uni, None, cons, lookback, rebalance, cost_bps, risk_free_rate,
+                                                                      risk_free)
                 res.backtest = res.comparison_runs[method]
             else:
                 sectors = [uni.sectors[t] for t in uni.tickers] if cons.max_sector_weight is not None else None
                 res.backtest = backtest_weights(uni.returns, method_weight_fn(uni.returns, method, cons, sectors, lookback, risk_free_rate),
-                                                lookback, rebalance, cost_bps, risk_free_rate, METHODS[method])
+                                                lookback, rebalance, cost_bps, _metrics_rf(risk_free, risk_free_rate), METHODS[method])
         except (ValueError, RuntimeError) as exc:
             res.notes.append(f"Walk-forward test skipped: {exc}")
     return res
@@ -793,7 +802,8 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
                    source: str = "auto", n_stocks: Optional[int] = None, constraints: Optional[PortfolioConstraints] = None,
                    max_per_sector: int = 3, lookback: int = 252, rebalance: str = "monthly", cost_bps: float = 10.0,
                    risk_free_rate: float = 0.02, run_backtest: bool = True,
-                   universe: Optional[PriceUniverse] = None, held: Optional[Iterable[str]] = None) -> PortfolioResult:
+                   universe: Optional[PriceUniverse] = None, held: Optional[Iterable[str]] = None,
+                   risk_free: Optional[pd.Series] = None) -> PortfolioResult:
     """Build a portfolio aimed at a goal from a universe ("all available tickers" by default).
 
     Today's picks use the same point-in-time ranking as the walk-forward test, which re-selects the stocks at every
@@ -881,22 +891,23 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
         try:
             kept = g.keep_rank is not None
             label = f"{g.label} (reviewed every {every}" + ("; holdings kept while they qualify)" if kept else ")")
-            res.backtest = backtest_weights(rets, weight_fn(g), warm, rebalance, cost_bps, risk_free_rate, label, pass_holdings=True)
+            rf_m = _metrics_rf(risk_free, risk_free_rate)
+            res.backtest = backtest_weights(rets, weight_fn(g), warm, rebalance, cost_bps, rf_m, label, pass_holdings=True)
             runs = {"goal": res.backtest}
             rows = {res.backtest.label: res.backtest.metrics}
             if kept:                     # the same goal re-selected from scratch at every review: what the buffer saves
                 g0 = Goal(**{**g.__dict__, "keep_rank": None})
-                scratch = backtest_weights(rets, weight_fn(g0), warm, rebalance, cost_bps, risk_free_rate,
+                scratch = backtest_weights(rets, weight_fn(g0), warm, rebalance, cost_bps, rf_m,
                                            f"{g.label} (re-selected from scratch every {every})", pass_holdings=True)
                 runs["goal_from_scratch"] = scratch
                 rows[scratch.label] = scratch.metrics
             ew = backtest_weights(rets, lambda t: (np.full(len(rets.columns), 1.0 / len(rets.columns)), 1.0), warm, rebalance,
-                                  cost_bps, risk_free_rate, "Equal weight, whole universe")
+                                  cost_bps, rf_m, "Equal weight, whole universe")
             runs["equal_weight_universe"] = ew
             rows[ew.label] = ew.metrics
             if uni.benchmark is not None:
                 b = uni.benchmark.reindex(res.backtest.equity.index)
-                rows["S&P 500 (buy & hold)"] = compute_metrics(b / b.iloc[0], risk_free_rate, TRADING_DAYS)
+                rows["S&P 500 (buy & hold)"] = compute_metrics(b / b.iloc[0], rf_m, TRADING_DAYS)
                 runs["benchmark"] = PortfolioBacktest(b / b.iloc[0], pd.DataFrame(), pd.Series(dtype=float), rows["S&P 500 (buy & hold)"], "S&P 500")
             cols = ["cagr", "volatility", "sharpe", "sortino", "max_drawdown", "calmar", "turnover_annual", "years"]
             table = pd.DataFrame(rows).T

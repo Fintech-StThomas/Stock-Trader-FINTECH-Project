@@ -13,9 +13,11 @@ the network entirely.
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 import threading
+import time
 import warnings
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
@@ -524,6 +526,63 @@ def load_benchmark(symbol: str = "^GSPC", years: Optional[float] = 10, start=Non
                    source: str = "auto", keep_partial: bool = False) -> pd.DataFrame:
     """Market benchmark (default: S&P 500 index) used for regime detection and comparison."""
     return load_prices(symbol, years=years, start=start, end=end, source=source, keep_partial=keep_partial)
+
+
+# --------------------------------------------------------------------------- #
+# Risk-free rate
+# --------------------------------------------------------------------------- #
+FRED_TBILL_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3"   # public CSV endpoint: no API key
+_rf_lock = threading.Lock()
+
+
+def _parse_fred_csv(text: str) -> pd.Series:
+    """FRED's CSV (observation_date, value in percent; "." or blank on holidays) as a fraction per date."""
+    df = pd.read_csv(io.StringIO(text))
+    s = pd.Series(pd.to_numeric(df.iloc[:, -1], errors="coerce").to_numpy() / 100.0,
+                  index=pd.to_datetime(df.iloc[:, 0]), name="DTB3")
+    return s.dropna().sort_index()
+
+
+def _read_risk_free(path: Path) -> pd.Series:
+    s = pd.read_csv(path, index_col=0, parse_dates=True).iloc[:, 0]
+    return s.rename("DTB3").dropna().sort_index()
+
+
+def load_risk_free(source: str = "auto", refresh: bool = False) -> Optional[pd.Series]:
+    """The 3-month Treasury bill rate (FRED series DTB3: secondary market, annualised, as a fraction) on every day it
+    was published, for the Sharpe and Sortino ratios. Downloaded from FRED's public CSV endpoint and cached for up to
+    20 hours (a stale cache is used if FRED cannot be reached). Returns None offline, for the sample pack, or when no
+    copy can be had: the caller then uses StrategyParams.risk_free_rate (2% a year)."""
+    if offline_mode() or source == "sample":
+        return None
+    path = CACHE_DIR / "riskfree_DTB3.csv"
+    with _rf_lock:
+        if path.exists():
+            age_h = (time.time() - path.stat().st_mtime) / 3600.0
+            if source == "cache" or (age_h < CACHE_MAX_AGE_HOURS and not refresh):
+                try:
+                    return _read_risk_free(path)
+                except Exception:  # noqa: BLE001 - a damaged cache file is simply downloaded again
+                    pass
+        if source != "cache":
+            try:
+                import requests
+                # requests' own User-Agent: FRED's CDN stalled (read timeouts) on custom or browser-like ones
+                r = requests.get(FRED_TBILL_URL, timeout=15)
+                r.raise_for_status()
+                s = _parse_fred_csv(r.text)
+                if len(s) > 250:
+                    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+                    _atomic_write(path, lambda tmp: s.to_csv(tmp, header=True))
+                    return s
+            except Exception:  # noqa: BLE001 - network, HTTP or format trouble: fall back below
+                pass
+        if path.exists():
+            try:
+                return _read_risk_free(path)
+            except Exception:  # noqa: BLE001
+                pass
+    return None
 
 
 def align(prices: pd.DataFrame, benchmark: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:

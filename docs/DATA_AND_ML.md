@@ -15,7 +15,7 @@ were checked in October 2026.
 | Daily bars only, and Yahoo's quote | Signals use finished sessions and "buy now" is priced from Yahoo's latest quote with its timestamp, which can lag by up to 15 minutes on some exchanges and is not your broker's market | A real-time quote from a broker API or a consolidated (SIP) feed |
 | Only ~4–5 years of fundamentals, dated by fiscal period end | The backtest's fundamental gate only acts in recent years, and period end ≠ the date the numbers became public | Point-in-time fundamentals keyed by **filing date** |
 | Survivorship bias | Testing only on companies that still exist (and won) flatters every strategy | A universe that includes delisted stocks and historical index membership |
-| Fixed 2% risk-free rate | Sharpe ratios are overstated when T-bills pay ~4%, understated when they paid ~0% | The 3-month Treasury bill rate from FRED, day by day |
+| ~~Fixed 2% risk-free rate~~ (done October 2026) | Sharpe ratios were overstated when T-bills paid ~4%, understated when they paid ~0% | Live analyses now use the 3-month T-bill (FRED `DTB3`) day by day; offline and sample data keep 2%. Backtest cash still earns 0% |
 | No earnings calendar, short interest or borrow cost | Stops can be gapped through on earnings; shorts can be expensive or recalled | Event and securities-lending data |
 
 ## 2. Recommended sources
@@ -48,7 +48,8 @@ were checked in October 2026.
 * Sharadar SF1 (above); **Financial Modeling Prep** (inexpensive and broad, good for screening; check how it dates figures).
 
 ### Macro data, the risk-free rate and factors
-* **FRED** (St. Louis Fed, free API key): the 3-month T-bill (`DTB3` daily) for the risk-free rate, Treasury yields, credit
+* **FRED** (St. Louis Fed, free API key; single series also download as CSV without one, which is how Lighthouse
+  reads the 3-month T-bill `DTB3` for its risk-free rate): Treasury yields, credit
   spreads (`BAA10Y`) and the VIX (`VIXCLS`). Useful as regime features too.
 * **Kenneth French Data Library**: Fama-French factors and momentum, to check whether a result is genuine or just
   exposure to value, size or momentum.

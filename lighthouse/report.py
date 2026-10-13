@@ -140,7 +140,8 @@ def build_report(result, include_backtest: bool = True) -> str:
         L.append(f"### How this rule behaved in the past ({bt.start.date()} → {bt.end.date()})")
         L.append(f"Long-only, reviewed {result.params.decision_frequency} at the close, filled at the {bt.options.get('fills')}, "
                  f"{result.params.cost_bps + result.params.slippage_bps:.0f} bps commission + slippage per side, statements lagged "
-                 f"{result.params.reporting_lag_days} days. Returns are for the capital allocated to this stock.\n")
+                 f"{result.params.reporting_lag_days} days. Returns are for the capital allocated to this stock. "
+                 f"Sharpe and Sortino use {bt.options.get('risk_free', 'a fixed risk-free rate')}.\n")
         L.append(_md_table(format_metrics(bt.summary())) + "\n")
         layers = result.extras.get("layers")
         if layers is not None:

@@ -52,7 +52,7 @@ Market weather is Bull / Calm: the S&P 500 is above its 200-day average (up-tren
   - Scaled by conviction 0.75 (score 71) and market-regime multiplier 1.
 
 ### How this rule behaved in the past (2002-09-04 → 2017-11-10)
-Long-only, reviewed monthly at the close, filled at the next open, 10 bps commission + slippage per side, statements lagged 90 days. Returns are for the capital allocated to this stock.
+Long-only, reviewed monthly at the close, filled at the next open, 10 bps commission + slippage per side, statements lagged 90 days. Returns are for the capital allocated to this stock. Sharpe and Sortino use a fixed 2% a year (no T-bill series: offline or sample data).
 
 |  | Total return | CAGR | Volatility | Sharpe | Sortino | Max drawdown | Calmar | Trades | Win rate | Avg win | Avg loss | Profit Factor | Time invested | Years |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|

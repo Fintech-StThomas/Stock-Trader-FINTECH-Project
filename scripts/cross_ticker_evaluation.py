@@ -43,7 +43,7 @@ def evaluate(ticker: str) -> dict:
     sig = run_backtest(r.prices, r.benchmark, p, r.profile, r.pit_scores, use_regime=True, use_fundamental_gate=False,
                        use_stops=False, sizing="full").metrics
     cons = analyze(ticker, InvestorProfile(horizon="long", risk="conservative"), p, years=40, source="sample").backtest.metrics
-    m, bh = bt.metrics, compute_metrics(bt.buy_hold, p.risk_free_rate, p.trading_days)
+    m, bh = bt.metrics, compute_metrics(bt.buy_hold, bt.rf, p.trading_days)
     return {"ticker": ticker, "start": str(bt.start.date()), "end": str(bt.end.date()),
             "signals_cagr": sig["cagr"], "signals_sharpe": sig["sharpe"], "signals_mdd": sig["max_drawdown"],
             "lighthouse_cagr": m["cagr"], "lighthouse_vol": m["volatility"], "lighthouse_sharpe": m["sharpe"],

@@ -24,7 +24,7 @@ import streamlit as st
 from lighthouse import analyze, screen, InvestorProfile, StrategyParams
 from lighthouse import interactive as ix
 from lighthouse.config import VERDICT_BANDS, RISK_PRESETS, HORIZON_WEIGHTS
-from lighthouse.data import sample_pack_tickers, offline_mode, load_prices, DataUnavailable
+from lighthouse.data import sample_pack_tickers, offline_mode, load_prices, load_risk_free, DataUnavailable
 from lighthouse.decision import size_position
 from lighthouse.regime import regime_adjustments
 from lighthouse.report import format_metrics, LIGHT_ICON
@@ -114,11 +114,17 @@ def _universe(tickers, years, source):
     return pf.load_universe(list(tickers), years=years, source=source)
 
 
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=4)
+def _risk_free(source):
+    """The daily 3-month T-bill rate from FRED (None offline or for the sample pack)."""
+    return None if _is_offline() else load_risk_free(source)
+
+
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
 def _basket(tickers, method, max_w, min_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf):
     cons = pf.PortfolioConstraints(max_weight=max_w, min_weight=min_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.build_portfolio(tickers, method, cons, capital=capital, lookback=lookback, rebalance=rebalance, cost_bps=cost,
-                              risk_free_rate=rf, universe=_universe(tickers, years, source))
+                              risk_free_rate=rf, universe=_universe(tickers, years, source), risk_free=_risk_free(source))
 
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
@@ -127,7 +133,7 @@ def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, ca
     cons = pf.PortfolioConstraints(max_weight=max_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.goal_portfolio(goal, capital=capital, n_stocks=n_stocks, constraints=cons, max_per_sector=per_sector,
                              lookback=lookback, rebalance=rebalance, cost_bps=cost, risk_free_rate=rf,
-                             universe=_universe(tickers, years, source), held=list(held) or None)
+                             universe=_universe(tickers, years, source), held=list(held) or None, risk_free=_risk_free(source))
 
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=200)
@@ -620,6 +626,7 @@ def backtest_section(res) -> None:
         st.markdown(f"#### How this rule behaved {bt.start.date()} → {bt.end.date()}")
         st.caption(f"Long-only, reviewed {res.params.decision_frequency}, filled at the {bt.options['fills']}, "
                    f"{res.params.cost_bps + res.params.slippage_bps:.0f} bps per side. Returns are for the capital allocated to this stock. "
+                   f"Sharpe and Sortino use {bt.options.get('risk_free', 'a fixed risk-free rate')}. "
                    "Past behaviour of a rule is evidence about its design, not a promise.")
         m, mb = bt.metrics, bt.summary().loc["Buy & hold"]
         ratio = lambda v: "n/a" if pd.isna(v) else f"{v:.2f}"            # noqa: E731
@@ -910,8 +917,13 @@ def portfolio_tab() -> None:
         lookback = e1.select_slider("Estimation window (sessions)", [126, 252, 504, 756], value=252, key="pf_lookback")
         rebalance = e2.selectbox("Rebalance", ["monthly", "quarterly"], key="pf_rebal")
         pf_cost = e3.number_input("Trading cost (bps per trade)", 0, 100, 10, key="pf_cost")
-        rf = e4.number_input("Risk-free rate (%/yr)", 0.0, 10.0, 2.0, 0.25, key="pf_rf",
-                             help="Used for Sharpe ratios and the maximum-Sharpe method. Use the current 3-month T-bill yield.") / 100
+        tbill = _risk_free(source)
+        rf_now = round(float(tbill.iloc[-1]) * 100, 2) if tbill is not None and len(tbill) else 2.0
+        rf = e4.number_input("Risk-free rate (%/yr)", 0.0, 10.0, rf_now, 0.25, key="pf_rf",
+                             help=(f"Today's 3-month T-bill (FRED DTB3, {tbill.index[-1].date()}): {rf_now:.2f}%. "
+                                   if tbill is not None and len(tbill) else "No T-bill data offline: 2%. ") +
+                                  "Used by the maximum-Sharpe method and the risk report. The walk-forward Sharpe ratios use "
+                                  "the T-bill rate of each day when it is available.") / 100
     if mode.startswith("My basket"):
         default_basket = "AAPL JNJ XOM JPM KO PG UNH WMT" if _is_offline() else "AAPL MSFT JNJ JPM XOM PG KO UNH"
         basket = pc2.text_input("Your stocks", value=default_basket, key="pf_basket")
