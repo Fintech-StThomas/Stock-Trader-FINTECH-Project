@@ -516,12 +516,14 @@ def _rebalance_flags(index: pd.DatetimeIndex, freq: str) -> np.ndarray:
     return flags
 
 
-def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[[int], Tuple[np.ndarray, float]], lookback: int = 252,
+def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[..., Tuple[np.ndarray, float]], lookback: int = 252,
                      rebalance: str = "monthly", cost_bps: float = 10.0, risk_free_rate: float = 0.02,
-                     label: str = "portfolio") -> PortfolioBacktest:
+                     label: str = "portfolio", pass_holdings: bool = False) -> PortfolioBacktest:
     """Walk forward: on each rebalance day t, `weight_fn(t)` sees returns up to and including day t and returns
-    (risky weights, invested fraction). The trade executes at the NEXT day's close (no look-ahead), pays `cost_bps`
-    on the one-way turnover, and the weights then drift with prices until the next rebalance. Cash earns 0%."""
+    (risky weights, invested fraction); with `pass_holdings` it is called as `weight_fn(t, w)` with the weights held
+    at that close (after drift), so a rule can keep what it owns. The trade executes at the NEXT day's close (no
+    look-ahead), pays `cost_bps` on every dollar traded (turnover = buys + sells as a share of the portfolio), and the
+    weights then drift with prices until the next rebalance. Cash earns 0%."""
     r = returns.to_numpy(dtype=float)
     dates = returns.index
     t_n, n = r.shape
@@ -549,7 +551,7 @@ def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[[int], Tuple[np.
             turn_dates.append(dates[t])
             pending = None
         if flags[t]:
-            wt, invested = weight_fn(t)
+            wt, invested = weight_fn(t, w.copy()) if pass_holdings else weight_fn(t)
             pending = np.asarray(wt, dtype=float) * invested
             w_rows.append(pending.copy())
             w_dates.append(dates[t])
@@ -610,6 +612,11 @@ class Goal:
     target_vol: Optional[float] = None
     require_uptrend: bool = False
     min_technical: Optional[float] = None   # skip stocks the engine rates bearish (technical score below this)
+    # Rank buffer: a stock already held is kept while it still passes the goal's filters and ranks within the top
+    # keep_rank x n_stocks (inf = for as long as it qualifies); only the freed places are re-filled by rank. None:
+    # re-select from scratch at every review. Without it the fast-moving technical and momentum ranks replaced most of
+    # the portfolio every month (balanced: 18.5x a year on the large caps); see docs/METHODOLOGY.md section 10.
+    keep_rank: Optional[float] = None
 
 
 GOALS: Dict[str, Goal] = {
@@ -618,14 +625,16 @@ GOALS: Dict[str, Goal] = {
                          n_stocks=10, max_weight=0.15, max_sector_weight=0.35, target_vol=0.12),
     "balanced": Goal("balanced", "Balanced risk and reward", "risk_parity", "technical",
                      "The stocks with the strongest Lighthouse technical scores, with risk spread evenly so no single stock "
-                     "or sector dominates.", n_stocks=10, max_weight=0.20, max_sector_weight=0.40, min_technical=45.0),
+                     "or sector dominates.", n_stocks=10, max_weight=0.20, max_sector_weight=0.40, min_technical=45.0,
+                     keep_rank=float("inf")),
     "growth": Goal("growth", "Growth", "max_sharpe", "momentum",
                    "The strongest 12-month momentum among stocks in an up-trend, weighted for the best expected return per "
                    "unit of risk. Higher volatility; the most estimation-sensitive method.",
-                   n_stocks=8, max_weight=0.25, max_sector_weight=0.50, require_uptrend=True),
+                   n_stocks=8, max_weight=0.25, max_sector_weight=0.50, require_uptrend=True, keep_rank=float("inf")),
     "diversified": Goal("diversified", "Maximum diversification", "hrp", "technical",
                         "Many stocks across sectors, weighted by hierarchical risk parity so correlated clusters share one "
-                        "risk budget.", n_stocks=15, max_weight=0.15, max_sector_weight=0.30, min_technical=45.0),
+                        "risk budget.", n_stocks=15, max_weight=0.15, max_sector_weight=0.30, min_technical=45.0,
+                        keep_rank=float("inf")),
 }
 
 
@@ -649,8 +658,9 @@ def selection_panels(universe: PriceUniverse, params: Optional[StrategyParams] =
 
 
 def select(panels: Dict[str, pd.DataFrame], t: int, goal: Goal, sectors: Dict[str, str], max_per_sector: int = 3,
-           tickers: Optional[Sequence[str]] = None) -> List[str]:
-    """Pick the goal's stocks as of row t: rank, optional up-trend filter, at most `max_per_sector` per sector."""
+           tickers: Optional[Sequence[str]] = None, held: Optional[Iterable[str]] = None) -> List[str]:
+    """Pick the goal's stocks as of row t: rank, optional up-trend filter, at most `max_per_sector` per sector.
+    Stocks in `held` that still qualify and sit inside the goal's rank buffer (`Goal.keep_rank`) are kept first."""
     score = panels[goal.rank_by].iloc[t]
     if tickers is not None:
         score = score.reindex(tickers)
@@ -661,8 +671,13 @@ def select(panels: Dict[str, pd.DataFrame], t: int, goal: Goal, sectors: Dict[st
     if goal.min_technical is not None:
         tech = panels["technical"].iloc[t].reindex(score.index)
         score = score[tech >= goal.min_technical]
+    order = list(score.sort_values(ascending=False).index)
+    keep: List[str] = []
+    if held is not None and goal.keep_rank is not None:
+        rank = {tk: i for i, tk in enumerate(order)}
+        keep = sorted((tk for tk in set(held) if tk in rank and rank[tk] < goal.keep_rank * goal.n_stocks), key=rank.get)
     picked, per = [], {}
-    for tk in score.sort_values(ascending=False).index:
+    for tk in keep + [tk for tk in order if tk not in keep]:
         s = sectors.get(tk, UNKNOWN_SECTOR)
         if s != UNKNOWN_SECTOR and per.get(s, 0) >= max_per_sector:
             continue                     # an unknown sector is not a sector: it never counts against the limit
@@ -778,11 +793,13 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
                    source: str = "auto", n_stocks: Optional[int] = None, constraints: Optional[PortfolioConstraints] = None,
                    max_per_sector: int = 3, lookback: int = 252, rebalance: str = "monthly", cost_bps: float = 10.0,
                    risk_free_rate: float = 0.02, run_backtest: bool = True,
-                   universe: Optional[PriceUniverse] = None) -> PortfolioResult:
+                   universe: Optional[PriceUniverse] = None, held: Optional[Iterable[str]] = None) -> PortfolioResult:
     """Build a portfolio aimed at a goal from a universe ("all available tickers" by default).
 
     Today's picks use the same point-in-time ranking as the walk-forward test, which re-selects the stocks at every
-    rebalance using only data available then - so the test does not benefit from knowing today's winners.
+    rebalance using only data available then - so the test does not benefit from knowing today's winners. `held`: the
+    stocks you already own for this goal; they are kept while they still qualify (the goal's rank buffer), as the
+    walk-forward test keeps its own holdings.
     """
     from .universe import available_universe
     if goal not in GOALS:
@@ -811,7 +828,14 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
         notes.append(f"This universe has {len(counts)} sector{'s' if len(counts) > 1 else ''}{extra}: too few for "
                      f"{g.n_stocks} stocks at {max_per_sector} per sector, so up to {raised} stocks per sector are allowed.")
         max_per_sector = raised
-    picked = select(panels, t_last, g, uni.sectors, max_per_sector)
+    held = [t.upper().strip() for t in held] if held is not None else None
+    picked = select(panels, t_last, g, uni.sectors, max_per_sector, held=held)
+    if held:
+        kept = [t for t in picked if t in held]
+        dropped = [t for t in held if t not in picked]
+        notes.append(f"Kept {len(kept)} of the {len(held)} stocks you hold" + (f" ({', '.join(kept)})" if kept else "") +
+                     (f"; {', '.join(dropped)} no longer qualif{'ies' if len(dropped) == 1 else 'y'} (or left the "
+                      "universe): sell" if dropped else "") + ".")
     if len(picked) < 2:
         raise ValueError(f"only {len(picked)} stock(s) qualify for the '{g.label}' goal right now; widen the universe")
     if len(picked) < g.n_stocks:
@@ -834,27 +858,42 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
     if run_backtest:
         rets = uni.returns
         offset = 1                       # returns start one row after closes
+        names = list(rets.columns)
 
-        def fn(t: int):
-            pk = select(panels, t + offset, g, uni.sectors, max_per_sector)
-            w_full = np.zeros(len(rets.columns))
-            if len(pk) < 2:
-                return w_full, 0.0       # not enough qualifying stocks: stay in cash
-            c = _goal_constraints(g, pk, uni.sectors, cons)
-            window = rets[pk].iloc[t - lookback + 1: t + 1]
-            est = estimate(window)
-            w, _ = optimize(window, g.method, c, [uni.sectors[x] for x in pk] if c.max_sector_weight is not None else None,
-                            risk_free_rate, est=est)
-            w_full[[rets.columns.get_loc(x) for x in pk]] = w.to_numpy()
-            return w_full, vol_target_scale(w.to_numpy(), est.cov, c.target_vol)
+        def weight_fn(goal: Goal):
+            def fn(t: int, w_now: np.ndarray):
+                held_now = [names[i] for i in np.flatnonzero(w_now > 1e-9)]
+                pk = select(panels, t + offset, goal, uni.sectors, max_per_sector, held=held_now)
+                w_full = np.zeros(len(names))
+                if len(pk) < 2:
+                    return w_full, 0.0       # not enough qualifying stocks: stay in cash
+                c = _goal_constraints(goal, pk, uni.sectors, cons)
+                window = rets[pk].iloc[t - lookback + 1: t + 1]
+                est = estimate(window)
+                w, _ = optimize(window, goal.method, c, [uni.sectors[x] for x in pk] if c.max_sector_weight is not None else None,
+                                risk_free_rate, est=est)
+                w_full[[names.index(x) for x in pk]] = w.to_numpy()
+                return w_full, vol_target_scale(w.to_numpy(), est.cov, c.target_vol)
+            return fn
 
         warm = max(lookback, 253)        # momentum and volatility ranks need a year of history
+        every = {"monthly": "month", "quarterly": "quarter", "weekly": "week"}.get(rebalance, rebalance)
         try:
-            res.backtest = backtest_weights(rets, fn, warm, rebalance, cost_bps, risk_free_rate, f"{g.label} (re-selected monthly)")
+            kept = g.keep_rank is not None
+            label = f"{g.label} (reviewed every {every}" + ("; holdings kept while they qualify)" if kept else ")")
+            res.backtest = backtest_weights(rets, weight_fn(g), warm, rebalance, cost_bps, risk_free_rate, label, pass_holdings=True)
+            runs = {"goal": res.backtest}
+            rows = {res.backtest.label: res.backtest.metrics}
+            if kept:                     # the same goal re-selected from scratch at every review: what the buffer saves
+                g0 = Goal(**{**g.__dict__, "keep_rank": None})
+                scratch = backtest_weights(rets, weight_fn(g0), warm, rebalance, cost_bps, risk_free_rate,
+                                           f"{g.label} (re-selected from scratch every {every})", pass_holdings=True)
+                runs["goal_from_scratch"] = scratch
+                rows[scratch.label] = scratch.metrics
             ew = backtest_weights(rets, lambda t: (np.full(len(rets.columns), 1.0 / len(rets.columns)), 1.0), warm, rebalance,
                                   cost_bps, risk_free_rate, "Equal weight, whole universe")
-            runs = {"goal": res.backtest, "equal_weight_universe": ew}
-            rows = {res.backtest.label: res.backtest.metrics, ew.label: ew.metrics}
+            runs["equal_weight_universe"] = ew
+            rows[ew.label] = ew.metrics
             if uni.benchmark is not None:
                 b = uni.benchmark.reindex(res.backtest.equity.index)
                 rows["S&P 500 (buy & hold)"] = compute_metrics(b / b.iloc[0], risk_free_rate, TRADING_DAYS)
