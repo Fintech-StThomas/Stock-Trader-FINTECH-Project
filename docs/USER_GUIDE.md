@@ -119,15 +119,18 @@ Each row also says how often trades ended that way on the stock's own history an
 * **Build for a goal**: choose *Capital preservation*, *Balanced risk and reward*, *Growth* or *Maximum diversification*.
   Lighthouse picks the stocks from the universe (any pre-built list, or your own) and weights them, at most 3 per sector.
   A ticker outside the curated list gets the sector its fundamentals report; one with no sector at all (an ETF, say) is
-  not counted against the per-sector limits.
+  not counted against the per-sector limits. When you rebalance, list what you already hold under *Stocks you already
+  hold for this goal*: for the balanced, growth and diversified goals each one is kept while it still qualifies, and only
+  the free places are re-filled (the walk-forward test follows the same rule; re-picking from scratch traded up to 8×
+  more).
 
 Every portfolio shows:
 * whole-share **orders for your cash** (CSV download);
 * **expected volatility**, **Value at Risk** and **expected shortfall** in dollars (1 day and 1 month, 95%), beta to the
   S&P 500, the diversification ratio and the effective number of stocks;
 * where the money is versus where the risk is, and the correlation heatmap;
-* a **walk-forward test** of every method (or of the goal, re-selecting its stocks every month) against the S&P 500 and
-  equal weight;
+* a **walk-forward test** of every method (or of the goal, reviewed every month, next to the same goal re-picked from
+  scratch so you can see what keeping holdings saves) against the S&P 500 and equal weight;
 * a stress test through past crashes covered by the data.
 
 Judge performance by the walk-forward test. The back-cast of today's weights is shown for risk only: a goal portfolio picks

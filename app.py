@@ -122,11 +122,12 @@ def _basket(tickers, method, max_w, min_w, sector_cap, target_vol, capital, year
 
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
-def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf):
+def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf,
+          held=()):
     cons = pf.PortfolioConstraints(max_weight=max_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.goal_portfolio(goal, capital=capital, n_stocks=n_stocks, constraints=cons, max_per_sector=per_sector,
                              lookback=lookback, rebalance=rebalance, cost_bps=cost, risk_free_rate=rf,
-                             universe=_universe(tickers, years, source))
+                             universe=_universe(tickers, years, source), held=list(held) or None)
 
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=200)
@@ -916,13 +917,21 @@ with tab_port:
         gmax = g3.slider("Max per stock", 0.05, 1.0, float(g.max_weight), 0.05, key=f"pf_gmax_{goal}")
         gsec = g4.slider("Max per sector", 0.1, 1.0, float(g.max_sector_weight or 1.0), 0.05, key=f"pf_gsec_{goal}")
         gtv = g5.slider("Target volatility (%/yr, 0 = none)", 0, 40, int(round((g.target_vol or 0) * 100)), 1, key=f"pf_gtv_{goal}")
+        held_text = st.text_input(
+            "Stocks you already hold for this goal (optional)", "", key="pf_held",
+            disabled=g.keep_rank is None,
+            help="Rebalancing? List what you bought last time: each one is kept while it still qualifies for the goal, and "
+                 "only the free places are re-filled. That is the rule the walk-forward test follows; re-picking from "
+                 "scratch every month traded several times more." if g.keep_rank is not None else
+                 "This goal re-picks its stocks from scratch at every review.")
         if st.button("Build the goal portfolio", type="primary", key="pf_goal_go"):
             tick = _parse_tickers(utext)
+            held = tuple(_parse_tickers(held_text)) if g.keep_rank is not None else ()
             with st.spinner("Ranking the universe, optimising, and re-running the selection month by month for the walk-forward test ..."):
                 try:
                     st.session_state["pf_goal_res"] = _goal(goal, tick, int(n_st), int(per_sec), gmax, gsec if gsec < 1.0 else None,
                                                             gtv / 100 if gtv else None, float(capital), years, source, lookback,
-                                                            rebalance, float(pf_cost), rf)
+                                                            rebalance, float(pf_cost), rf, held)
                     st.session_state.pop("pf_goal_err", None)
                 except Exception as exc:  # noqa: BLE001
                     st.session_state.pop("pf_goal_res", None)

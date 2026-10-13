@@ -97,6 +97,8 @@ def main(argv=None) -> int:
     a6.add_argument("--max-weight", type=float, default=None); a6.add_argument("--max-sector", type=float, default=None)
     a6.add_argument("--target-vol", type=float, default=None, help="annual, e.g. 0.12; holds cash above it")
     a6.add_argument("--n", type=int, default=None, help="number of stocks for --goal")
+    a6.add_argument("--held", nargs="*", default=None,
+                    help="stocks you already hold for --goal: kept while they still qualify (balanced, growth, diversified)")
 
     sub.add_parser("universes", help="list the pre-built universes")
 
@@ -191,7 +193,8 @@ def main(argv=None) -> int:
             g = pf.GOALS[a.goal]
             cons = pf.PortfolioConstraints(max_weight=a.max_weight or g.max_weight, max_sector_weight=a.max_sector or g.max_sector_weight,
                                            target_vol=a.target_vol if a.target_vol is not None else g.target_vol)
-            res = pf.goal_portfolio(a.goal, a.tickers or None, capital=cash, years=a.years, source=a.source, n_stocks=a.n, constraints=cons)
+            res = pf.goal_portfolio(a.goal, a.tickers or None, capital=cash, years=a.years, source=a.source, n_stocks=a.n, constraints=cons,
+                                    held=a.held)
         else:
             if not a.tickers:
                 print("give tickers, or --goal"); return 1

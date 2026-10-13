@@ -238,7 +238,7 @@ account or an IRA), borrowable shares, and the payment of dividends in lieu.
 | Volatility target | If expected volatility exceeds the target, the excess is held in cash | Delivers the risk the investor asked for |
 | Orders | Whole shares by flooring, then the leftover cash buys one share at a time for the position furthest below target | Never overspends; a cash buffer is never spent |
 | Risk report | Expected volatility (shrunk covariance); historical-simulation VaR and expected shortfall at 95% for 1 day and 1 month (overlapping 21-session windows); beta, correlation and tracking error vs the S&P 500; back-cast max drawdown; risk contributions; diversification ratio; effective number of stocks (1/Σw²); stress tests through the dot-com bust, the GFC, 2011, Q4 2018, the COVID crash and 2022 (S&P 500 closing peak to trough) when covered by the data | Each answers "how bad can it get?" in a different way |
-| Walk-forward test | Monthly (or quarterly) rebalance; weights from the trailing window only; trades executed at the **next** day's close; 10 bps per unit of turnover; weights drift between rebalances; cash earns 0% | No look-ahead (unit-tested by truncation) |
+| Walk-forward test | Monthly (or quarterly) rebalance; weights from the trailing window only; trades executed at the **next** day's close; 10 bps per dollar traded (turnover = buys + sells as a share of the portfolio); weights drift between rebalances; cash earns 0% | No look-ahead (unit-tested by truncation) |
 
 **Goals.** *Capital preservation* picks the 10 calmest stocks and uses minimum variance with a 12% volatility target. *Balanced*
 picks the 10 best technical scores (≥ 45) and uses risk parity. *Growth* picks the 8 strongest 12-1 month momentum names in an
@@ -253,6 +253,31 @@ result.
 All 122 curated labels were checked against Yahoo's live `info["sector"]` in October 2026 and match. The walk-forward test **re-selects** the stocks every rebalance with only the data
 available then, so it does not benefit from knowing today's winners. That matters: the back-cast of today's picks over the
 last year is inflated by how they were chosen, so the app shows it for risk only and uses the walk-forward test for performance.
+
+**Holdings are kept while they qualify (October 2026).** Re-picking the top N from scratch every month made the
+technical-score and momentum ranks, which move week to week, replace most of the portfolio each month: the balanced goal
+on the live large-cap universe turned over 18.5× a year (buys + sells). *Balanced*, *growth* and *diversified* now keep a
+stock they hold for as long as it still passes the goal's filter (technical score ≥ 45; for growth, a close above the
+200-day SMA) and re-fill only the freed places by rank (`Goal.keep_rank`, a rank buffer; infinite for these three). The
+walk-forward test applies it to its own simulated holdings; the app and the CLI (`--held`) apply it to the stocks the
+investor says they hold. Walk-forward, monthly, 10 bps per dollar traded (`scripts/turnover_evaluation.py`):
+
+| Goal | Universe | Turnover / yr, from scratch → kept | Sharpe | CAGR | Max drawdown |
+|---|---|---|---|---|---|
+| Balanced | 86 large caps, Aug 2016 – Oct 2026 (live) | 18.5× → 2.4× | 0.48 → 0.79 | 9.1% → 15.4% | −29% → −31% |
+| Growth | same | 10.0× → 4.9× | 0.78 → 0.94 | 18.7% → 22.5% | −35% → −34% |
+| Maximum diversification | same | 16.4× → 3.3× | 0.61 → 0.86 | 11.0% → 15.4% | −30% → −27% |
+| Balanced | 19 sample stocks, 2012-2022 | 6.8× → 2.4× | 0.90 → 0.83 | 16.8% → 15.4% | −32% → −31% |
+| Growth | same | 6.6× → 4.9× | 0.73 → 0.71 | 14.2% → 13.8% | −27% → −27% |
+| Maximum diversification | same | 5.6× → 3.8× | 0.84 → 0.85 | 15.2% → 15.5% | −31% → −31% |
+
+Also tested on the large caps (balanced): a 3-percentage-point no-trade band on the weights (18.5× → 18.2×: the turnover
+came from swapping stocks, not from re-weighting them); keeping holdings only while they rank in the top 2N or 3N (13.5×
+and 9.5×); quarterly reviews (6.5×, Sharpe 0.59). On the 1990-2022 sample pack the kept version turned over 2.7× instead
+of 6.7× with the same Sharpe (0.69). *Capital preservation* keeps re-selecting from scratch: it ranks by 1-year
+volatility, which moves slowly (3.3× a year on the large caps), and a buffer lowered its Sharpe on every universe tested
+(large caps 0.55 → 0.51, sample 0.69 → 0.62). The sample-pack results are close to a wash; the large-cap gains are large
+but come from one 10-year window, so read them as "much less trading at no cost", not as a promised improvement.
 
 **What the evidence says.** On the app's default basket (AAPL, JNJ, XOM, JPM, KO, PG, UNH, WMT; offline sample data;
 walk-forward from late 2012 to December 2022; 25% cap; 10 bps costs) plain equal weight had the best Sharpe (0.84). Risk
@@ -299,6 +324,7 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | Issue | Effect | Fix |
 |---|---|---|
 | Long-horizon targets sat 30-80% away (2R / 3R on a stop 8% below the 200-day SMA), and the ticket's fixed stop differed from the backtest's monthly SMA exit | Profit targets that a long-term trade rarely reached; two different exit models | Long-horizon buys follow the backtest's month-end trend and signal exits, no fixed target (+3.56R vs +0.56R per trade on the sample setups, §9); `scripts/exit_plan_evaluation.py` |
+| Goal portfolios re-picked their stocks from scratch every month | The balanced goal turned over 18.5× a year on the live large caps, paying costs to swap stocks whose ranks moved a little | Holdings are kept while they still qualify (balanced 18.5× → 2.4×; §10); the walk-forward table shows both versions; `scripts/turnover_evaluation.py` |
 | The Hull-MA band centre still trailed the price by ~3 sessions and swung 26% past a jump | The chart's centre line and the *price bands* beacon described the price of three days earlier | Holt's trend filter (0.4 / 0.1): ~1 session behind, no lag in a trend, 9% overshoot (§3); `scripts/band_lag_evaluation.py` measures every candidate |
 
 ## 12. Speed
