@@ -41,8 +41,8 @@ $500 at its stop, but it can never cost more than the $5,000 of cash.
   worst-case loss if the stop fills at its price, and *which rule limited the size* (max loss, volatility target,
   concentration cap or your cash). Hold means keep what you own; Reduce means trim about half; Sell means exit.
 * **Trade ticket**: switch between 📈 Long and 📉 Short. See *Trade tickets* below.
-* **Price chart**: close, 50/200-day averages and **price bands** that follow the price: a 20-day Hull moving average
-  (dashed) ± 2 standard deviations of the closes around it, about 3 sessions behind the price instead of the ~10 of
+* **Price chart**: close, 50/200-day averages and **price bands** that follow the price: a trend filter (dashed) ± 2
+  standard deviations of the closes around it over 20 sessions, about 1 session behind the price instead of the ~10 of
   classic Bollinger Bands. They use only past prices; the *Price bands* beacon scores where the close sits in them.
 * **Backtest**: how the rule behind the verdict behaved historically versus buy-and-hold and the S&P 500.
 * **Warnings**: data-source notes (offline data, missing volume, fixture fundamentals) and anything to know before acting.
@@ -54,16 +54,29 @@ A ticket is a complete order plan:
 1. **Entry**: a limit order near the last price, and a do-not-chase price (skip the trade if it has already run 0.5 ATR past the entry).
 2. **Stop-loss**: placed immediately. Longs use the horizon's stop; shorts always use a 2.5 × ATR stop (balanced risk).
    The planned loss is shown in dollars and as % of your account.
-3. **Take profit 1** (2R by default, R = the distance to the stop): sell half and move the stop on the rest to breakeven.
-4. **Trailing stop**: after target 1, the stop follows the best close since entry minus k × ATR. It never loosens.
-5. **Take profit 2** (3R by default): sell the rest.
-6. **Time stop**: close a trade that has reached neither the stop nor target 1 after 40 sessions (short horizon) or 252 (long).
+3. **How the profit is taken** depends on the trade:
+   * **Long-term buys: trend exits, no fixed target.** At the last close of each month, sell everything at the next open if
+     the close is below the 200-day SMA − 8% (a level that rises with the trend, so it locks in more of the gain the
+     longer the trend runs) or the technical score has faded to 35 or lower. These are the long-horizon backtest's own
+     exits. The stop order stays where it was placed and caps the loss between reviews.
+   * **Short-term trades and shorts: profit targets.** Take profit 1 (2R by default, R = the distance to the stop): sell
+     half and move the stop on the rest to breakeven. Then a **trailing stop** follows the best close since entry minus
+     k × ATR and never loosens. Take profit 2 (3R by default) sells the rest. A **time stop** closes a trade that has
+     reached neither the stop nor target 1 after 40 sessions (252 for a long-term trade on profit targets).
+
+Why no target on long-term buys: the long-term stop sits 8% below the 200-day SMA, often 20-30% under the price, so a 2R
+target needed a 40-80% rise. Replayed on every past setup of the 20 sample stocks, the trend exits earned +3.6R per trade
+against +0.6R for the targets (1990-2022; +2.5R vs +0.6R over the last 15 years). Profit targets stay available under
+*Trade management* ("Long-term buys: how to take profit").
 
 Each ticket shows **how these exact rules did on this stock's own history**: number of trades, win rate, average result
 in R per trade after costs, and profit factor. If the rules lost money on that stock, the ticket says so in red. Change the
 targets, the partial exit, the time stop, the number of ideas and the total-risk cap under *Trade management* in the sidebar.
 
-**When to get out** (on every ticket): one row per exit, for a loss or a profit, decided before you enter:
+**When to get out** (on every ticket): one row per exit, for a loss or a profit, decided before you enter. A long-term buy
+lists the stop order (−1R), the 📈 trend exit (its level today; the result depends on how far the trend ran, so the row
+shows the average result of past trend exits) and the 🧭 signal exit (the technical score today against 35). A trade on
+profit targets lists:
 
 | Exit | Trigger | Result shown |
 |---|---|---|
@@ -106,15 +119,18 @@ Each row also says how often trades ended that way on the stock's own history an
 * **Build for a goal**: choose *Capital preservation*, *Balanced risk and reward*, *Growth* or *Maximum diversification*.
   Lighthouse picks the stocks from the universe (any pre-built list, or your own) and weights them, at most 3 per sector.
   A ticker outside the curated list gets the sector its fundamentals report; one with no sector at all (an ETF, say) is
-  not counted against the per-sector limits.
+  not counted against the per-sector limits. When you rebalance, list what you already hold under *Stocks you already
+  hold for this goal*: for the balanced, growth and diversified goals each one is kept while it still qualifies, and only
+  the free places are re-filled (the walk-forward test follows the same rule; re-picking from scratch traded up to 8×
+  more).
 
 Every portfolio shows:
 * whole-share **orders for your cash** (CSV download);
 * **expected volatility**, **Value at Risk** and **expected shortfall** in dollars (1 day and 1 month, 95%), beta to the
   S&P 500, the diversification ratio and the effective number of stocks;
 * where the money is versus where the risk is, and the correlation heatmap;
-* a **walk-forward test** of every method (or of the goal, re-selecting its stocks every month) against the S&P 500 and
-  equal weight;
+* a **walk-forward test** of every method (or of the goal, reviewed every month, next to the same goal re-picked from
+  scratch so you can see what keeping holdings saves) against the S&P 500 and equal weight;
 * a stress test through past crashes covered by the data.
 
 Judge performance by the walk-forward test. The back-cast of today's weights is shown for risk only: a goal portfolio picks
@@ -136,9 +152,11 @@ python -m lighthouse portfolio --goal balanced --cash 10000
 python -m lighthouse portfolio --goal growth --universe technology --cash 10000
 ```
 
-`trade` prints each ticket's plan and its *when to get out* list. `monitor` replays a position you hold since its entry
-with the same rules (target 1 sells half, the stop then moves to breakeven and trails) and reports the exits already
-taken, the realised and unrealised P&L, and where the stop is now. During market hours it includes today's unfinished
+`trade` prints each ticket's plan and its *when to get out* list (`--long-exit targets` puts long-term buys on profit
+targets). `monitor` replays a position you hold since its entry with the same rules (a long-term buy: the stop order and
+the month-end trend and signal exits; otherwise target 1 sells half, the stop then moves to breakeven and trails) and
+reports the exits already taken, the realised and unrealised P&L, where the stop is now, and whether the last review says
+sell at the next open. During market hours it includes today's unfinished
 session, so a position bought today can be replayed and a stop hit today shows up.
 
 Add `--as-of 2020-03-20` to `analyze` to ask what Lighthouse would have said on a past day. `--portfolio` still works and

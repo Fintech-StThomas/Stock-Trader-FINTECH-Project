@@ -14,6 +14,7 @@ This document exists so that the team can defend every number in the product. It
 | Offline pack | Real data shipped in open-source packages (Microsoft OHLCV 1986-2017 from `pmdarima`, 19 S&P stocks and the index 1990-2022 from `skfolio`) | The notebook and tests must run end-to-end without internet; provenance in `scripts/build_sample_pack.py` |
 | Caching | Last live download cached in `data/cache/` for at most 20 hours, and (in `auto`) only until the next session close (16:00 New York) after the download; files are written atomically and each ticker is downloaded by one thread at a time | Yahoo rate-limits; the product stays usable; a finished session is never missing from the cache; parallel loads never read a half-written file |
 | Unfinished sessions | During market hours today's daily bar is left out of every indicator, and never cached; a note says so | Its close, range and volume are not final (a partial day's volume reads as a collapse), and the rules were tested on finished days |
+| Risk-free rate | The 3-month Treasury bill (FRED `DTB3`, secondary market, daily) from FRED's public CSV endpoint (no API key), cached like prices; a day without a value takes the last published one. Used for the Sharpe and Sortino ratios of every backtest and walk-forward test on current prices; the portfolio builder's rate input defaults to the latest value. Offline and on the sample pack: a fixed 2% | T-bills paid ~0% in 2020-21 and ~4-5% in 2023-26: a fixed 2% overstated Sharpe ratios in high-rate years and understated them near zero. Over the ten years to October 2026 it averaged 2.4%, so live Sharpe ratios fall by ~0.02-0.03 (MSFT's rule 0.74 → 0.71). Cash in the backtests still earns 0% |
 | Order price | "Buy now" tickets and the position plan are priced from the feed's latest quote with its timestamp and market state (Yahoo chart metadata: `regularMarketPrice`, `regularMarketTime`, trading periods); the last close when there is none, when it is older than the data, or when it is more than 25% from the close (a split or a bad tick) | The decision is made on finished sessions, the order on the price you can trade at. Yahoo quotes can lag by up to 15 minutes on some exchanges |
 
 ## 2. Fundamental beacons
@@ -49,26 +50,57 @@ All indicators are causal (rolling windows, `ewm(adjust=False)`): the value on d
 | Trend | 0.5·clip((Close/SMA200 − 1)/10%) + 0.5·clip((SMA50/SMA200 − 1)/5%) | Continuous Golden/Death Cross: fewer whipsaws than a binary cross | 35% / 20% |
 | RSI(14) | linear from −1 at 30 to +1 at 70, then fading (+1 → −1 from 70 to 100) | Confirms momentum; extremes signal exhaustion | 15% / 20% |
 | MACD(12/26/9) | histogram / ATR, clipped | Momentum acceleration, scale-free | 10% / 20% |
-| Price bands %B (Hull 20, 2σ) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits around its low-lag centre line; above the band = over-extended | 10% / 15% |
+| Price bands %B (trend filter, 2σ over 20 sessions) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits around its low-lag centre line; above the band = over-extended | 10% / 15% |
 | Volume | 0.5·sign(20-day return)·clip((vol20/vol60 − 1)/0.5, 0, 1) + 0.5·sign(OBV − SMA20(OBV)) | A move on expanding volume is more trustworthy; excluded (grey) when volume is unavailable | 10% / 15% |
 | 52-week high | +1 at the high, 0 at 20% below, −1 at 40% below | Breakout proximity; momentum literature | 20% / 10% |
 
 Technical score = 50 + 50 × weighted mean, with weights re-normalised over available beacons. Long-term weights lean on slow beacons (trend, breakout); short-term on oscillators.
 
 **Price bands: low lag instead of Bollinger's.** Classic Bollinger Bands are a 20-day simple moving average ± 2σ of the
-same closes. A trailing 20-day average lags price by (20 − 1) / 2 = 9.5 sessions (the sample data agree: the middle band
-lines up best with the close from 9 sessions earlier), so the bands trail every move. Lighthouse uses a 20-day Hull moving
-average (Hull 2005: WMA(2·WMA(10) − WMA(20), 4)) as the centre and ± 2 standard deviations of the closes around it over
-the same 20 sessions. On the 20 sample stocks the centre's best-matching lag is 3.0 sessions instead of 9.2, at about
-twice the roughness; a rolling-regression endpoint lagged 2.1 but was rougher still, and a 10-day SMA lagged 4.2. The
-bands are causal (nothing is shifted forward; the truncation test covers them), and the *price bands* beacon scores %B
-on them exactly as it scored Bollinger's %B.
+same closes. A trailing 20-day average lags price by (20 − 1) / 2 = 9.5 sessions, so the bands trail every move. Lighthouse
+centres its bands on **Holt's linear trend filter** (Holt 1957; double exponential smoothing, which is also the steady
+state of a Kalman filter for a local linear trend). Each session it projects yesterday's level along yesterday's slope,
+then moves the level 40% of the way to today's close and the slope 10% of the way to the level's latest change
+(`band_alpha` 0.4, `band_beta` 0.1). Because it carries the slope forward it follows a straight-line trend with no lag at
+all, where any moving average falls behind. The bands sit ± 2 standard deviations of the closes around that centre over
+the last 20 sessions. They are causal (a recursion over past closes; nothing is shifted forward; the truncation test
+covers them), and the *price bands* beacon scores %B on them exactly as it scored Bollinger's %B.
 
-Switching the beacon from Bollinger's bands to these was tested before it was made: on the 20 sample stocks over 15
-years the long-term rule's average Sharpe went 0.323 → 0.322 and the short-term rule's −0.134 → −0.127 (better on 21 of
-40 stock-horizon pairs), and over the full 1990-2022 cross-ticker test the balanced profile's average Sharpe went
-0.394 → 0.399 (better on 9 stocks, worse on 10). In other words a wash on returns; the gain is a chart and a beacon that
-describe the price as it is now. The classic bands were removed in October 2026.
+How far behind each candidate centre runs, on the 20 sample stocks over their last 15 years
+(`scripts/band_lag_evaluation.py` rebuilds this table):
+
+| Centre | Best-matching lag | Turns after price turns | Half of a jump covered after | Overshoot after a jump | Lag in a steady trend | Roughness |
+|---|---|---|---|---|---|---|
+| SMA 20 (Bollinger) | 9.5 | 5.7 | 9 | 0% | 9.5 | 0.20 |
+| Hull MA 20 (used until October 2026) | 2.6 | 3.2 | 3 | 26% | 0.7 | 0.42 |
+| Hull MA 10 | 1.2 | 1.5 | 1 | 24% | 0.3 | 0.57 |
+| Linear-regression end point, 20 | 2.4 | 3.0 | 2 | 30% | 0.0 | 0.40 |
+| EMA 5 | 1.2 | 1.1 | 1 | 0% | 2.0 | 0.42 |
+| Holt 0.3 / 0.1 | 1.3 | 1.5 | 1 | 12% | 0.0 | 0.43 |
+| **Holt 0.4 / 0.1 (Lighthouse)** | **0.9** | **1.0** | **1** | **9%** | **0.0** | **0.50** |
+| Holt 0.5 / 0.1 | 0.1 | 0.7 | 0 | 6% | 0.0 | 0.57 |
+
+All lags are in sessions. *Best-matching lag*: the shift k for which the centre on day t sits closest to the close of day
+t − k. *Roughness*: the standard deviation of the centre's daily change over the close's (1 = as jumpy as the price).
+The Holt filter at 0.4 / 0.1 is the only candidate that is about one session behind on every measure, with no lag in a
+trend and less overshoot than the Hull MA (which swings 26% past a jump before settling). The cost is a line about 20%
+rougher than the Hull MA's. Going further (0.5) puts the centre almost on the price (half of it is today's close), so
+the bands measure little more than today's move, and the short-horizon backtest got worse (below).
+
+Each centre change was tested on the score before it was made. Hull MA 20 → Holt 0.4 / 0.1, same rules otherwise:
+
+| Test | Hull MA 20 | Holt 0.4 / 0.1 |
+|---|---|---|
+| Cross-ticker test, balanced, 1990-2022 (20 stocks), average Sharpe | 0.399 | 0.401 (7 better, 4 worse, 9 unchanged) |
+| Same, stocks with a higher Sharpe than buy-and-hold | 3 of 20 | 4 of 20 (AAPL) |
+| Long-horizon rule, last 15 years, average Sharpe | 0.322 | 0.322 (1 better, 1 worse) |
+| Short-horizon rule, last 15 years, average Sharpe | −0.127 | −0.137 (9 better, 11 worse) |
+| Holt 0.5 / 0.1 instead (for comparison) | | long 15 y 0.321, short −0.147 |
+
+On returns the change is again a wash; the gain is a chart and a beacon that describe where the price is today. The MSFT
+example stays a Buy (71.1 → 71.3) with the same trades. The step before (October 2026): Bollinger's SMA centre → Hull MA
+20 moved the cross-ticker Sharpe 0.394 → 0.399 and the 15-year rules 0.323 → 0.322 (long) and −0.134 → −0.127 (short).
+The classic bands were removed in October 2026; `indicators.hull_ma` stays for comparisons.
 
 ## 4. Market weather (regime)
 
@@ -100,7 +132,7 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 * Exit when score ≤ 35 (long) / 40 (short), close < 200-SMA × 0.92 (long) / 0.97 (short), or the ATR stop (short, checked daily).
 * Size: volatility target / 60-day realised vol × regime multiplier, re-balanced on review days when the target moves by more than 10 points.
 * Fills at the next day's open (close when no open data), 5 bps commission + 5 bps slippage per side.
-* Metrics: total return, CAGR, volatility, Sharpe and Sortino (2% risk-free), max drawdown, Calmar, trades, win rate, average win/loss, profit factor, exposure; plus layer attribution, sensitivity grid (entry 50-70 × exit 25-45), walk-forward (tune on 60%, test on 40%) and regime breakdown.
+* Metrics: total return, CAGR, volatility, Sharpe and Sortino (risk-free rate: the 3-month T-bill day by day, FRED `DTB3`, when the prices are current; a fixed 2% for offline and sample data, so the published tables stay reproducible), max drawdown, Calmar, trades, win rate, average win/loss, profit factor, exposure; plus layer attribution, sensitivity grid (entry 50-70 × exit 25-45), walk-forward (tune on 60%, test on 40%) and regime breakdown.
 * No look-ahead: unit-tested by re-running on truncated data and comparing equity curves.
 
 ## 7. What we tested and rejected (design-phase experiments, 12-16 stocks, 1990-2022)
@@ -131,26 +163,58 @@ Interpretation: on a universe of survivors that compounded at 13% a year, a rule
 | Stop-loss | Longs: the horizon's stop (200-day SMA − 8% long term, 2.5 × ATR short term). **Shorts always use the short-horizon ATR stop** | A short's loss is open-ended and borrow fees accrue daily; a wide SMA stop would make its targets meaningless |
 | Size | The three risk rules as % of the account × conviction × regime, capped by the cash; shorts are capped at 1:1 collateral (Regulation T would allow 2:1) | Same engine as the Position plan, so the long ticket and the plan agree |
 | Entry | Limit order at the last price; skip if price has run 0.5 × ATR beyond it | Do not chase |
-| Targets | Target 1 = entry ± 2R, target 2 = entry ± 3R (R = entry-to-stop distance; editable) | R-multiples express reward in units of risk; a 2R target needs a win rate above 1/3 to pay |
-| Management | Sell 50% at target 1, move the stop on the rest to breakeven, then trail it at the best close ∓ k × ATR (chandelier exit); time stop after 40 (short horizon) / 252 (long) sessions | Locks in gains, caps dead money |
+| Long-horizon buys: trend plan (default) | No fixed target. The stop order stays where it was placed; at the last close of each month, sell at the next open if the close is below the 200-day SMA − 8% (the *trend exit*, a level that rises with the average) or the technical score is ≤ 35 (the *signal exit*). No time stop | The long-horizon backtest's own exits, so the ticket and the backtest agree; tested against R targets below |
+| Short horizon and shorts: targets | Target 1 = entry ± 2R, target 2 = entry ± 3R (R = entry-to-stop distance; editable). Long-horizon buys can use them too (`TradeSettings.long_exit = "targets"`) | R-multiples express reward in units of risk; a 2R target needs a win rate above 1/3 to pay |
+| Management (targets) | Sell 50% at target 1, move the stop on the rest to breakeven, then trail it at the best close ∓ k × ATR (chandelier exit); time stop after 40 (short horizon) / 252 (long) sessions | Locks in gains, caps dead money |
 | Portfolio heat | Ideas are funded best-first until the cash, the idea count (5) or the total planned risk (6% of the account) runs out; leftovers smaller than 25% of an idea's full size are not funded | Limits correlated losses across many open trades |
 
 **Historical setup test.** For every past day the stock met the (point-in-time) setup rule, the trade is entered at the next
 session's open (the close for close-only data) and managed with exactly the rules above, one trade at a time, after costs.
+A trend plan's review-day exits fill at the next session's open, as in the backtest.
 Gaps fill at the open; when a stop and a target fall in the same session the stop is assumed first. Results are in R
 (expectancy, win rate, profit factor, share of trades reaching target 1 / stopped / timed out). A ticket whose rules lost
 money on that stock is flagged in red. Shorts are simulated on the dividend-adjusted series, so the dividends a short seller
 owes are reflected; borrow fees are not.
 
+**Long-horizon exits: trend plan instead of far targets.** The long-horizon stop sits 8% below the 200-day SMA, typically
+15-30% under the price, so R is large and 2R / 3R targets sat 30-80% away (MSFT in October 2026: stop 26% away, targets
++53% and +79%). Candidate plans were replayed with the setup test on every long-horizon setup of the 20 sample stocks,
+balanced profile, after costs, all with the same entries and the same initial stop (so R is comparable):
+
+| Plan (1990-2022) | Trades | Avg R | Win rate | Avg sessions | Return a year held |
+|---|---|---|---|---|---|
+| 2R / 3R targets, 5 × ATR trail, 252-session time stop (until October 2026) | 707 | +0.56 | 63% | 170 | 16.8% |
+| Volatility targets: 1σ / 2σ of the 1-year move, 5 × ATR trail | 767 | +0.51 | 66% | 158 | 16.1% |
+| Stop raised monthly to the 200-day SMA − 8%, tightened to a 5 × ATR trail after a 1σ (1-year) gain | 745 | +0.53 | 56% | 153 | 16.7% |
+| Stop order raised to the 200-day SMA − 8% each month | 361 | +2.17 | 44% | 310 | 26.4% |
+| Same, plus the signal exit | 369 | +2.26 | 45% | 302 | 26.3% |
+| Same, but half sold at +1σ | 361 | +1.32 | 46% | 310 | 16.2% |
+| Chandelier 5 × ATR trail from entry (with the SMA trail) | 3,566 | +0.09 | 43% | 27 | 12.9% |
+| **Trend plan: stop order kept; month-end trend and signal exits (the backtest's)** | **296** | **+3.56** | **45%** | **392** | **33.9%** |
+
+The trend plan had the higher average R on all 20 stocks, in each decade (1990s +6.3R vs +0.75R, 2000s +1.5R vs +0.26R,
+2010-22 +3.4R vs +0.64R), and over the app's shorter windows (`scripts/exit_plan_evaluation.py`): last 15 years +2.53R vs
++0.57R (20.1% vs 13.2% a year held; better on 18 of 20 stocks), last 10 years +2.09R vs +0.62R (19.5% vs 15.3%; 16 of 20).
+Loss tails were similar: 5% of trend-plan trades lost more than 1.3R (gaps through the stop) against 1.2R for the targets.
+What it costs: a lower median trade (−0.22R; most trades lose a little, a few win a lot), fewer trades, long holding periods,
+and a large give-back from the peak before a trend exit fires. Faster profit-taking (volatility targets, partial sales,
+tight ATR trails) cut the winners that pay for everything else. Checking the trend rules at month-end closes rather than
+resting the raised stop as an order avoided intra-month shake-outs (+3.56R vs +2.26R). Caveat: the sample stocks are 2022
+survivors, which flatters any plan that lets winners run; the trend plan still beat the targets on GE, BBY and RRC, the
+pack's weakest stocks. Long-term investors who prefer fixed targets can switch them back on.
+
 **When to get out.** Every ticket lists its exits with a trigger, the result for the *whole* position if the trade ends
-that way, and how often (and how fast) the setup test's trades ended that way on that stock: the stop (−1R); target 1 (the
+that way, and how often (and how fast) the setup test's trades ended that way on that stock. A trend plan lists the stop
+order (−1R), the trend exit (today's level; its result depends on how far the trend ran, so the row shows the average
+result of past trend exits) and the signal exit (today's technical score against 35). A targets plan lists the stop (−1R); target 1 (the
 partial sold there, which is also the result if the rest is then stopped at breakeven); the trailing stop (between target 1
 and target 2); target 2 (the best planned outcome); the time stop (between the stop and target 1); and a verdict turning
 against the trade at the weekly (short horizon) or monthly (long horizon) review. The exits are decided, and the stop
 order placed, when the trade is entered.
 
 **Position replay (CLI `monitor`).** An open position is replayed from the session after its entry with the same rules,
-assuming the plan was followed: the shares sold at target 1 are the ticket's split (half by default, all of a single
+assuming the plan was followed. A trend plan reports a stop hit, a trend or signal exit already taken, or a review at the
+last close that says sell at the next open. On a targets plan: the shares sold at target 1 are the ticket's split (half by default, all of a single
 share), every later exit closes what is left. P&L is realised on those fills (the fill price, so a gap through a target
 or a stop counts at the open) and unrealised only on the shares still held, at the last close; R is that total over the
 initial risk of the whole position. It also reports how far price is from the current (breakeven or trailing) stop, a
@@ -175,7 +239,7 @@ account or an IRA), borrowable shares, and the payment of dividends in lieu.
 | Volatility target | If expected volatility exceeds the target, the excess is held in cash | Delivers the risk the investor asked for |
 | Orders | Whole shares by flooring, then the leftover cash buys one share at a time for the position furthest below target | Never overspends; a cash buffer is never spent |
 | Risk report | Expected volatility (shrunk covariance); historical-simulation VaR and expected shortfall at 95% for 1 day and 1 month (overlapping 21-session windows); beta, correlation and tracking error vs the S&P 500; back-cast max drawdown; risk contributions; diversification ratio; effective number of stocks (1/Σw²); stress tests through the dot-com bust, the GFC, 2011, Q4 2018, the COVID crash and 2022 (S&P 500 closing peak to trough) when covered by the data | Each answers "how bad can it get?" in a different way |
-| Walk-forward test | Monthly (or quarterly) rebalance; weights from the trailing window only; trades executed at the **next** day's close; 10 bps per unit of turnover; weights drift between rebalances; cash earns 0% | No look-ahead (unit-tested by truncation) |
+| Walk-forward test | Monthly (or quarterly) rebalance; weights from the trailing window only; trades executed at the **next** day's close; 10 bps per dollar traded (turnover = buys + sells as a share of the portfolio); weights drift between rebalances; cash earns 0% | No look-ahead (unit-tested by truncation) |
 
 **Goals.** *Capital preservation* picks the 10 calmest stocks and uses minimum variance with a 12% volatility target. *Balanced*
 picks the 10 best technical scores (≥ 45) and uses risk parity. *Growth* picks the 8 strongest 12-1 month momentum names in an
@@ -190,6 +254,31 @@ result.
 All 122 curated labels were checked against Yahoo's live `info["sector"]` in October 2026 and match. The walk-forward test **re-selects** the stocks every rebalance with only the data
 available then, so it does not benefit from knowing today's winners. That matters: the back-cast of today's picks over the
 last year is inflated by how they were chosen, so the app shows it for risk only and uses the walk-forward test for performance.
+
+**Holdings are kept while they qualify (October 2026).** Re-picking the top N from scratch every month made the
+technical-score and momentum ranks, which move week to week, replace most of the portfolio each month: the balanced goal
+on the live large-cap universe turned over 18.5× a year (buys + sells). *Balanced*, *growth* and *diversified* now keep a
+stock they hold for as long as it still passes the goal's filter (technical score ≥ 45; for growth, a close above the
+200-day SMA) and re-fill only the freed places by rank (`Goal.keep_rank`, a rank buffer; infinite for these three). The
+walk-forward test applies it to its own simulated holdings; the app and the CLI (`--held`) apply it to the stocks the
+investor says they hold. Walk-forward, monthly, 10 bps per dollar traded (`scripts/turnover_evaluation.py`):
+
+| Goal | Universe | Turnover / yr, from scratch → kept | Sharpe | CAGR | Max drawdown |
+|---|---|---|---|---|---|
+| Balanced | 86 large caps, Aug 2016 – Oct 2026 (live) | 18.5× → 2.4× | 0.48 → 0.79 | 9.1% → 15.4% | −29% → −31% |
+| Growth | same | 10.0× → 4.9× | 0.78 → 0.94 | 18.7% → 22.5% | −35% → −34% |
+| Maximum diversification | same | 16.4× → 3.3× | 0.61 → 0.86 | 11.0% → 15.4% | −30% → −27% |
+| Balanced | 19 sample stocks, 2012-2022 | 6.8× → 2.4× | 0.90 → 0.83 | 16.8% → 15.4% | −32% → −31% |
+| Growth | same | 6.6× → 4.9× | 0.73 → 0.71 | 14.2% → 13.8% | −27% → −27% |
+| Maximum diversification | same | 5.6× → 3.8× | 0.84 → 0.85 | 15.2% → 15.5% | −31% → −31% |
+
+Also tested on the large caps (balanced): a 3-percentage-point no-trade band on the weights (18.5× → 18.2×: the turnover
+came from swapping stocks, not from re-weighting them); keeping holdings only while they rank in the top 2N or 3N (13.5×
+and 9.5×); quarterly reviews (6.5×, Sharpe 0.59). On the 1990-2022 sample pack the kept version turned over 2.7× instead
+of 6.7× with the same Sharpe (0.69). *Capital preservation* keeps re-selecting from scratch: it ranks by 1-year
+volatility, which moves slowly (3.3× a year on the large caps), and a buffer lowered its Sharpe on every universe tested
+(large caps 0.55 → 0.51, sample 0.69 → 0.62). The sample-pack results are close to a wash; the large-cap gains are large
+but come from one 10-year window, so read them as "much less trading at no cost", not as a promised improvement.
 
 **What the evidence says.** On the app's default basket (AAPL, JNJ, XOM, JPM, KO, PG, UNH, WMT; offline sample data;
 walk-forward from late 2012 to December 2022; 25% cap; 10 bps costs) plain equal weight had the best Sharpe (0.84). Risk
@@ -231,6 +320,15 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | A benchmark with no rows in the stock's window crashed the analysis | E.g. live prices with the S&P 500 falling back to the 2022 sample file | `load_prices` raises when the window is empty and `align` when the frames do not overlap; the regime rules are then switched off with a warning |
 | A quote was requested even after the prices had fallen back to old data | An extra network timeout per ticker, and today's price paired with stale signals | A separate quote is fetched only for current prices |
 
+### Third October 2026 session
+
+| Issue | Effect | Fix |
+|---|---|---|
+| Long-horizon targets sat 30-80% away (2R / 3R on a stop 8% below the 200-day SMA), and the ticket's fixed stop differed from the backtest's monthly SMA exit | Profit targets that a long-term trade rarely reached; two different exit models | Long-horizon buys follow the backtest's month-end trend and signal exits, no fixed target (+3.56R vs +0.56R per trade on the sample setups, §9); `scripts/exit_plan_evaluation.py` |
+| Goal portfolios re-picked their stocks from scratch every month | The balanced goal turned over 18.5× a year on the live large caps, paying costs to swap stocks whose ranks moved a little | Holdings are kept while they still qualify (balanced 18.5× → 2.4×; §10); the walk-forward table shows both versions; `scripts/turnover_evaluation.py` |
+| Sharpe and Sortino ratios used a fixed 2% risk-free rate | Overstated in high-rate years (T-bills ~4-5% in 2023-26), understated near zero (2020-21) | The 3-month T-bill (FRED `DTB3`) day by day for live analyses and portfolio walk-forward tests; 2% offline (§1) |
+| The Hull-MA band centre still trailed the price by ~3 sessions and swung 26% past a jump | The chart's centre line and the *price bands* beacon described the price of three days earlier | Holt's trend filter (0.4 / 0.1): ~1 session behind, no lag in a trend, 9% overshoot (§3); `scripts/band_lag_evaluation.py` measures every candidate |
+
 ## 12. Speed
 
 Measured offline with Streamlit's test harness on the sample pack (before → after this session's work): first page load
@@ -252,6 +350,18 @@ A cold live screen of the 12 mega caps took 41 s one ticker at a time and 8 s wi
   stays serial because Python threads only add contention to pure CPU work.
 * **Imports**: the app no longer loads matplotlib (`palette.py` holds the shared colours), and scipy loads only when an
   optimiser runs.
+
+* **Fragments** (third October 2026 session): each interactive section is an `st.fragment`, so a click re-runs only its
+  section: on the Analyse tab the trade ticket's side, the beacon filter, the chart lookback, the what-if sizer and the
+  sensitivity metric; and each of the trade desk, portfolio builder, watchlist and data tabs as a whole. Measured in
+  headless Chromium (click until Streamlit reports idle, median of 8, MSFT analysed): chart lookback 1.34 → 1.11 s, beacon
+  filter 1.12 → 0.73 s, ticket side 1.20 → 0.79 s. What remains is mostly the browser redrawing that section's charts.
+  The watchlist's "open the full analysis" button asks for a full re-run explicitly, because the Analyse tab lives
+  outside its fragment.
+* **Weekly points for long charts**: a price, backtest, walk-forward, comparison or portfolio chart longer than ~3 years
+  (800 sessions) is drawn from each week's last session (volume summed over the week, drawdowns from the week's low, so
+  the deepest drawdown survives; trade markers and every table keep daily values). The full-history price chart of a
+  25-year analysis went from 3.2 MB to 0.7 MB of chart data and the backtest chart from 1.8 MB to 0.4 MB.
 
 Every published number is unchanged by these changes: the cross-ticker table and the MSFT example report regenerate
 byte for byte. What is still slow: a portfolio walk-forward test (6 methods × ~120 monthly optimisations, about 1.5 s

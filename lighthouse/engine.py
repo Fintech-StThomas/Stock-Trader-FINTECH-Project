@@ -12,7 +12,8 @@ import pandas as pd
 
 from .backtest import BacktestResult, run_backtest, strategy_layers, sensitivity_grid, walk_forward, regime_breakdown
 from .config import InvestorProfile, StrategyParams
-from .data import EXCHANGE_TZ, Quote, load_prices, load_benchmark, load_fundamentals, load_quote, align, DataUnavailable
+from .data import (EXCHANGE_TZ, Quote, load_prices, load_benchmark, load_fundamentals, load_quote, load_risk_free, align,
+                   DataUnavailable)
 from .decision import Decision, make_decision
 from .fundamentals import FundamentalSnapshot, StatementHistory, fundamental_beacons, fundamental_score, point_in_time_scores
 from .parallel import map_tickers
@@ -39,6 +40,7 @@ class AnalysisResult:
     extras: Dict[str, object] = field(default_factory=dict)   # layers / sensitivity / walk-forward when computed
     quote: Optional[Quote] = None              # the live price the orders are priced from (None: the last close)
     partial_bar: Optional[dict] = None         # today's unfinished session, left out of the signals
+    risk_free: Optional[pd.Series] = None      # daily 3-month T-bill rate behind the Sharpe ratios (None: a fixed 2%)
 
     # ---- convenience -------------------------------------------------------------
     @property
@@ -56,7 +58,7 @@ class AnalysisResult:
     def evaluate(self, layers: bool = True, sensitivity: bool = True, walk_forward_test: bool = True) -> Dict[str, object]:
         """Run the deeper (slower) evaluations and cache them in `extras`."""
         bt_kwargs = dict(prices=self.prices, benchmark=self.benchmark, params=self.params, profile=self.profile,
-                         fundamentals_pit=self.pit_scores)
+                         fundamentals_pit=self.pit_scores, risk_free=self.risk_free)
         if layers and "layers" not in self.extras:
             self.extras["layers"] = strategy_layers(**bt_kwargs)
         if sensitivity and "sensitivity" not in self.extras:
@@ -188,10 +190,13 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
                              f_now, t_now, f_beacons + t_beacons, regime_now, prof, p, warnings,
                              sma_slow=float(last["sma_slow"]))
 
+    # the T-bill rate for the Sharpe ratios, when the prices are current (live or a fresh cache); offline and sample
+    # data keep the fixed StrategyParams.risk_free_rate so their published numbers stay reproducible
+    risk_free = load_risk_free(source) if data_attrs.get("source") in {"yfinance", "stooq", "cache"} else None
     bt = None
     if run_backtest_:
         try:
-            bt = run_backtest(prices, bench, p, prof, pit)
+            bt = run_backtest(prices, bench, p, prof, pit, risk_free=risk_free)
         except ValueError as exc:
             warnings.append(f"Backtest skipped: {exc}")
 
@@ -199,7 +204,7 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     return AnalysisResult(ticker=ticker, profile=prof, params=p, prices=prices, indicators=ind, technical_scores=tscores,
                           benchmark=bench, regimes=regimes, fundamentals=snap, statements=hist, pit_scores=pit,
                           decision=decision, backtest=bt, warnings=list(dict.fromkeys(warnings)), quote=quote,
-                          partial_bar=partial)
+                          partial_bar=partial, risk_free=risk_free)
 
 
 def analyze_many(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, params: Optional[StrategyParams] = None,

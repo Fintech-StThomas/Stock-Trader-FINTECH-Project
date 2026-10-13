@@ -188,3 +188,43 @@ def test_goal_portfolio_selects_by_its_rules():
 def test_universe_labels_cover_every_ticker():
     assert all(t in SECTORS for t in LARGE_CAP_UNIVERSE)
     assert all(t in SECTORS for t in available_universe("sample"))
+
+
+def test_goal_keeps_holdings_while_they_qualify():
+    from lighthouse.portfolio import Goal
+    uni_all = load_universe(available_universe("sample"), years=10, source="sample")
+    panels = selection_panels(uni_all)
+    t = len(uni_all.closes) - 1
+    g = Goal(**{**GOALS["balanced"].__dict__, "n_stocks": 4})
+    fresh = select(panels, t, g, uni_all.sectors)
+    tech = panels["technical"].iloc[t]
+    ok = tech[tech >= g.min_technical].sort_values()
+    low, failing = ok.index[0], tech[tech < g.min_technical].index
+    assert low not in fresh                                        # too weak to be picked from scratch ...
+    kept = select(panels, t, g, uni_all.sectors, held=[low])
+    assert kept[0] == low and set(kept[1:]) <= set(fresh)          # ... but kept while it still qualifies
+    if len(failing):
+        assert failing[0] not in select(panels, t, g, uni_all.sectors, held=[failing[0]])   # sold once it fails the filter
+    narrow = Goal(**{**g.__dict__, "keep_rank": 1.0})              # a buffer as wide as the goal: only the top n stay
+    assert select(panels, t, narrow, uni_all.sectors, held=[low]) == fresh
+    assert GOALS["preservation"].keep_rank is None                 # preservation re-picks from scratch
+    pres = GOALS["preservation"]
+    assert select(panels, t, pres, uni_all.sectors, held=[low]) == select(panels, t, pres, uni_all.sectors)
+
+    r = goal_portfolio("balanced", capital=10_000, source="sample", universe=uni_all, held=[low, "ZZZZ"])
+    assert low in r.weights.index and any(n.startswith("Kept 1 of the 2 stocks you hold") for n in r.notes)
+    rows = list(r.comparison.index)
+    kept_row = next(x for x in rows if "holdings kept while they qualify" in x)
+    scratch_row = next(x for x in rows if "re-selected from scratch" in x)
+    assert r.comparison.loc[kept_row, "turnover_annual"] < r.comparison.loc[scratch_row, "turnover_annual"]
+
+
+def test_walk_forward_passes_the_drifted_holdings(uni):
+    rets = uni.returns[["KO", "PG"]]
+    seen = []
+
+    def fn(t, w_now):
+        seen.append(w_now)
+        return np.array([0.5, 0.5]), 1.0
+    backtest_weights(rets, fn, 252, "monthly", 0.0, pass_holdings=True)
+    assert np.allclose(seen[0], 0.0) and seen[1].sum() == pytest.approx(1.0) and not np.allclose(seen[1], 0.5)

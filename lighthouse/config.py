@@ -167,8 +167,10 @@ class StrategyParams:
     macd_slow: int = 26
     macd_signal: int = 9
     # --- volatility / bands --------------------------------------------------
-    band_window: int = 20         # price bands: Hull moving average of this many sessions ...
-    band_std: float = 2.0         # ... +/- this many standard deviations of the closes around it
+    band_alpha: float = 0.4       # price bands: centre = Holt's trend filter; share of each close taken into the level ...
+    band_beta: float = 0.1        # ... and of each level change taken into the slope (larger = less lag, rougher line)
+    band_window: int = 20         # bands at +/- band_std standard deviations of the closes around the centre over this
+    band_std: float = 2.0         # many sessions
     atr_window: int = 14
     vol_window: int = 20          # realised-volatility window for the regime/beacons (trading days)
     sizing_vol_window: int = 60   # realised-volatility window used for position sizing (smoother)

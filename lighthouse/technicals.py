@@ -10,7 +10,7 @@ Beacons
 trend      Price vs 200-day SMA and 50-day vs 200-day SMA (Golden / Death Cross)
 rsi        14-day RSI: confirms momentum between 30-70, flags exhaustion beyond
 macd       MACD histogram normalised by ATR (momentum acceleration)
-bands      Position inside the low-lag price bands (%B, Hull MA centre): trend confirmation vs. over-extension
+bands      Position inside the low-lag price bands (%B, Holt trend-filter centre): trend confirmation vs. over-extension
 volume     Volume confirmation: expanding volume behind the move + OBV trend
 breakout   Distance from the 52-week high (breakout proximity)
 """
@@ -75,7 +75,8 @@ def _compute_indicators(prices: pd.DataFrame, p: StrategyParams) -> pd.DataFrame
     df["sma_slow"] = ind.sma(close, p.sma_slow)
     df["rsi"] = ind.rsi(close, p.rsi_window)
     df["macd"], df["macd_signal"], df["macd_hist"] = ind.macd(close, p.macd_fast, p.macd_slow, p.macd_signal)
-    df["band_mid"], df["band_upper"], df["band_lower"], df["pct_b"] = ind.lowlag_bands(close, p.band_window, p.band_std)
+    df["band_mid"], df["band_upper"], df["band_lower"], df["pct_b"] = ind.lowlag_bands(
+        close, p.band_window, p.band_std, p.band_alpha, p.band_beta)
     df["atr"] = ind.atr(high, low, close, p.atr_window)
     df["atr_pct"] = df["atr"] / close
     df["realized_vol"] = ind.realized_vol(close, p.vol_window, p.trading_days)
@@ -247,7 +248,7 @@ def latest_beacons(ind_df: pd.DataFrame, horizon: str = "long",
         why = "Price sits in the upper half of its bands: buyers are in control without over-extension."
     else:
         why = "Price sits in the lower half of its bands: sellers are in control."
-    beacons.append(Beacon("bands", f"Price bands (Hull {p.band_window}, {p.band_std:g}σ)", "technical",
+    beacons.append(Beacon("bands", f"Price bands (trend filter, {p.band_std:g}σ)", "technical",
                           f"%B {b:.2f}", float(sc["bands"]), w["bands"], why))
 
     # volume

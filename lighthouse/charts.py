@@ -69,7 +69,7 @@ def plot_dashboard(result, last_days: int = 756):
     ax = axes[0]
     _shade_regimes(ax, result.regimes, ind.index)
     ax.fill_between(ind.index, ind["band_lower"], ind["band_upper"], color=SERIES["band"], alpha=0.35, lw=0, label=f"Price bands (±{p.band_std:g}σ)")
-    ax.plot(ind.index, ind["band_mid"], color=SERIES["band_mid"], lw=1.0, ls="--", label=f"Band centre (Hull MA {p.band_window})")
+    ax.plot(ind.index, ind["band_mid"], color=SERIES["band_mid"], lw=1.0, ls="--", label="Band centre (trend filter)")
     ax.plot(ind.index, ind["Close"], color=SERIES["price"], lw=1.6, label="Close")
     ax.plot(ind.index, ind["sma_fast"], color=SERIES["sma_fast"], lw=1.4, label=f"SMA {p.sma_fast}")
     ax.plot(ind.index, ind["sma_slow"], color=SERIES["sma_slow"], lw=1.4, label=f"SMA {p.sma_slow}")
@@ -85,7 +85,7 @@ def plot_dashboard(result, last_days: int = 756):
     for lab, col in REGIME_FILL.items():
         handles.append(Patch(color=col)); labels.append(lab)
     ax.legend(handles, labels, ncol=4, loc="upper left", fontsize=8)
-    _style(ax, f"{result.ticker} · price, trend and price bands (Hull MA {p.band_window} ± {p.band_std:g}σ) · verdict {result.decision.verdict} ({result.decision.composite_score:.0f}/100)")
+    _style(ax, f"{result.ticker} · price, trend and price bands (trend filter ± {p.band_std:g}σ) · verdict {result.decision.verdict} ({result.decision.composite_score:.0f}/100)")
     ax.set_ylabel("price")
     i = 1
     if has_vol:

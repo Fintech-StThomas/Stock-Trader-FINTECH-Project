@@ -24,7 +24,7 @@ import streamlit as st
 from lighthouse import analyze, screen, InvestorProfile, StrategyParams
 from lighthouse import interactive as ix
 from lighthouse.config import VERDICT_BANDS, RISK_PRESETS, HORIZON_WEIGHTS
-from lighthouse.data import sample_pack_tickers, offline_mode, load_prices, DataUnavailable
+from lighthouse.data import sample_pack_tickers, offline_mode, load_prices, load_risk_free, DataUnavailable
 from lighthouse.decision import size_position
 from lighthouse.regime import regime_adjustments
 from lighthouse.report import format_metrics, LIGHT_ICON
@@ -114,19 +114,26 @@ def _universe(tickers, years, source):
     return pf.load_universe(list(tickers), years=years, source=source)
 
 
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=4)
+def _risk_free(source):
+    """The daily 3-month T-bill rate from FRED (None offline or for the sample pack)."""
+    return None if _is_offline() else load_risk_free(source)
+
+
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
 def _basket(tickers, method, max_w, min_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf):
     cons = pf.PortfolioConstraints(max_weight=max_w, min_weight=min_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.build_portfolio(tickers, method, cons, capital=capital, lookback=lookback, rebalance=rebalance, cost_bps=cost,
-                              risk_free_rate=rf, universe=_universe(tickers, years, source))
+                              risk_free_rate=rf, universe=_universe(tickers, years, source), risk_free=_risk_free(source))
 
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=50)
-def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf):
+def _goal(goal, tickers, n_stocks, per_sector, max_w, sector_cap, target_vol, capital, years, source, lookback, rebalance, cost, rf,
+          held=()):
     cons = pf.PortfolioConstraints(max_weight=max_w, max_sector_weight=sector_cap, target_vol=target_vol)
     return pf.goal_portfolio(goal, capital=capital, n_stocks=n_stocks, constraints=cons, max_per_sector=per_sector,
                              lookback=lookback, rebalance=rebalance, cost_bps=cost, risk_free_rate=rf,
-                             universe=_universe(tickers, years, source))
+                             universe=_universe(tickers, years, source), held=list(held) or None, risk_free=_risk_free(source))
 
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=200)
@@ -226,12 +233,16 @@ def _typed_ticker() -> None:
 
 
 def _open_from_watchlist(ticker: str) -> None:
-    st.session_state["ticker"] = ticker
-    st.session_state["pick"] = None
-    st.session_state["auto_run"] = True
+    """Ask the next full run to analyse `ticker`. Applied before the sidebar's ticker box is drawn: the watchlist is a
+    fragment, and a widget's value cannot be changed after the widget exists in a run."""
+    st.session_state["open_ticker"] = ticker
 
 
 # ----------------------------------------------------------------------------- sidebar
+if st.session_state.get("open_ticker"):
+    st.session_state["ticker"] = st.session_state.pop("open_ticker")
+    st.session_state["pick"] = None
+    st.session_state["auto_run"] = True
 st.session_state.setdefault("ticker", "MSFT")
 with st.sidebar:
     st.title("🔦 Lighthouse")
@@ -259,6 +270,12 @@ with st.sidebar:
     if cash + holdings <= 0:
         st.error("Enter the cash you can invest (or the value of what you hold) to size positions.")
     with st.expander("Trade management (entries & exits)"):
+        long_exit = st.radio("Long-term buys: how to take profit", ["Trend exits (tested best)", "Profit targets (R)"],
+                             key="long_exit", help="Trend exits: no fixed target; at each month's last close sell if the close "
+                             "is below the 200-day SMA − 8% (a level that rises with the trend) or the technical score has "
+                             "faded to the exit score. These are the long-horizon backtest's own exits and, on the sample "
+                             "stocks, earned several times more per trade than profit targets 30-80% away. Short-term trades "
+                             "and shorts always use the profit targets below.")
         tp1 = st.number_input("Target 1 (× the risk, R)", 0.5, 10.0, 2.0, 0.5, key="tp1",
                               help="Take-profit level 1 = entry ± this many times the distance from entry to the stop.")
         tp2 = st.number_input("Target 2 (R)", 0.5, 20.0, 3.0, 0.5, key="tp2")
@@ -266,7 +283,8 @@ with st.sidebar:
                             help="The rest runs to target 2 with the stop moved to breakeven and then trailed.")
         tstop = st.number_input("Time stop (trading sessions, 0 = horizon default)", 0, 1000, 0, 5, key="tstop",
                                 help=f"Close a trade that has reached neither stop nor target 1 after this many sessions. "
-                                     f"Default: {TIME_STOP_DEFAULT['short']} (short horizon) / {TIME_STOP_DEFAULT['long']} (long).")
+                                     f"Default: {TIME_STOP_DEFAULT['short']} (short horizon) / {TIME_STOP_DEFAULT['long']} (long "
+                                     "with profit targets); none with trend exits.")
         max_ideas = st.number_input("Max trade ideas funded at once", 1, 20, 5, key="max_ideas")
         heat = st.slider("Max total risk across ideas (% of account)", 1.0, 20.0, 6.0, 0.5, key="heat",
                          help="'Portfolio heat': the sum of every idea's planned loss stays below this.")
@@ -301,7 +319,8 @@ run = run or st.session_state.pop("auto_run", False)
 NONCE = st.session_state.get("live_nonce", 0)
 try:
     SETTINGS = TradeSettings(reward_multiples=(float(min(tp1, tp2)), float(max(tp1, tp2))), partial_exit=partial / 100.0,
-                             time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat))
+                             time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat),
+                             long_exit="targets" if str(long_exit).startswith("Profit") else "trend")
 except ValueError as exc:
     st.sidebar.error(f"Trade management: {exc}")
     SETTINGS = TradeSettings()
@@ -353,6 +372,7 @@ def ticket_headline(pl) -> str:
 
 
 EXIT_ICON = {"loss": "🛑", "profit": "🎯", "time": "⏱️", "evidence": "🧭"}
+TREND_ICON = {"loss": "🛑", "profit": "📈", "time": "⏱️", "evidence": "🧭"}
 
 
 def render_exits(pl, key: str) -> None:
@@ -361,16 +381,24 @@ def render_exits(pl, key: str) -> None:
     st.markdown("**When to get out** · place the stop when you enter, so the exit is decided before emotions are")
 
     rows = []
+    icons = TREND_ICON if pl.is_trend_plan else EXIT_ICON
     for x in pl.exit_plan():
         result = ""
         if x.r is not None:
             result = (f"{signed_usd(x.pnl)} ({x.r:+.2f}R)" if x.pnl is not None else f"{x.r:+.2f}R")
-        rows.append({"": EXIT_ICON.get(x.kind, ""), "Exit": x.name,
+        elif pl.is_trend_plan and x.kind != "loss":
+            result = "depends on when (see history)"
+        rows.append({"": icons.get(x.kind, ""), "Exit": x.name,
                      "Trigger": "" if x.price is None else f"${x.price:,.2f} ({x.move_pct:+.1f}%)",
                      "If the trade ends here": result, "What to do": x.action, "On this stock's history": x.history})
     st.table(pd.DataFrame(rows).set_index(""))
-    st.caption("Results are for the whole position (shares already sold included) before costs; R = multiples of the planned "
-               "loss. A gap through a stop fills at the open, which can be worse.")
+    if pl.is_trend_plan:
+        st.caption("A trend plan has no fixed profit target: the review-day exits end the trade, and their result depends on "
+                   "how far the trend ran (the history column shows the average). R = multiples of the planned loss. A gap "
+                   "through a stop fills at the open, which can be worse.")
+    else:
+        st.caption("Results are for the whole position (shares already sold included) before costs; R = multiples of the "
+                   "planned loss. A gap through a stop fills at the open, which can be worse.")
 
 
 def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) -> None:
@@ -390,18 +418,36 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
     kpi(c1, "Entry (limit)", money(pl.price, 2), f"do not chase: {lim} {money(pl.entry_limit, 2)}")
     kpi(c2, "Stop-loss", money(pl.stop, 2) if pl.stop else "n/a",
         f"{pl.stop_pct * 100:.1f}% {'below' if pl.side == 'long' else 'above'} · {pl.stop_label}" if pl.stop_pct else "")
-    kpi(c3, "Take profit 1", money(t1.price, 2) if t1 else "n/a", f"{t1.r_multiple:g}R · {t1.move_pct:+.1f}% · {t1.shares} sh" if t1 else "")
-    kpi(c4, "Take profit 2", money(t2.price, 2) if t2 else "n/a", f"{t2.r_multiple:g}R · {t2.move_pct:+.1f}% · {t2.shares} sh" if t2 else "")
+    if pl.is_trend_plan:
+        lvl = pl.trend_exit_level
+        kpi(c3, f"Trend exit ({pl.review}-end close)", money(lvl, 2) if lvl is not None else "n/a",
+            f"below the {pl.trend_exit_label}; rises with the trend" + (f" ({pl.trend_exit_pace_pct:+.1f}% last month)"
+                                                                         if pl.trend_exit_pace_pct is not None else ""))
+        kpi(c4, f"Signal exit ({pl.review}-end)", f"score ≤ {pl.signal_exit_score:g}",
+            f"technical score today {pl.technical_score:.0f}")
+    else:
+        kpi(c3, "Take profit 1", money(t1.price, 2) if t1 else "n/a", f"{t1.r_multiple:g}R · {t1.move_pct:+.1f}% · {t1.shares} sh" if t1 else "")
+        kpi(c4, "Take profit 2", money(t2.price, 2) if t2 else "n/a", f"{t2.r_multiple:g}R · {t2.move_pct:+.1f}% · {t2.shares} sh" if t2 else "")
     c5, c6, c7, c8 = st.columns(4)
     kpi(c5, "Cash used" if pl.side == "long" else "Collateral (1:1)", money(pl.notional),
         f"{pl.shares} shares · {money(pl.cash_left)} of {money(pl.cash_available)} cash left")
     kpi(c6, "Planned loss at the stop", money(pl.dollars_at_risk), f"{pl.risk_pct_of_account:.2f}% of the account (gaps can be worse)")
-    kpi(c7, "Profit if both targets fill", money(pl.profit_if_all_targets),
-        f"reward : risk {pl.reward_risk:g} : 1 on target 1" if t1 else "")
     st_ = pl.stats
+    if pl.is_trend_plan:
+        wins = st_.trades.loc[st_.trades["r"] > 0] if st_ is not None else None
+        if wins is not None and len(wins):
+            kpi(c7, "Winning trades on this stock's history", f"{wins['return_pct'].median():+.0f}% median",
+                f"{len(wins)} winners · median {wins['r'].median():+.1f}R, held {wins['days'].median():.0f} sessions")
+        else:
+            kpi(c7, "Winning trades on this stock's history", "n/a", "no finished winning setups")
+    else:
+        kpi(c7, "Profit if both targets fill", money(pl.profit_if_all_targets),
+            f"reward : risk {pl.reward_risk:g} : 1 on target 1" if t1 else "")
     if st_ is not None:
+        how = (f"ended by a review exit {st_.trend_exited * 100:.0f}%" if st_.exit_style == "trend"
+               else f"hit target 1 {st_.hit_target1 * 100:.0f}%")
         kpi(c8, "These rules on this stock's history", f"{st_.avg_r:+.2f}R / trade",
-            f"{st_.n_trades} trades in {st_.years:.0f}y · win {st_.win_rate * 100:.0f}% · hit target 1 {st_.hit_target1 * 100:.0f}% · "
+            f"{st_.n_trades} trades in {st_.years:.0f}y · win {st_.win_rate * 100:.0f}% · {how} · "
             f"profit factor {st_.profit_factor:.2f}", STATUS_GOOD if st_.avg_r > 0 else STATUS_BAD)
     else:
         kpi(c8, "These rules on this stock's history", "n/a", "no comparable historical setups")
@@ -411,13 +457,13 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
         render_exits(pl, key)
     st.markdown("**The plan, step by step**\n\n" + "\n".join(f"{i}. {esc(x)}" for i, x in enumerate(pl.management_steps(), 1)))
     if chart and not compact:
-        levels = (pl.side, pl.price, pl.stop, tuple(t.price for t in pl.targets), pl.as_of)
+        levels = (pl.side, pl.price, pl.stop, tuple(t.price for t in pl.targets), pl.trend_exit_level, pl.as_of)
         plotly(figure(res, ("trade", levels), lambda: ix.trade_chart(res, pl)), key=f"ticket_chart_{key}_{pl.side}_{pl.ticker}")
     with st.expander("Why this status, how it was sized, and the caveats"):
         st.markdown("**Setup**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.reasons))
         if pl.sizing_notes:
             st.markdown("**Sizing**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.sizing_notes))
-        st.markdown(f"**Typical move**: one standard deviation over {pl.time_stop_days} sessions ≈ ±{pl.typical_move_pct:.1f}% "
+        st.markdown(f"**Typical move**: one standard deviation over {pl.typical_days} sessions ≈ ±{pl.typical_move_pct:.1f}% "
                     f"(from {res.params.sizing_vol_window}-day realised volatility). ATR(14) today {esc(money(pl.atr, 2))}.")
         if pl.margin:
             st.markdown(f"**Margin (short)**: Regulation T initial margin ≈ {esc(money(pl.margin['reg_t_initial']))} (50% of the short "
@@ -426,10 +472,11 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
         if pl.warnings:
             st.markdown("**Caveats**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.warnings))
         if st_ is not None:
+            rules = ("stop order, then the review-day trend and signal exits at the next open" if pl.is_trend_plan else
+                     "stop, partial at target 1, breakeven, trailing stop, target 2, time stop")
             st.markdown("**Historical setup test**: every past day this stock met the same setup rule, the trade was entered the next "
-                        "session and managed with exactly the plan above (stop, partial at target 1, breakeven, trailing stop, target 2, "
-                        "time stop), one trade at a time, after costs. If the stop and a target fall in the same session the stop is "
-                        "assumed to come first.")
+                        f"session and managed with exactly the plan above ({rules}), one trade at a time, after costs. If the stop "
+                        "and a target fall in the same session the stop is assumed to come first.")
             tr = st_.trades.copy()
             st.dataframe(tr[["signal_date", "entry_date", "entry", "stop", "exit_date", "outcome", "r", "return_pct", "days"]],
                          hide_index=True, width="stretch", column_config={
@@ -498,25 +545,43 @@ def render_result(res) -> None:
             for r_ in pl.rationale:
                 st.markdown("• " + esc(r_))
         with st.expander("What if I change my limits? (instant, no new analysis)"):
-            w1, w2, w3, w4 = st.columns(4)
-            w_loss = w1.slider("Max loss (% of account)", 0.5, 10.0, float(prof.max_loss_pct), 0.5, key="wi_loss")
-            w_cash = w2.number_input("Cash ($)", 0, value=int(prof.cash), step=500, key="wi_cash")
-            w_hold = w3.number_input("Holdings ($)", 0, value=int(prof.holdings_value), step=1000, key="wi_hold")
-            w_risk = w4.select_slider("Risk", ["conservative", "balanced", "aggressive"], value=prof.risk, key="wi_risk")
-            if w_cash + w_hold > 0:
-                wp = resize_plan(res, w_loss, w_cash, w_hold, w_risk)
-                exit_txt = "n/a" if wp.stop_price is None else esc(money(wp.stop_price, 2))
-                st.markdown(f"**{wp.shares} shares** ≈ **{esc(money(wp.cost))}** ({wp.position_pct:.1f}% of the account) · "
-                            f"exit {exit_txt} · worst case **{esc(money(wp.max_loss_value))}** · limited by the **{wp.binding_constraint}**")
-            st.caption("The verdict and score do not change here; only the sizing rules are re-applied.")
+            whatif_section(res)
 
-    # ---- trade ticket -------------------------------------------------------
+    ticket_section(res)
+    beacons_section(res)
+    charts_section(res)
+    backtest_section(res)
+    downloads_section(res)
+
+
+# Each section below is a fragment: a click on one of its widgets re-runs that section only, not the whole page.
+@st.fragment
+def whatif_section(res) -> None:
+    prof = res.profile
+    w1, w2, w3, w4 = st.columns(4)
+    w_loss = w1.slider("Max loss (% of account)", 0.5, 10.0, float(prof.max_loss_pct), 0.5, key="wi_loss")
+    w_cash = w2.number_input("Cash ($)", 0, value=int(prof.cash), step=500, key="wi_cash")
+    w_hold = w3.number_input("Holdings ($)", 0, value=int(prof.holdings_value), step=1000, key="wi_hold")
+    w_risk = w4.select_slider("Risk", ["conservative", "balanced", "aggressive"], value=prof.risk, key="wi_risk")
+    if w_cash + w_hold > 0:
+        wp = resize_plan(res, w_loss, w_cash, w_hold, w_risk)
+        exit_txt = "n/a" if wp.stop_price is None else esc(money(wp.stop_price, 2))
+        st.markdown(f"**{wp.shares} shares** ≈ **{esc(money(wp.cost))}** ({wp.position_pct:.1f}% of the account) · "
+                    f"exit {exit_txt} · worst case **{esc(money(wp.max_loss_value))}** · limited by the **{wp.binding_constraint}**")
+    st.caption("The verdict and score do not change here; only the sizing rules are re-applied.")
+
+
+@st.fragment
+def ticket_section(res) -> None:
     st.markdown("#### Trade ticket: buy or sell short right now")
     side = st.segmented_control("Side", ["long", "short"], default="long", key="ticket_side", label_visibility="collapsed",
                                 format_func=lambda v: "📈 Long (buy)" if v == "long" else "📉 Short (sell short)")
     render_ticket(res, build_trade_plan(res, side or "long", SETTINGS), key="analyse")
 
-    # ---- beacons ----------------------------------------------------------
+
+@st.fragment
+def beacons_section(res) -> None:
+    d, f = res.decision, res.fundamentals
     st.markdown("#### Why: the beacons")
     st.caption("Every signal votes between −1 (bearish) and +1 (bullish). Hover a bar for the reading and the reason. Filter by light to focus.")
     flt = st.segmented_control("Show", ["all", "bullish", "neutral", "bearish"], default="all", key="beacon_filter", label_visibility="collapsed")
@@ -534,27 +599,34 @@ def render_result(res) -> None:
         st.markdown("**Technical beacons**")
         st.dataframe(beacon_frame([b for b in d.technical_beacons if b in shown]), hide_index=True, width="stretch", column_config=BEACON_COLUMNS)
 
-    # ---- charts -----------------------------------------------------------
+
+@st.fragment
+def charts_section(res) -> None:
     st.markdown("#### Price, trend and momentum")
     look = st.segmented_control("Lookback", ["1y", "3y", "5y", "all"], default="3y", key="lookback", label_visibility="collapsed")
     last_days = {"1y": 252, "3y": 756, "5y": 1260, "all": len(res.indicators)}[look or "3y"]
-    st.caption("Shaded areas show market weather (red = bear, amber = turbulent). Triangles are the backtested rule's entries and exits. Drag to zoom, double-click to reset.")
+    st.caption("Shaded areas show market weather (red = bear, amber = turbulent). Triangles are the backtested rule's entries and "
+               "exits. Windows longer than 3 years are drawn from weekly points. Drag to zoom, double-click to reset.")
     plotly(figure(res, ("dashboard", last_days), lambda: ix.dashboard(res, last_days=last_days)), key="dashboard")
     with st.expander("How the price bands are built"):
         n, k = res.params.band_window, res.params.band_std
-        st.markdown(f"The dashed centre line is a {n}-day **Hull moving average**: a weighted average that cancels most of the "
-                    f"delay of an ordinary average (about 3 sessions behind the price on the sample stocks, against about 9 for "
-                    f"the {n}-day simple average that classic Bollinger Bands use). The bands sit ± {k:g} standard deviations of "
-                    f"the closes around that line over the last {n} sessions. A close above the upper band means price is "
-                    "stretched relative to where it is now; the *Price bands* beacon scores that position (%B). Like every line "
-                    "in Lighthouse they use only past prices: nothing is shifted forward, so nothing peeks at the future.")
+        st.markdown("The dashed centre line is a **trend filter** (Holt's double exponential smoothing). Each session it "
+                    "projects yesterday's level along yesterday's slope and then moves part of the way to today's close, so "
+                    "it follows a steady trend without falling behind. On the sample stocks it is about 1 session behind the "
+                    f"price, against about 3 for a 20-day Hull moving average and about 9 for the {n}-day simple average that "
+                    f"classic Bollinger Bands use. The bands sit ± {k:g} standard deviations of the closes around that line "
+                    f"over the last {n} sessions. A close above the upper band means price is stretched relative to where it "
+                    "is now; the *Price bands* beacon scores that position (%B). Like every line in Lighthouse they use only "
+                    "past prices: nothing is shifted forward, so nothing peeks at the future.")
 
-    # ---- backtest ---------------------------------------------------------
+
+def backtest_section(res) -> None:
     bt = res.backtest
     if bt is not None:
         st.markdown(f"#### How this rule behaved {bt.start.date()} → {bt.end.date()}")
         st.caption(f"Long-only, reviewed {res.params.decision_frequency}, filled at the {bt.options['fills']}, "
                    f"{res.params.cost_bps + res.params.slippage_bps:.0f} bps per side. Returns are for the capital allocated to this stock. "
+                   f"Sharpe and Sortino use {bt.options.get('risk_free', 'a fixed risk-free rate')}. "
                    "Past behaviour of a rule is evidence about its design, not a promise.")
         m, mb = bt.metrics, bt.summary().loc["Buy & hold"]
         ratio = lambda v: "n/a" if pd.isna(v) else f"{v:.2f}"            # noqa: E731
@@ -587,9 +659,7 @@ def render_result(res) -> None:
             with e2:
                 sens = res.extras.get("sensitivity")
                 if sens is not None and len(sens):
-                    metric = st.selectbox("Sensitivity metric", ["sharpe", "cagr", "max_drawdown", "win_rate"], key="sens_metric")
-                    plotly(figure(res, ("sensitivity", metric), lambda: ix.sensitivity(sens, metric)), key="sensitivity")
-                    st.caption("A robust rule shows a plateau of similar values; a single bright cell means the thresholds were fitted to noise.")
+                    sensitivity_section(res, sens)
                 wf = res.extras.get("walk_forward")
                 if wf is not None:
                     st.markdown(f"**Out-of-sample test** (thresholds tuned before {wf['split_date'].date()}, tested after)")
@@ -604,7 +674,17 @@ def render_result(res) -> None:
                 "pnl_pct": st.column_config.NumberColumn("Sleeve P&L", format="percent"), "holding_days": st.column_config.NumberColumn("Days held"),
                 "exit_reason": st.column_config.TextColumn("Exit reason")})
 
-    # ---- downloads --------------------------------------------------------
+
+
+@st.fragment
+def sensitivity_section(res, sens) -> None:
+    metric = st.selectbox("Sensitivity metric", ["sharpe", "cagr", "max_drawdown", "win_rate"], key="sens_metric")
+    plotly(figure(res, ("sensitivity", metric), lambda: ix.sensitivity(sens, metric)), key="sensitivity")
+    st.caption("A robust rule shows a plateau of similar values; a single bright cell means the thresholds were fitted to noise.")
+
+
+def downloads_section(res) -> None:
+    d, bt = res.decision, res.backtest
     st.markdown("#### Take it with you")
     dl1, dl2, dl3, dl4 = st.columns(4)
     dl1.download_button("Full report (Markdown)", res.report(), file_name=f"{d.ticker}_lighthouse_report.md", width="stretch")
@@ -713,6 +793,7 @@ def render_side(side: str, desk: dict) -> None:
             "risk_usd": st.column_config.NumberColumn("Risk $", format="$%.0f"), "risk_pct": st.column_config.NumberColumn("Risk % acct", format="%.2f%%"),
             "target1": st.column_config.NumberColumn("Target 1", format="$%.2f"), "target2": st.column_config.NumberColumn("Target 2", format="$%.2f"),
             "profit_t1": st.column_config.NumberColumn("Profit @T1", format="$%.0f"), "profit_all": st.column_config.NumberColumn("Profit @T1+T2", format="$%.0f"),
+            "exit": "Exits", "trend_exit": st.column_config.NumberColumn("Trend exit", format="$%.2f"),
             "hist_win_rate": st.column_config.NumberColumn("Hist. win %", format="%.0f%%"), "hist_avg_r": st.column_config.NumberColumn("Hist. R/trade", format="%+.2f")})
         st.download_button(f"Download {side} orders (CSV)", table.to_csv(index=False), file_name=f"lighthouse_{side}_orders.csv",
                            key=f"dl_orders_{side}")
@@ -722,11 +803,14 @@ def render_side(side: str, desk: dict) -> None:
                 st.markdown(f"**{pl.ticker}** · score {pl.composite_score:.0f} · " + esc(" ".join(pl.reasons)))
 
 
-with tab_desk:
+@st.fragment
+def desk_tab() -> None:
+    """The trade desk; its scans and tabs re-run on their own."""
     st.markdown("### Trade desk: what to buy (or sell short) right now with your cash")
     st.caption(f"Sized for {esc(money(cash))} of cash in a {esc(money(cash + holdings))} account, {horizon}-term, {risk} risk, max loss "
-               f"{max_loss:g}% of the account per position. Each idea gets an entry, a stop-loss, two take-profit levels, a trailing "
-               "and a time stop, and the record of those exact rules on the stock's own history. Change the targets and the "
+               f"{max_loss:g}% of the account per position. Each idea gets an entry, a stop-loss, its exits (long-term buys: "
+               "trend and signal exits reviewed each month; short-term trades and shorts: two take-profit levels, a trailing "
+               "and a time stop), and the record of those exact rules on the stock's own history. Change the exits and the "
                "risk caps under *Trade management* in the sidebar.")
     d_tab_long, d_tab_short = st.tabs(["📈 Long (buy)", "📉 Short (sell short)"])
     with d_tab_long:
@@ -755,6 +839,9 @@ with tab_desk:
         else:
             st.info("Run **Find trades now** on the Long tab first; the same scan feeds both sides.")
 
+
+with tab_desk:
+    desk_tab()
 
 # ============================================================================= PORTFOLIO BUILDER
 def render_portfolio(res, key: str) -> None:
@@ -813,7 +900,9 @@ def render_portfolio(res, key: str) -> None:
             st.dataframe(res.selection, width="stretch")
 
 
-with tab_port:
+@st.fragment
+def portfolio_tab() -> None:
+    """The portfolio builder; its inputs and results re-run on their own."""
     st.markdown("### Portfolio builder")
     st.caption("Give Lighthouse a basket and it works out the percentages, or pick a goal and it chooses the stocks too. Every portfolio "
                "comes with a risk report and a walk-forward test, and is turned into whole-share orders for your cash.")
@@ -828,8 +917,13 @@ with tab_port:
         lookback = e1.select_slider("Estimation window (sessions)", [126, 252, 504, 756], value=252, key="pf_lookback")
         rebalance = e2.selectbox("Rebalance", ["monthly", "quarterly"], key="pf_rebal")
         pf_cost = e3.number_input("Trading cost (bps per trade)", 0, 100, 10, key="pf_cost")
-        rf = e4.number_input("Risk-free rate (%/yr)", 0.0, 10.0, 2.0, 0.25, key="pf_rf",
-                             help="Used for Sharpe ratios and the maximum-Sharpe method. Use the current 3-month T-bill yield.") / 100
+        tbill = _risk_free(source)
+        rf_now = round(float(tbill.iloc[-1]) * 100, 2) if tbill is not None and len(tbill) else 2.0
+        rf = e4.number_input("Risk-free rate (%/yr)", 0.0, 10.0, rf_now, 0.25, key="pf_rf",
+                             help=(f"Today's 3-month T-bill (FRED DTB3, {tbill.index[-1].date()}): {rf_now:.2f}%. "
+                                   if tbill is not None and len(tbill) else "No T-bill data offline: 2%. ") +
+                                  "Used by the maximum-Sharpe method and the risk report. The walk-forward Sharpe ratios use "
+                                  "the T-bill rate of each day when it is available.") / 100
     if mode.startswith("My basket"):
         default_basket = "AAPL JNJ XOM JPM KO PG UNH WMT" if _is_offline() else "AAPL MSFT JNJ JPM XOM PG KO UNH"
         basket = pc2.text_input("Your stocks", value=default_basket, key="pf_basket")
@@ -876,13 +970,21 @@ with tab_port:
         gmax = g3.slider("Max per stock", 0.05, 1.0, float(g.max_weight), 0.05, key=f"pf_gmax_{goal}")
         gsec = g4.slider("Max per sector", 0.1, 1.0, float(g.max_sector_weight or 1.0), 0.05, key=f"pf_gsec_{goal}")
         gtv = g5.slider("Target volatility (%/yr, 0 = none)", 0, 40, int(round((g.target_vol or 0) * 100)), 1, key=f"pf_gtv_{goal}")
+        held_text = st.text_input(
+            "Stocks you already hold for this goal (optional)", "", key="pf_held",
+            disabled=g.keep_rank is None,
+            help="Rebalancing? List what you bought last time: each one is kept while it still qualifies for the goal, and "
+                 "only the free places are re-filled. That is the rule the walk-forward test follows; re-picking from "
+                 "scratch every month traded several times more." if g.keep_rank is not None else
+                 "This goal re-picks its stocks from scratch at every review.")
         if st.button("Build the goal portfolio", type="primary", key="pf_goal_go"):
             tick = _parse_tickers(utext)
+            held = tuple(_parse_tickers(held_text)) if g.keep_rank is not None else ()
             with st.spinner("Ranking the universe, optimising, and re-running the selection month by month for the walk-forward test ..."):
                 try:
                     st.session_state["pf_goal_res"] = _goal(goal, tick, int(n_st), int(per_sec), gmax, gsec if gsec < 1.0 else None,
                                                             gtv / 100 if gtv else None, float(capital), years, source, lookback,
-                                                            rebalance, float(pf_cost), rf)
+                                                            rebalance, float(pf_cost), rf, held)
                     st.session_state.pop("pf_goal_err", None)
                 except Exception as exc:  # noqa: BLE001
                     st.session_state.pop("pf_goal_res", None)
@@ -892,8 +994,14 @@ with tab_port:
         if st.session_state.get("pf_goal_res") is not None:
             render_portfolio(st.session_state["pf_goal_res"], "goal")
 
+
+with tab_port:
+    portfolio_tab()
+
 # ============================================================================= WATCHLIST
-with tab_screen:
+@st.fragment
+def watchlist_tab() -> None:
+    """The watchlist; ranking, row selection and the comparison chart re-run on their own."""
     st.markdown("### Rank a watchlist")
     st.caption("Every ticker is scored with your profile; the table is sortable, and selecting a row opens a summary card.")
     wl = universe_picker("wl_preset", "wl_text", OFFLINE_DEFAULT_LIST if _is_offline() else " ".join(get_universe("Mega caps")))
@@ -939,7 +1047,9 @@ with tab_screen:
                 st.markdown(f"<h4 style='margin:.4rem 0'>{r['name']} ({r['ticker']}) <span class='lh-verdict' style='background:{vc}'>{r['verdict']}</span> "
                             f"<span class='lh-muted' style='font-weight:400;font-size:1rem'>score {r['score']:.0f} · fundamental {r['fundamental'] if pd.notna(r['fundamental']) else 'n/a'} · "
                             f"technical {r['technical']:.0f} · weather {r['regime']} · suggested position {r['position_pct']:.1f}%</span></h4>", unsafe_allow_html=True)
-                st.button(f"Open the full analysis of {r['ticker']} (in the Analyse tab)", key="open_full", on_click=_open_from_watchlist, args=(r["ticker"],))
+                if st.button(f"Open the full analysis of {r['ticker']} (in the Analyse tab)", key="open_full"):
+                    _open_from_watchlist(r["ticker"])
+                    st.rerun(scope="app")      # the Analyse tab lives outside this fragment
             else:
                 st.info(f"{r['ticker']} could not be scored: {r['error']}")
         st.download_button("Download ranking (CSV)", sdf.to_csv(), file_name="lighthouse_watchlist.csv")
@@ -957,8 +1067,14 @@ with tab_screen:
             if series:
                 plotly(ix.compare_prices(series), key="compare")
 
+
+with tab_screen:
+    watchlist_tab()
+
 # ============================================================================= DATA
-with tab_data:
+@st.fragment
+def data_tab() -> None:
+    """The data behind the verdict; the column picker re-runs only this tab."""
     res = st.session_state.get("result")
     if res is None:
         st.info("Analyse a stock first; this tab then shows every number behind its verdict.")
@@ -996,6 +1112,10 @@ with tab_data:
                 st.dataframe(rg[["close", "sma", "vol", "vol_median", "regime"]].tail(250).sort_index(ascending=False), width="stretch")
             else:
                 st.info("No benchmark data, so no market-weather history.")
+
+
+with tab_data:
+    data_tab()
 
 # ============================================================================= ABOUT
 with tab_about:

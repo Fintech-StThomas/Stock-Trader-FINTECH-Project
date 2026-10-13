@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import product
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -57,20 +57,26 @@ class BacktestResult:
     params: StrategyParams
     profile: InvestorProfile
     options: Dict[str, object] = field(default_factory=dict)
+    risk_free: Optional[pd.Series] = None   # daily T-bill rate (annual fraction); None = params.risk_free_rate
+
+    @property
+    def rf(self) -> Union[float, pd.Series]:
+        """The risk-free rate the Sharpe and Sortino ratios use: the T-bill series when there is one, else the fixed rate."""
+        return self.risk_free if self.risk_free is not None else self.params.risk_free_rate
 
     # -- metrics ----------------------------------------------------------------
     @property
     def metrics(self) -> Dict[str, float]:
-        m = compute_metrics(self.equity, self.params.risk_free_rate, self.params.trading_days)
+        m = compute_metrics(self.equity, self.rf, self.params.trading_days)
         m.update(trade_metrics(self.trades))
         m["exposure"] = float(self.exposure.mean())
         return m
 
     def summary(self) -> pd.DataFrame:
         rows = {"Lighthouse strategy": self.metrics,
-                "Buy & hold": compute_metrics(self.buy_hold, self.params.risk_free_rate, self.params.trading_days)}
+                "Buy & hold": compute_metrics(self.buy_hold, self.rf, self.params.trading_days)}
         if self.benchmark is not None:
-            rows["S&P 500"] = compute_metrics(self.benchmark, self.params.risk_free_rate, self.params.trading_days)
+            rows["S&P 500"] = compute_metrics(self.benchmark, self.rf, self.params.trading_days)
         df = pd.DataFrame(rows).T
         cols = ["total_return", "cagr", "volatility", "sharpe", "sortino", "max_drawdown", "calmar",
                 "n_trades", "win_rate", "avg_win", "avg_loss", "profit_factor", "exposure", "years"]
@@ -94,7 +100,16 @@ class BacktestResult:
 # --------------------------------------------------------------------------- #
 # Metrics
 # --------------------------------------------------------------------------- #
-def compute_metrics(equity: pd.Series, risk_free_rate: float = 0.02, trading_days: int = 252) -> Dict[str, float]:
+def rate_on(rate: pd.Series, index: pd.Index) -> pd.Series:
+    """An annual rate published on some days (e.g. the T-bill) as a value for every date of `index`: the latest
+    published value (dates before the first one take the first)."""
+    s = rate.reindex(rate.index.union(index)).ffill().reindex(index)
+    return s.fillna(float(rate.iloc[0])) if len(rate) else s
+
+
+def compute_metrics(equity: pd.Series, risk_free_rate: Union[float, pd.Series] = 0.02, trading_days: int = 252) -> Dict[str, float]:
+    """Return and risk metrics of an equity curve. `risk_free_rate`: a fixed annual rate, or a series of annual rates
+    by date (the 3-month T-bill) applied day by day."""
     eq = equity.dropna()
     if len(eq) < 2:
         return {k: float("nan") for k in ["total_return", "cagr", "volatility", "sharpe", "sortino", "max_drawdown", "calmar", "years"]}
@@ -103,12 +118,17 @@ def compute_metrics(equity: pd.Series, risk_free_rate: float = 0.02, trading_day
     total = float(eq.iloc[-1] / eq.iloc[0] - 1.0)
     cagr = float((eq.iloc[-1] / eq.iloc[0]) ** (1.0 / years) - 1.0) if years > 0 else float("nan")
     vol = float(r.std(ddof=0) * np.sqrt(trading_days))
-    excess = r.mean() * trading_days - risk_free_rate
+    if isinstance(risk_free_rate, pd.Series):
+        rf_daily = rate_on(risk_free_rate, r.index) / trading_days
+        excess = float((r - rf_daily).mean() * trading_days)
+    else:
+        rf_daily = risk_free_rate / trading_days
+        excess = r.mean() * trading_days - risk_free_rate
     sharpe = float(excess / vol) if vol > 0 else float("nan")
     # Sortino & Price (1994): downside deviation below the target (here the risk-free rate), averaged over ALL
     # periods - not the standard deviation of the negative returns alone, which measures how losses vary around
     # their own average rather than how far returns fall short of the target.
-    shortfall = np.minimum(r - risk_free_rate / trading_days, 0.0)
+    shortfall = np.minimum(r - rf_daily, 0.0)
     downside = float(np.sqrt(np.mean(shortfall ** 2)) * np.sqrt(trading_days))
     sortino = float(excess / downside) if downside > 0 else float("nan")
     mdd = max_drawdown(eq)
@@ -142,7 +162,9 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
                  params: Optional[StrategyParams] = None, profile: Optional[InvestorProfile] = None,
                  fundamentals_pit: Optional[pd.Series] = None, use_regime: bool = True,
                  use_fundamental_gate: bool = True, use_stops: bool = True, sizing: str = "vol_target",
-                 start=None, end=None) -> BacktestResult:
+                 start=None, end=None, risk_free: Optional[pd.Series] = None) -> BacktestResult:
+    """`risk_free`: the daily 3-month T-bill rate for the Sharpe and Sortino ratios (data.load_risk_free); None uses
+    the fixed `params.risk_free_rate`. It changes no trade."""
     p = params or StrategyParams()
     prof = profile or InvestorProfile()
     ind = compute_indicators(prices, p)
@@ -298,13 +320,24 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
                             "regime_known": regime_known.astype(float), "in_market": in_market.astype(float)}, index=idx)
     return BacktestResult(prices.attrs.get("ticker", ""), eq, bh, bench, pd.Series(exposure, index=idx), signals, trades,
                           p, prof, {"use_regime": use_regime, "use_fundamental_gate": use_fundamental_gate,
-                                    "use_stops": use_stops, "sizing": sizing, "fills": "next open" if has_open else "next close"})
+                                    "use_stops": use_stops, "sizing": sizing, "fills": "next open" if has_open else "next close",
+                                    "risk_free": describe_risk_free(risk_free, idx, p.risk_free_rate)},
+                          risk_free=risk_free)
+
+
+def describe_risk_free(risk_free: Optional[pd.Series], index: pd.Index, fixed: float) -> str:
+    """One line on the risk-free rate behind the Sharpe and Sortino ratios."""
+    if risk_free is None or not len(risk_free) or not len(index):
+        return f"a fixed {fixed * 100:g}% a year (no T-bill series: offline or sample data)"
+    on = rate_on(risk_free, index)
+    return (f"the 3-month T-bill day by day (FRED DTB3): {on.mean() * 100:.1f}% a year on average over the test, "
+            f"{on.iloc[-1] * 100:.2f}% at its end")
 
 
 # --------------------------------------------------------------------------- #
 # Evaluation helpers
 # --------------------------------------------------------------------------- #
-def strategy_layers(prices, benchmark, params, profile, fundamentals_pit=None, start=None) -> pd.DataFrame:
+def strategy_layers(prices, benchmark, params, profile, fundamentals_pit=None, start=None, risk_free=None) -> pd.DataFrame:
     """Add the product's layers one at a time to show what each contributes."""
     variants = [
         ("Technical signals only (fully invested)", dict(use_regime=False, use_fundamental_gate=False, use_stops=False, sizing="full")),
@@ -317,24 +350,26 @@ def strategy_layers(prices, benchmark, params, profile, fundamentals_pit=None, s
     rows = {}
     base = None
     for name, opts in variants:
-        res = run_backtest(prices, benchmark, params, profile, fundamentals_pit, start=start, **opts)
+        res = run_backtest(prices, benchmark, params, profile, fundamentals_pit, start=start, risk_free=risk_free, **opts)
         rows[name] = res.metrics
         base = base or res
-    rows["Buy & hold"] = compute_metrics(base.buy_hold, params.risk_free_rate, params.trading_days)
+    rows["Buy & hold"] = compute_metrics(base.buy_hold, base.rf, params.trading_days)
     if base.benchmark is not None:
-        rows["S&P 500"] = compute_metrics(base.benchmark, params.risk_free_rate, params.trading_days)
+        rows["S&P 500"] = compute_metrics(base.benchmark, base.rf, params.trading_days)
     df = pd.DataFrame(rows).T
     return df.reindex(columns=["cagr", "volatility", "sharpe", "max_drawdown", "n_trades", "win_rate", "exposure"])
 
 
 def sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit=None,
-                     entry_values=(50, 55, 60, 65, 70), exit_values=(25, 30, 35, 40, 45), start=None) -> pd.DataFrame:
+                     entry_values=(50, 55, 60, 65, 70), exit_values=(25, 30, 35, 40, 45), start=None,
+                     risk_free=None) -> pd.DataFrame:
     """Backtest every (entry, exit) threshold pair. A robust rule has a *plateau*, not a single spike."""
     rows = []
     for e_in, e_out in product(entry_values, exit_values):
         if e_out >= e_in:
             continue
-        res = run_backtest(prices, benchmark, params.copy(entry_score=e_in, exit_score=e_out), profile, fundamentals_pit, start=start)
+        res = run_backtest(prices, benchmark, params.copy(entry_score=e_in, exit_score=e_out), profile, fundamentals_pit, start=start,
+                           risk_free=risk_free)
         m = res.metrics
         rows.append({"entry": e_in, "exit": e_out, "cagr": m["cagr"], "sharpe": m["sharpe"],
                      "max_drawdown": m["max_drawdown"], "n_trades": m["n_trades"], "win_rate": m["win_rate"]})
@@ -357,22 +392,24 @@ def parameter_sweep(prices, benchmark, params, profile, fundamentals_pit, name: 
 
 
 def walk_forward(prices, benchmark, params, profile, fundamentals_pit=None, split: float = 0.6,
-                 entry_values=(50, 55, 60, 65, 70), exit_values=(25, 30, 35, 40, 45)) -> Dict[str, object]:
+                 entry_values=(50, 55, 60, 65, 70), exit_values=(25, 30, 35, 40, 45), risk_free=None) -> Dict[str, object]:
     """Tune thresholds on the first `split` of history, then test them - untouched - on the rest.
 
     Reports the default rule and the tuned rule on the out-of-sample window, so the
     investor can see whether tuning helped or merely fitted noise.
     """
-    base = run_backtest(prices, benchmark, params, profile, fundamentals_pit)
+    base = run_backtest(prices, benchmark, params, profile, fundamentals_pit, risk_free=risk_free)
+    rf = base.rf
     idx = base.equity.index
     split_date = idx[int(len(idx) * split)]
-    grid = sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit, entry_values, exit_values, start=None)
+    grid = sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit, entry_values, exit_values, start=None,
+                            risk_free=risk_free)
     # in-sample: metrics restricted to the training window
     rows = []
     for _, g in grid.iterrows():
         res = run_backtest(prices, benchmark, params.copy(entry_score=g["entry"], exit_score=g["exit"]), profile, fundamentals_pit)
         is_eq = res.equity[res.equity.index < split_date]
-        m = compute_metrics(is_eq, params.risk_free_rate, params.trading_days)
+        m = compute_metrics(is_eq, rf, params.trading_days)
         rows.append({"entry": g["entry"], "exit": g["exit"], "is_sharpe": m["sharpe"], "is_cagr": m["cagr"],
                      "is_trades": sum(1 for t in res.trades if t.exit_date < split_date)})
     is_df = pd.DataFrame(rows)
@@ -384,7 +421,7 @@ def walk_forward(prices, benchmark, params, profile, fundamentals_pit=None, spli
         res = run_backtest(prices, benchmark, p, profile, fundamentals_pit)
         eq = res.equity[res.equity.index >= split_date]
         eq = eq / eq.iloc[0]
-        m = compute_metrics(eq, params.risk_free_rate, params.trading_days)
+        m = compute_metrics(eq, rf, params.trading_days)
         m["n_trades"] = sum(1 for t in res.trades if t.entry_date >= split_date)
         return m, eq, res
 
@@ -392,7 +429,7 @@ def walk_forward(prices, benchmark, params, profile, fundamentals_pit=None, spli
     m_tuned, eq_tuned, _ = oos(tuned)
     bh = base.buy_hold[base.buy_hold.index >= split_date]
     bh = bh / bh.iloc[0]
-    m_bh = compute_metrics(bh, params.risk_free_rate, params.trading_days)
+    m_bh = compute_metrics(bh, rf, params.trading_days)
     table = pd.DataFrame({f"Default rule ({params.entry_score:.0f}/{params.exit_score:.0f})": m_default, f"Tuned in-sample ({best['entry']:.0f}/{best['exit']:.0f})": m_tuned,
                           "Buy & hold": m_bh}).T
     return {"split_date": split_date, "in_sample": is_df, "best_in_sample": best, "tuned_params": tuned,

@@ -94,7 +94,7 @@ beacon_frame_df(f_beacons)""")
 md("""## 4 · Technical analysis
 
 Six beacons, all computed with **causal** indicators (no future data leaks into any value): trend (50/200-day SMA, Golden/Death
-Cross), RSI(14), MACD(12/26/9), position in the low-lag price bands (%B around a 20-day Hull moving average), volume confirmation (OBV + 20/60-day volume ratio) and distance from the 52-week high.
+Cross), RSI(14), MACD(12/26/9), position in the low-lag price bands (%B around Holt's trend filter, about 1 session behind the price), volume confirmation (OBV + 20/60-day volume ratio) and distance from the 52-week high.
 The weights depend on the horizon: long-term investors lean on trend and breakouts; short-term on momentum oscillators.""")
 code("""from lighthouse.technicals import compute_indicators, technical_score, latest_beacons
 ind = compute_indicators(prices, params)
@@ -172,9 +172,11 @@ display(ranking[["ticker", "name", "verdict", "score", "fundamental", "technical
 fig = ch.plot_screener(ranking); plt.show()""")
 md("""## 9 · Trade ticket: buy or short it right now
 
-The ticket sizes the trade from your **cash**, sets the stop-loss, two take-profit levels (in multiples of the risk, *R*),
-a trailing stop and a time stop, and replays those exact rules on the stock's own history. Shorts mirror the long rules and
-always use the tactical short-horizon stop.""")
+The ticket sizes the trade from your **cash**, sets the stop-loss and the exits, and replays those exact rules on the
+stock's own history. A long-term buy has no fixed profit target: it is sold after a month-end close below the 200-day SMA
+− 8% (a level that rises with the trend) or when the technical score fades to 35, the backtest's own exits. Short-term
+trades and shorts take profit at two levels in multiples of the risk (*R*) with a trailing and a time stop. Shorts mirror
+the long rules and always use the tactical short-horizon stop.""")
 code("""from lighthouse.tradeplan import build_trade_plan, TradeSettings
 settings = TradeSettings(reward_multiples=(2, 3), partial_exit=0.5)
 for side in ("long", "short"):

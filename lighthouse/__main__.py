@@ -74,7 +74,10 @@ def main(argv=None) -> int:
         sp.add_argument("--side", choices=["long", "short"], default="long")
         sp.add_argument("--targets", type=float, nargs=2, default=[2.0, 3.0], metavar=("R1", "R2"), help="take-profit levels in R")
         sp.add_argument("--partial", type=float, default=0.5, help="share of the position sold at target 1")
-        sp.add_argument("--time-stop", type=int, default=None, help="sessions (default: 40 short horizon / 252 long)")
+        sp.add_argument("--time-stop", type=int, default=None,
+                        help="sessions (default: 40 short horizon / 252 long with --long-exit targets; none for trend exits)")
+        sp.add_argument("--long-exit", choices=["trend", "targets"], default="trend",
+                        help="long-horizon buys: monthly trend and signal exits (default, tested best) or R-multiple targets")
 
     a4 = sub.add_parser("trade", help="trade tickets for your cash across one or more tickers"); common(a4); trade_opts(a4)
     universe_opt(a4)
@@ -94,6 +97,8 @@ def main(argv=None) -> int:
     a6.add_argument("--max-weight", type=float, default=None); a6.add_argument("--max-sector", type=float, default=None)
     a6.add_argument("--target-vol", type=float, default=None, help="annual, e.g. 0.12; holds cash above it")
     a6.add_argument("--n", type=int, default=None, help="number of stocks for --goal")
+    a6.add_argument("--held", nargs="*", default=None,
+                    help="stocks you already hold for --goal: kept while they still qualify (balanced, growth, diversified)")
 
     sub.add_parser("universes", help="list the pre-built universes")
 
@@ -139,6 +144,7 @@ def main(argv=None) -> int:
     if a.cmd in {"trade", "monitor"}:
         from .tradeplan import TradeSettings, allocate_ideas, monitor_position, signed_usd
         s = TradeSettings(reward_multiples=tuple(sorted(a.targets)), partial_exit=a.partial, time_stop_days=a.time_stop,
+                          long_exit=a.long_exit,
                           **({"max_ideas": a.max_ideas, "max_total_risk_pct": a.max_total_risk} if a.cmd == "trade" else {}))
         prof = _profile(a)
         if a.cmd == "monitor":
@@ -176,7 +182,8 @@ def main(argv=None) -> int:
         if not funded:
             print(f"no actionable {a.side} setup in {', '.join(a.tickers)}")
         if len(table):
-            print("\n" + table[["ticker", "status", "score", "shares", "cost", "stop", "target1", "target2", "risk_usd"]].to_string(index=False))
+            print("\n" + table[["ticker", "status", "score", "shares", "cost", "stop", "target1", "target2", "trend_exit",
+                                 "risk_usd"]].to_string(index=False))
         return 0
 
     if a.cmd == "portfolio":
@@ -186,7 +193,8 @@ def main(argv=None) -> int:
             g = pf.GOALS[a.goal]
             cons = pf.PortfolioConstraints(max_weight=a.max_weight or g.max_weight, max_sector_weight=a.max_sector or g.max_sector_weight,
                                            target_vol=a.target_vol if a.target_vol is not None else g.target_vol)
-            res = pf.goal_portfolio(a.goal, a.tickers or None, capital=cash, years=a.years, source=a.source, n_stocks=a.n, constraints=cons)
+            res = pf.goal_portfolio(a.goal, a.tickers or None, capital=cash, years=a.years, source=a.source, n_stocks=a.n, constraints=cons,
+                                    held=a.held)
         else:
             if not a.tickers:
                 print("give tickers, or --goal"); return 1

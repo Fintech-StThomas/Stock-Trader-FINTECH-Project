@@ -29,8 +29,10 @@ def test_memo_keys_on_content_and_on_parameters_that_matter(prices):
     swapped = prices.copy()
     swapped.iloc[[-1, -2], swapped.columns.get_loc("Close")] = prices["Close"].iloc[[-2, -1]].to_numpy()   # same sums
     assert memo.frame_fingerprint(swapped) != memo.frame_fingerprint(prices)
+    faster = compute_indicators(prices, StrategyParams(band_alpha=0.5))
+    assert not np.allclose(faster["band_mid"].dropna().tail(50), base["band_mid"].dropna().tail(50))
     wider = compute_indicators(prices, StrategyParams(band_window=30))
-    assert not np.allclose(wider["band_mid"].dropna().tail(50), base["band_mid"].dropna().tail(50))
+    assert not np.allclose(wider["band_upper"].dropna().tail(50), base["band_upper"].dropna().tail(50))
     # trading thresholds never change an indicator, so a sensitivity grid reuses one computation
     k1 = memo.params_key(StrategyParams(entry_score=55, exit_score=30, cost_bps=20))
     assert k1 == memo.params_key(StrategyParams())
@@ -79,3 +81,22 @@ def test_charts_draw_every_level_and_regime_in_one_layout():
     full = ix.dashboard(r, last_days=len(r.indicators))          # the full history used to take seconds to shade
     rects = [s for s in full.layout.shapes if s.type == "rect"]
     assert len(rects) > 10 and {(s.xref, s.yref) for s in rects} == {("x", "y domain")}
+
+
+def test_long_charts_are_drawn_from_weekly_points():
+    pytest.importorskip("plotly")
+    from lighthouse import analyze
+    from lighthouse import interactive as ix
+    from lighthouse.indicators import drawdown
+    r = analyze("AAPL", source="sample", years=20)
+    full = ix.dashboard(r, last_days=len(r.indicators))
+    close = next(t for t in full.data if t.name == "Close")
+    assert len(close.x) < len(r.indicators) / 4                       # one point a week
+    assert close.y[-1] == pytest.approx(r.indicators["Close"].iloc[-1])  # the last session is always kept
+    assert "weekly points" in full.layout.annotations[0].text
+    short = ix.dashboard(r, last_days=252)                             # a year stays daily
+    assert len(next(t for t in short.data if t.name == "Close").x) == 252
+    vol = ix._thin(r.indicators, sums=("Volume",))
+    assert vol["Volume"].sum() == pytest.approx(r.indicators["Volume"].sum())   # weekly volume is the week's total
+    dd = drawdown(r.backtest.equity)
+    assert ix._thin(dd, how="min").min() == pytest.approx(dd.min())    # the deepest drawdown survives thinning

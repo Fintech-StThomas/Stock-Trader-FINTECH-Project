@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import pandas as pd
 
 from lighthouse import indicators as ind
@@ -95,15 +96,40 @@ def test_wma_and_hull_ma():
     assert np.allclose(hull_lag, 2 / 3)                       # the Hull MA trails a straight line by 2/3 of a session
 
 
+def test_holt_trend_tracks_a_trend_without_lag():
+    ramp = pd.Series(np.arange(300, dtype=float))             # +1 a session
+    assert np.allclose((ramp - ind.holt_trend(ramp)).tail(50), 0.0, atol=1e-6)   # no lag on a straight line
+    step = pd.Series(np.r_[np.zeros(100), np.ones(100)])
+    h = ind.holt_trend(step, 0.4, 0.1).to_numpy()[100:]
+    assert h[0] == pytest.approx(0.4)                         # covers 40% of a jump on the day it happens ...
+    assert h[1] > 0.5 and h[3] > 0.9 and h.max() < 1.1        # ... more than half by the next session, little overshoot
+    sma_step = ind.sma(step, 20).to_numpy()[100:]
+    hull_step = ind.hull_ma(step, 20).to_numpy()[100:]
+    assert np.argmax(sma_step >= 0.5) == 9 and np.argmax(hull_step >= 0.5) == 3 and np.argmax(h >= 0.5) == 1
+    # the recursion as written, by hand
+    x = pd.Series([10.0, 11.0, np.nan, 12.5, 12.0])
+    lvl, slope, ref = 10.0, 0.0, [10.0]
+    for v in (11.0, 12.5, 12.0):
+        prev = lvl
+        lvl = 0.4 * v + 0.6 * (lvl + slope)
+        slope = 0.1 * (lvl - prev) + 0.9 * slope
+        ref.append(lvl)
+    got = ind.holt_trend(x, 0.4, 0.1)
+    assert np.isnan(got.iloc[2]) and np.allclose(got.dropna().to_numpy(), ref)
+    assert ind.holt_trend(x, 0.4, 0.1, min_periods=3).notna().sum() == 2
+
+
 def test_lowlag_bands_follow_the_price(prices):
     close = prices["Close"]
     mid, up, lo, pct_b = ind.lowlag_bands(close, 20, 2.0)
+    assert mid.iloc[:19].isna().all() and mid.iloc[19:].notna().all()
     valid = pct_b.dropna().index
     assert (up[valid] >= mid[valid]).all() and (lo[valid] <= mid[valid]).all()
     assert np.allclose(pct_b[valid], ((close - lo) / (up - lo))[valid])
     gap_low = (close - mid).abs().div(close)[valid].mean()
     gap_sma = (close - ind.sma(close, 20)).abs().div(close)[valid].mean()
-    assert gap_low < 0.75 * gap_sma                           # the centre sits much closer to the price
+    gap_hull = (close - ind.hull_ma(close, 20)).abs().div(close)[valid].mean()
+    assert gap_low < 0.75 * gap_hull < 0.75 * gap_sma         # the centre sits much closer to the price than either
     inside = ((close >= lo) & (close <= up))[valid]
     assert inside.mean() > 0.85                               # most closes sit inside the 2-sigma bands
     assert np.allclose(((up - lo) / 2 + lo)[valid], mid[valid])
