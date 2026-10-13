@@ -349,6 +349,18 @@ A cold live screen of the 12 mega caps took 41 s one ticker at a time and 8 s wi
 * **Imports**: the app no longer loads matplotlib (`palette.py` holds the shared colours), and scipy loads only when an
   optimiser runs.
 
+* **Fragments** (third October 2026 session): each interactive section is an `st.fragment`, so a click re-runs only its
+  section: on the Analyse tab the trade ticket's side, the beacon filter, the chart lookback, the what-if sizer and the
+  sensitivity metric; and each of the trade desk, portfolio builder, watchlist and data tabs as a whole. Measured in
+  headless Chromium (click until Streamlit reports idle, median of 8, MSFT analysed): chart lookback 1.34 → 1.11 s, beacon
+  filter 1.12 → 0.73 s, ticket side 1.20 → 0.79 s. What remains is mostly the browser redrawing that section's charts.
+  The watchlist's "open the full analysis" button asks for a full re-run explicitly, because the Analyse tab lives
+  outside its fragment.
+* **Weekly points for long charts**: a price, backtest, walk-forward, comparison or portfolio chart longer than ~3 years
+  (800 sessions) is drawn from each week's last session (volume summed over the week, drawdowns from the week's low, so
+  the deepest drawdown survives; trade markers and every table keep daily values). The full-history price chart of a
+  25-year analysis went from 3.2 MB to 0.7 MB of chart data and the backtest chart from 1.8 MB to 0.4 MB.
+
 Every published number is unchanged by these changes: the cross-ticker table and the MSFT example report regenerate
 byte for byte. What is still slow: a portfolio walk-forward test (6 methods × ~120 monthly optimisations, about 1.5 s
 for 8 stocks), and a cold live scan, which is bound by Yahoo's response time (fundamentals are 7 requests per ticker).

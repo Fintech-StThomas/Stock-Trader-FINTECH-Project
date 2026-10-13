@@ -10,7 +10,7 @@ report and the notebook; this module is only imported by the app.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,30 @@ FONT = dict(family="Source Sans Pro, Segoe UI, Helvetica, Arial, sans-serif", si
 _MODEBAR_REMOVE = ["lasso2d", "select2d", "autoScale2d"]
 PLOTLY_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": _MODEBAR_REMOVE, "responsive": True,
                  "toImageButtonOptions": {"format": "png", "scale": 2}}
+
+
+# Windows longer than this many sessions (~3 years) are drawn from weekly points: a browser receives ~5x fewer points
+# per trace and a long chart looks the same at screen resolution. Tables, metrics and trade markers keep daily values.
+MAX_DAILY_POINTS = 800
+
+
+def _thin(obj, sums: Sequence[str] = (), how: str = "last", max_points: int = MAX_DAILY_POINTS):
+    """`obj` (a frame or a series on a date index) cut to one point a week when it has more than `max_points` rows:
+    each week's last session (`how="min"`: the week's lowest value, so a drawdown's trough survives); columns in
+    `sums` are summed over the week (volume). Shorter inputs come back unchanged."""
+    if len(obj) <= max_points:
+        return obj
+    period = pd.DatetimeIndex(obj.index).to_period("W").asi8
+    last = np.ones(len(period), dtype=bool)
+    last[:-1] = period[:-1] != period[1:]
+    if how == "min":
+        out = obj.groupby(period).min()
+        out.index = obj.index[last]
+        return out
+    out = obj[last].copy()
+    for col in sums:
+        out[col] = obj[col].groupby(period).sum(min_count=1).to_numpy()
+    return out
 
 
 def _base_layout(fig: go.Figure, title: Optional[str] = None, height: Optional[int] = None, **kw) -> go.Figure:
@@ -208,14 +232,18 @@ def _add_bands(fig, ind: pd.DataFrame, spec: dict, alpha: float, **rc) -> None:
 
 
 def dashboard(result, last_days: int = 756, height: Optional[int] = None) -> go.Figure:
-    """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons."""
-    ind = result.indicators.tail(last_days)
+    """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons. Windows
+    longer than ~3 years are drawn from weekly points (volume summed over the week)."""
+    daily = result.indicators.tail(last_days)
+    ind = _thin(daily, sums=("Volume",))
+    weekly = len(ind) < len(daily)
     p = result.params
     spec = _band_spec(p)
     has_vol = ind["Volume"].notna().any()
     rows = 4 if has_vol else 3
     heights = [0.5, 0.14, 0.18, 0.18] if has_vol else [0.56, 0.22, 0.22]
-    titles = [f"Price, trend and {spec['title']}"] + (["Volume"] if has_vol else []) + \
+    titles = [f"Price, trend and {spec['title']}" + (" · weekly points" if weekly else "")] + \
+             ([f"Volume{' (weekly)' if weekly else ''}"] if has_vol else []) + \
              [f"RSI ({p.rsi_window}) · dashed = {p.rsi_overbought:.0f} / {p.rsi_oversold:.0f}", f"MACD ({p.macd_fast}/{p.macd_slow}/{p.macd_signal})"]
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.045, row_heights=heights, subplot_titles=titles)
 
@@ -280,22 +308,23 @@ def backtest(bt, regimes: Optional[pd.DataFrame] = None, height: int = 640) -> g
     from .indicators import drawdown
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06, row_heights=[0.56, 0.26, 0.18],
                         subplot_titles=["Growth of $1 (log scale)", "Drawdown from peak", "Fraction of the sleeve invested"])
-    used = _shade_regimes(fig, regimes, bt.equity.index, row=1)
-    series = [("Lighthouse strategy", bt.equity, SERIES["strategy"]), ("Buy & hold", bt.buy_hold, SERIES["buy_hold"])]
+    used = _shade_regimes(fig, regimes, _thin(bt.equity).index, row=1)
+    series = [("Lighthouse strategy", _thin(bt.equity), SERIES["strategy"]), ("Buy & hold", _thin(bt.buy_hold), SERIES["buy_hold"])]
     if bt.benchmark is not None:
-        series.append(("S&P 500", bt.benchmark, SERIES["benchmark"]))
+        series.append(("S&P 500", _thin(bt.benchmark), SERIES["benchmark"]))
     for name, s, color in series:
         fig.add_trace(go.Scatter(x=s.index, y=s, name=name, line=dict(color=color, width=1.7),
                                  hovertemplate="%{y:.2f}x<extra>" + name + "</extra>"), row=1, col=1)
         fig.add_annotation(x=s.index[-1], y=np.log10(s.iloc[-1]), text=f"{s.iloc[-1]:.2f}x", showarrow=False, xanchor="left",
                            xshift=4, font=dict(size=11, color=color), row=1, col=1)
-    fig.add_trace(go.Scatter(x=bt.equity.index, y=drawdown(bt.equity), name="strategy drawdown", fill="tozeroy",
+    dd_s, dd_b, expo = _thin(drawdown(bt.equity), how="min"), _thin(drawdown(bt.buy_hold), how="min"), _thin(bt.exposure)
+    fig.add_trace(go.Scatter(x=dd_s.index, y=dd_s, name="strategy drawdown", fill="tozeroy",
                              line=dict(color=SERIES["strategy"], width=1), fillcolor="rgba(42,120,214,0.35)",
                              hovertemplate="%{y:.1%}<extra>strategy drawdown</extra>", showlegend=False), row=2, col=1)
-    fig.add_trace(go.Scatter(x=bt.buy_hold.index, y=drawdown(bt.buy_hold), name="buy & hold drawdown",
+    fig.add_trace(go.Scatter(x=dd_b.index, y=dd_b, name="buy & hold drawdown",
                              line=dict(color=SERIES["buy_hold"], width=1.2), hovertemplate="%{y:.1%}<extra>buy & hold drawdown</extra>",
                              showlegend=False), row=2, col=1)
-    fig.add_trace(go.Scatter(x=bt.exposure.index, y=bt.exposure, name="invested", fill="tozeroy", line=dict(color="#86b6ef", width=0.8),
+    fig.add_trace(go.Scatter(x=expo.index, y=expo, name="invested", fill="tozeroy", line=dict(color="#86b6ef", width=0.8),
                              fillcolor="rgba(134,182,239,0.6)", hovertemplate="%{y:.0%} invested<extra></extra>", showlegend=False), row=3, col=1)
     _regime_legend(fig, used, row=1)
     m = bt.metrics
@@ -349,7 +378,7 @@ def sensitivity(grid: pd.DataFrame, metric: str = "sharpe", height: int = 420) -
 
 
 def walk_forward(wf: dict, height: int = 380) -> go.Figure:
-    eq = wf["oos_equity"]
+    eq = _thin(wf["oos_equity"])
     fig = go.Figure()
     for col, name, color in (("default", "Default rule", SERIES["strategy"]), ("tuned", "Rule tuned in-sample", "#4a3aa7"),
                              ("buy_hold", "Buy & hold", SERIES["buy_hold"])):
@@ -393,6 +422,7 @@ def compare_prices(series: Dict[str, pd.Series], height: int = 420) -> go.Figure
         s = s.dropna()
         if s.empty:
             continue
+        s = _thin(s)
         fig.add_trace(go.Scatter(x=s.index, y=s / s.iloc[0] * 100, name=name, line=dict(color=palette[i % len(palette)], width=1.6),
                                  hovertemplate="%{y:.0f}<extra>" + name + "</extra>"))
     _base_layout(fig, title="Price performance, rebased to 100", height=height)
@@ -489,10 +519,10 @@ def equity_curves(runs: Dict[str, object], height: int = 520) -> go.Figure:
     palette = [SERIES["strategy"], "#4a3aa7", SERIES["buy_hold"], "#d03b3b", "#fab219", "#1c5cab", "#ec835a", SERIES["benchmark"]]
     for i, (key, bt) in enumerate(runs.items()):
         color = SERIES["benchmark"] if key == "benchmark" else palette[i % len(palette)]
-        eq = bt.equity
+        eq, dd = _thin(bt.equity), _thin(drawdown(bt.equity), how="min")
         fig.add_trace(go.Scatter(x=eq.index, y=eq, name=bt.label, line=dict(color=color, width=1.6),
                                  hovertemplate="%{y:.2f}x<extra>" + bt.label + "</extra>"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=eq.index, y=drawdown(eq), name=bt.label, line=dict(color=color, width=1), showlegend=False,
+        fig.add_trace(go.Scatter(x=dd.index, y=dd, name=bt.label, line=dict(color=color, width=1), showlegend=False,
                                  hovertemplate="%{y:.1%}<extra>" + bt.label + "</extra>"), row=2, col=1)
     _base_layout(fig, height=height)
     fig.update_layout(legend=dict(y=1.06), margin=dict(t=80))
