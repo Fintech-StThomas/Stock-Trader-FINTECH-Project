@@ -17,7 +17,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .charts import SERIES, STATUS, REGIME_FILL, INK2, GRID
+from .palette import SERIES, STATUS, REGIME_FILL, INK2, GRID
 from .config import VERDICT_BANDS
 
 VERDICT_COLOR = {"Strong Buy": STATUS["green"], "Buy": "#1baf7a", "Hold": STATUS["amber"], "Reduce": "#ec835a", "Sell": STATUS["red"]}
@@ -63,12 +63,21 @@ def _regime_spans(regimes: Optional[pd.DataFrame], index: pd.Index) -> List[Tupl
 def _shade_regimes(fig: go.Figure, regimes: Optional[pd.DataFrame], index: pd.Index, row: int = 1) -> List[Tuple[str, str]]:
     """Draw the regime rectangles behind panel `row`; returns the (label, colour) pairs used, for `_regime_legend`."""
     used: Dict[str, str] = {}
+    try:
+        sub = fig.get_subplot(row, 1)
+        xref, yref = sub.xaxis.plotly_name.replace("axis", ""), sub.yaxis.plotly_name.replace("axis", "")
+    except Exception:  # noqa: BLE001 - a figure without subplots
+        xref, yref = "x", "y"
+    shapes = []
     for x0, x1, label, color in _regime_spans(regimes, index):
-        # exclude_empty_subplots=False: the shading is drawn before the panel's traces, and Plotly's default
-        # (True) silently drops shapes aimed at a subplot that has no trace yet.
-        fig.add_vrect(x0=x0, x1=x1, fillcolor=color, opacity=0.55, layer="below", line_width=0, row=row, col=1,
-                      exclude_empty_subplots=False)
+        # one layout update for all the spans: fig.add_vrect re-validates the whole layout on every call, which took
+        # seconds for a long history. Shapes set directly are also never dropped for a subplot without traces yet
+        # (the add_vrect default that once hid the shading).
+        shapes.append(dict(type="rect", xref=xref, yref=f"{yref} domain", x0=x0, x1=x1, y0=0, y1=1, fillcolor=color,
+                           opacity=0.55, layer="below", line_width=0))
         used[label] = color
+    if shapes:
+        fig.update_layout(shapes=list(fig.layout.shapes or ()) + shapes)
     return list(used.items())
 
 
@@ -422,9 +431,12 @@ def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Fig
         levels.append(("stop", plan.stop, STATUS["red"], "dash"))
     for k, t in enumerate(plan.targets):
         levels.append((f"target {k + 1} ({t.r_multiple:g}R)", t.price, STATUS["green"], "dot"))
-    for label, y, color, dash in levels:
-        fig.add_hline(y=y, line=dict(color=color, width=1.4, dash=dash), annotation_text=f"{label} ${y:,.2f}",
-                      annotation_position="right", annotation_font=dict(size=11, color=color))
+    # one layout update (fig.add_hline re-validates the whole layout on every call)
+    fig.update_layout(
+        shapes=[dict(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=y, y1=y, line=dict(color=color, width=1.4, dash=dash))
+                for _, y, color, dash in levels],
+        annotations=[dict(xref="x domain", yref="y", x=1, y=y, xanchor="left", yanchor="middle", showarrow=False,
+                          text=f"{label} ${y:,.2f}", font=dict(size=11, color=color)) for label, y, color, _ in levels])
     side = "LONG" if plan.side == "long" else "SHORT"
     _base_layout(fig, title=f"{plan.ticker} · {side} ticket levels · data to {plan.as_of}", height=height)
     fig.update_layout(margin=dict(r=150))

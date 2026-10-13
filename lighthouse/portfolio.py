@@ -30,14 +30,12 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import leaves_list, linkage
-from scipy.optimize import minimize
-from scipy.spatial.distance import squareform
 
 from .backtest import compute_metrics
 from .config import StrategyParams
 from .data import DataUnavailable, load_prices
 from .indicators import max_drawdown
+from .parallel import map_tickers
 from .technicals import compute_indicators, technical_score
 from .universe import UNKNOWN_SECTOR, sectors_for
 
@@ -128,15 +126,13 @@ def load_universe(tickers: Iterable[str], years: float = 10, source: str = "auto
     """Load and align prices. Tickers that fail, are too short, or whose data ends well before the others' are left
     out (and reported), so one stale series cannot cut everyone's history short."""
     frames, excluded, sources = {}, {}, {}
-    for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip()):
-        try:
-            df = load_prices(t, years=years, source=source)
-            if len(df) < min_days:
-                excluded[t] = f"only {len(df)} trading days"
-                continue
-            frames[t], sources[t] = df, str(df.attrs.get("source"))
-        except Exception as exc:  # noqa: BLE001 - one bad ticker must not kill the portfolio
-            excluded[t] = f"{type(exc).__name__}: {str(exc)[:120]}"
+    loaded, errors = map_tickers(lambda t: load_prices(t, years=years, source=source), tickers, source=source)
+    excluded.update(errors)                  # one bad ticker must not kill the portfolio
+    for t, df in loaded.items():
+        if len(df) < min_days:
+            excluded[t] = f"only {len(df)} trading days"
+            continue
+        frames[t], sources[t] = df, str(df.attrs.get("source"))
     if not frames:
         raise DataUnavailable("no ticker in the basket could be loaded: " + "; ".join(f"{k} ({v})" for k, v in excluded.items()))
     latest = max(df.index[-1] for df in frames.values())
@@ -244,6 +240,7 @@ def _feasible(w: np.ndarray, cons: PortfolioConstraints, sectors: Optional[Seque
 
 
 def _solve(fun, jac, x0: np.ndarray, cons: PortfolioConstraints, sectors: Optional[Sequence[str]]) -> np.ndarray:
+    from scipy.optimize import minimize   # imported on first use: scipy adds ~0.25 s to start-up
     n = len(x0)
     res = minimize(fun, x0, jac=jac, method="SLSQP", bounds=[(cons.min_weight, cons.max_weight)] * n,
                    constraints=_weight_constraints(n, cons, sectors), options={"maxiter": 500, "ftol": 1e-12})
@@ -269,6 +266,7 @@ def _min_variance(cov: np.ndarray, cons, sectors) -> np.ndarray:
 
 def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tuple[np.ndarray, str]:
     """Tangency portfolio via the convex reformulation: min y'Σy s.t. (mu - rf)'y = 1, y >= 0, caps scaled by sum(y)."""
+    from scipy.optimize import minimize
     n = len(mu)
     ex = mu - rf
     if not (ex > 0).any():
@@ -298,6 +296,7 @@ def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tu
 
 
 def _risk_parity(cov: np.ndarray, cons, sectors) -> Tuple[np.ndarray, str]:
+    from scipy.optimize import minimize
     n = len(cov)
     # Spinu (2013): the minimiser of 1/2 y'Σy - (1/n) Σ log y gives equal risk contributions after normalising
     fun = lambda y: 0.5 * float(y @ cov @ y) - float(np.sum(np.log(y))) / n          # noqa: E731
@@ -320,6 +319,8 @@ def _risk_parity(cov: np.ndarray, cons, sectors) -> Tuple[np.ndarray, str]:
 def _hrp(cov: np.ndarray) -> np.ndarray:
     """López de Prado (2016): single-linkage clustering on the correlation distance sqrt((1 - rho) / 2), quasi-diagonal
     ordering, then recursive bisection with inverse-variance weights inside each cluster."""
+    from scipy.cluster.hierarchy import leaves_list, linkage
+    from scipy.spatial.distance import squareform
     n = len(cov)
     if n == 1:
         return np.ones(1)

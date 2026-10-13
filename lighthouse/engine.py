@@ -3,10 +3,9 @@ The one-call pipeline: data -> fundamentals -> technicals -> regime -> decision 
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -16,6 +15,7 @@ from .config import InvestorProfile, StrategyParams
 from .data import EXCHANGE_TZ, Quote, load_prices, load_benchmark, load_fundamentals, load_quote, align, DataUnavailable
 from .decision import Decision, make_decision
 from .fundamentals import FundamentalSnapshot, StatementHistory, fundamental_beacons, fundamental_score, point_in_time_scores
+from .parallel import map_tickers
 from .regime import regime_table, latest_regime, RegimeSnapshot
 from .technicals import compute_indicators, technical_score, latest_beacons
 
@@ -187,3 +187,9 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
                           benchmark=bench, regimes=regimes, fundamentals=snap, statements=hist, pit_scores=pit,
                           decision=decision, backtest=bt, warnings=list(dict.fromkeys(warnings)), quote=quote,
                           partial_bar=partial)
+
+
+def analyze_many(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, params: Optional[StrategyParams] = None,
+                 max_workers: Optional[int] = None, **kwargs) -> Tuple[Dict[str, AnalysisResult], Dict[str, str]]:
+    """`analyze` for several tickers (parallel when live). Returns ({ticker: result}, {ticker: error})."""
+    return map_tickers(lambda t: analyze(t, profile, params, **kwargs), tickers, max_workers, kwargs.get("source", "auto"))

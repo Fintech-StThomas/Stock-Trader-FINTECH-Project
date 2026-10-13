@@ -153,12 +153,11 @@ def main(argv=None) -> int:
             for x in ms.alerts:
                 print("! " + x)
             return 0
-        results = []
-        for t in a.tickers:
-            try:
-                results.append(analyze(t, prof, _params(a), years=a.years, source=a.source, run_backtest_=False))
-            except Exception as exc:  # noqa: BLE001
-                print(f"{t}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        from .engine import analyze_many
+        by, errors = analyze_many(a.tickers, prof, _params(a), years=a.years, source=a.source, run_backtest_=False)
+        for t, e in errors.items():
+            print(f"{t}: {e}", file=sys.stderr)
+        results = list(by.values())
         funded, watch, table = allocate_ideas(results, a.side, s, with_stats=True)
         print(prof.describe())
         for pl in funded:

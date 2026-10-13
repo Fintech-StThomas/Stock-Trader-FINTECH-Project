@@ -154,7 +154,7 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
         decide = pd.Series(True, index=ind.index)
     else:
         rule = "W" if p.decision_frequency == "weekly" else "M"
-        period = ind.index.to_period(rule)
+        period = ind.index.to_period(rule).asi8          # integer period codes: comparing Period objects boxed every date
         decide = pd.Series(period != np.roll(period, -1), index=ind.index)   # last trading day of each week/month
         decide.iloc[-1] = True
 

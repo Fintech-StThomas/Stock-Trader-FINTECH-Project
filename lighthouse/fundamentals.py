@@ -289,7 +289,8 @@ def point_in_time_scores(prices: pd.DataFrame, history: StatementHistory, sector
     norms = sector_norms(sector)
     is_financial = sector == "Financial Services"
     a = a.sort_index()
-    close = prices["Close"]
+    close = prices["Close"].copy()
+    close.attrs = {}      # pandas deep-copies attrs on every operation (see technicals.compute_indicators)
 
     for i in range(len(a)):
         row = a.iloc[i]
