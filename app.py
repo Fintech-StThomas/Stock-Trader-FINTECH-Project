@@ -30,7 +30,7 @@ from lighthouse.regime import regime_adjustments
 from lighthouse.report import format_metrics, LIGHT_ICON
 from lighthouse import portfolio as pf
 from lighthouse.parallel import map_tickers
-from lighthouse.tradeplan import TradeSettings, build_trade_plan, allocate_ideas, TIME_STOP_DEFAULT
+from lighthouse.tradeplan import TradeSettings, build_trade_plan, allocate_ideas, signed_usd, TIME_STOP_DEFAULT
 from lighthouse.universe import available_universe, get_universe, universe_names
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
@@ -360,13 +360,11 @@ def render_exits(pl, key: str) -> None:
     how often it happened on this stock's history."""
     st.markdown("**When to get out** · place the stop when you enter, so the exit is decided before emotions are")
 
-    def usd(v):
-        return "" if v is None or pd.isna(v) else f"{'−' if v < 0 else '+'}${abs(v):,.0f}"
     rows = []
     for x in pl.exit_plan():
         result = ""
         if x.r is not None:
-            result = (f"{usd(x.pnl)} ({x.r:+.2f}R)" if x.pnl is not None else f"{x.r:+.2f}R")
+            result = (f"{signed_usd(x.pnl)} ({x.r:+.2f}R)" if x.pnl is not None else f"{x.r:+.2f}R")
         rows.append({"": EXIT_ICON.get(x.kind, ""), "Exit": x.name,
                      "Trigger": "" if x.price is None else f"${x.price:,.2f} ({x.move_pct:+.1f}%)",
                      "If the trade ends here": result, "What to do": x.action, "On this stock's history": x.history})

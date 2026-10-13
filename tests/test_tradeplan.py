@@ -223,3 +223,24 @@ def test_monitor_validates_inputs(msft_short_horizon):
         monitor_position(r, "long", 80.0, 10, "2030-01-01")                  # entry after the data
     with pytest.raises(ValueError):
         monitor_position(r, "sideways", 80.0, 10, "2017-09-01")
+
+
+def test_exit_plan_and_replay_with_no_partial_sale(msft_short_horizon):
+    r = msft_short_horizon
+    s0 = TradeSettings(partial_exit=0.0)
+    pl = build_trade_plan(r, "long", s0, with_stats=False)
+    names = [x.name for x in pl.exit_plan()]
+    assert "Target 1: stop to breakeven" in names and "Target 1: partial profit" not in names
+    t1 = next(x for x in pl.exit_plan() if x.name == "Target 1: stop to breakeven")
+    assert t1.pnl == 0.0 and t1.r == 0.0 and "Sell nothing" in t1.action
+    ms = monitor_position(r, "long", 83.0, 10, "2017-11-09", stop=82.5, settings=s0)
+    assert ms.status == "TARGET 1 HIT" and ms.shares_open == 10 and "keep all 10 shares" in ms.action
+    none = build_trade_plan(r, "short", TradeSettings(partial_exit=0.3), with_stats=False)
+    t1s = next(x for x in none.exit_plan() if x.name.startswith("Target 1"))
+    assert "30% of the position" in t1s.action                     # not "half"
+
+
+def test_screen_accepts_a_generator():
+    from lighthouse.screener import screen
+    df = screen((t for t in ["MSFT", "KO"]), source="sample", years=5, progress=False)
+    assert list(df["ticker"]) and set(df["ticker"]) == {"MSFT", "KO"}

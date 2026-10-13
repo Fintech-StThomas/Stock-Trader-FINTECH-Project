@@ -15,6 +15,7 @@ def screen(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, pa
            progress: bool = True, max_workers: Optional[int] = None) -> pd.DataFrame:
     """Rank a watchlist by Lighthouse score. Tickers that fail to load are reported, not dropped silently.
     Live tickers load in parallel threads (`max_workers`, default up to 8)."""
+    tickers = list(tickers)               # walked twice below: a generator would be used up by the first pass
     done = (lambda t, k, n: print(f"  analysed {t} ({k}/{n})", flush=True)) if progress else None
     results, errors = map_tickers(lambda t: analyze(t, profile, params, years=years, source=source, run_backtest_=with_backtest,
                                                     benchmark=benchmark), tickers, max_workers, source, done)

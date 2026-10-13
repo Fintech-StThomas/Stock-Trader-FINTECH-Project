@@ -224,14 +224,20 @@ class TradePlan:
                 "loss", "Stop-loss (before target 1)", self.stop, (self.stop / self.price - 1.0) * 100.0, self.shares or None,
                 pnl(-total), -1.0, f"{unverb} everything at the stop order ({self.stop_label}). The trade was wrong; take the planned loss.",
                 hist.get("stop", "")))
+        if t1 is not None and t2 is not None and q2 and not q1:
+            # nothing is sold at target 1 (a 0% partial): it only moves the stop to breakeven
+            rules.append(ExitRule(
+                "profit", "Target 1: stop to breakeven", t1.price, t1.move_pct, None, pnl(0.0), 0.0,
+                f"Sell nothing; move the stop to breakeven (${self.price:,.2f}). If the position is then stopped there, the "
+                "result is zero.", hist.get("target 1", "")))
         if t1 is not None and q1:
             locked = q1 * t1.r_multiple
             if t2 is not None and q2:
+                what = f"{t1.shares} shares" if t1.shares else f"{q1 / total:.0%} of the position"
                 rules.append(ExitRule(
                     "profit", "Target 1: partial profit", t1.price, t1.move_pct, t1.shares or None, pnl(locked), locked / total,
-                    f"{unverb} {t1.shares or 'half'} {'shares' if t1.shares else 'of the position'} and move the stop on the rest to "
-                    f"breakeven (${self.price:,.2f}). If the rest is then stopped at breakeven, this is the result.",
-                    hist.get("target 1", "")))
+                    f"{unverb} {what} and move the stop on the rest to breakeven (${self.price:,.2f}). If the rest is then "
+                    "stopped at breakeven, this is the result.", hist.get("target 1", "")))
             else:
                 rules.append(ExitRule(
                     "profit", "Target 1: take profit", t1.price, t1.move_pct, t1.shares or None, pnl(locked), locked / total,
@@ -508,7 +514,8 @@ def attach_stats(plan: TradePlan, result, settings: Optional[TradeSettings] = No
 # --------------------------------------------------------------------------- #
 # Trade simulation (shared by the setup test and the position monitor)
 # --------------------------------------------------------------------------- #
-def _signed_usd(v: float) -> str:
+def signed_usd(v: float) -> str:
+    """Signed dollars for results: '+$1,234' / '−$1,234' (a true minus sign)."""
     return f"{'−' if v < 0 else '+'}${abs(v):,.0f}"
 
 
@@ -889,7 +896,7 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
     t_days = s.time_stop_for(prof.horizon)
     unverb = "Sell" if side == "long" else "Buy back"
     closing = done[-1] if open_sh == 0 and done else None     # the exit that closed the whole position, if any
-    result_txt = f"Result {_signed_usd(pnl)} ({r_now:+.2f}R)."
+    result_txt = f"Result {signed_usd(pnl)} ({r_now:+.2f}R)."
     if closing is not None and "stop" in closing[3]:
         status = "STOP HIT"
         action = (f"{unverb} the {'remaining ' if len(done) > 1 else ''}shares: the {closing[3]} was hit on {closing[0]} "
@@ -908,9 +915,15 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
                   "place; do not move it further away.")
     elif sim["tp1_hit"]:
         status = "TARGET 1 HIT"
-        action = (f"Target 1 was reached: {unverb.lower()} {shares - open_sh} shares there if you have not (${realised:,.0f} "
-                  f"locked in), keep the stop on the other {open_sh} at ${cur_stop:,.2f} (breakeven or better, trailing), and let "
-                  f"them run to ${tps[1]:,.2f}." if len(tps) > 1 and open_sh > 0 else "Target 1 was reached: take the profit.")
+        if len(tps) > 1 and open_sh < shares:
+            action = (f"Target 1 was reached: {unverb.lower()} {shares - open_sh} shares there if you have not "
+                      f"({signed_usd(realised)} locked in), keep the stop on the other {open_sh} at ${cur_stop:,.2f} (breakeven "
+                      f"or better, trailing), and let them run to ${tps[1]:,.2f}.")
+        elif len(tps) > 1:     # nothing is sold at target 1 (a 0% partial)
+            action = (f"Target 1 was reached: keep all {open_sh} shares with the stop at ${cur_stop:,.2f} (breakeven or better, "
+                      f"trailing) and let them run to ${tps[1]:,.2f}.")
+        else:
+            action = "Target 1 was reached: take the profit."
     elif days_held >= t_days:
         status = "TIME STOP DUE"
         action = f"Held {days_held} sessions without reaching target 1 (time stop {t_days}): close the trade and free the capital."

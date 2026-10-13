@@ -43,14 +43,16 @@ def test_live_sector_lookup_is_cached(tmp_cache, monkeypatch):
 
     def fake(t):
         asked.append(t)
-        return {"ZZA": "Healthcare"}.get(t)          # ZZB plays an ETF: no sector
+        return {"ZZA": ("Healthcare", True), "ZZC": (None, False)}.get(t, (None, True))   # ZZB: an ETF; ZZC: a thin answer
     monkeypatch.setattr(data, "_sector_from_yfinance", fake)
-    assert sectors_for(["ZZA", "ZZB", "MSFT"], source="auto") == {"ZZA": "Healthcare", "ZZB": UNKNOWN_SECTOR, "MSFT": "Technology"}
-    assert sorted(asked) == ["ZZA", "ZZB"]             # curated tickers never hit the network
+    got = sectors_for(["ZZA", "ZZB", "ZZC", "MSFT"], source="auto")
+    assert got == {"ZZA": "Healthcare", "ZZB": UNKNOWN_SECTOR, "ZZC": UNKNOWN_SECTOR, "MSFT": "Technology"}
+    assert sorted(asked) == ["ZZA", "ZZB", "ZZC"]      # curated tickers never hit the network
     cached = json.loads((tmp_cache / "fundamentals" / "_sectors.json").read_text())
     assert cached["ZZA"]["sector"] == "Healthcare" and cached["ZZB"]["sector"] is None
+    assert "ZZC" not in cached                         # a stock that came back without a sector is asked again
     asked.clear()
-    assert sectors_for(["ZZA", "ZZB"], source="auto")["ZZA"] == "Healthcare" and asked == []   # served from the cache
+    assert sectors_for(["ZZA", "ZZB", "ZZC"], source="auto")["ZZA"] == "Healthcare" and asked == ["ZZC"]
 
 
 def test_offline_lookup_never_calls_the_network(tmp_cache, monkeypatch):
@@ -104,8 +106,14 @@ def test_a_single_sector_universe_still_fills_the_goal(tmp_cache):
     uni = _synthetic_universe(tickers, {t: "Technology" for t in tickers})
     r = goal_portfolio("preservation", capital=10_000, universe=uni, run_backtest=False)
     assert len(r.weights) == GOALS["preservation"].n_stocks          # not 3: the per-sector limit is raised to 10
-    assert any("spans 1 sector" in n and "up to 10 stocks" in n for n in r.notes)
+    assert any("has 1 sector" in n and "up to 10 stocks per sector" in n for n in r.notes)
     assert any("sector cap was dropped" in n for n in r.notes)        # one sector cannot hold 100% under 35%
     mixed = _synthetic_universe(tickers, {t: ("Energy" if i < 6 else "Utilities") for i, t in enumerate(tickers)})
     r2 = goal_portfolio("preservation", capital=10_000, universe=mixed, run_backtest=False)
     assert len(r2.weights) == 10 and any("up to 5 stocks" in n for n in r2.notes)
+    # stocks without a sector are never limited: 15 tech + 10 unknown fill 10 without raising the limit
+    big = [f"T{i:02d}" for i in range(15)] + [f"U{i:02d}" for i in range(10)]
+    mixed2 = _synthetic_universe(big, {t: ("Technology" if t.startswith("T") else UNKNOWN_SECTOR) for t in big})
+    r3 = goal_portfolio("preservation", capital=10_000, universe=mixed2, run_backtest=False)
+    assert not any("stocks per sector are allowed" in n for n in r3.notes)
+    assert sum(mixed2.sectors[t] == "Technology" for t in r3.weights.index) <= 3

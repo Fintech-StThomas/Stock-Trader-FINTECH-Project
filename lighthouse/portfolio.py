@@ -721,6 +721,10 @@ def _finish(universe: PriceUniverse, picked: List[str], method: str, cons: Portf
     est = estimate(window)
     w, more = optimize(window, method, cons, sectors, risk_free_rate, est=est)
     notes = notes + more
+    unfinished = sorted({(universe.frames[t].attrs.get("partial_bar") or {}).get("date") for t in picked} - {None})
+    if unfinished:
+        notes.append(f"Orders are sized from the {universe.closes.index[-1].date()} closes: today's session "
+                     f"({unfinished[0]}) is still trading, so check each live price before you place the orders.")
     unknown = [t for t in picked if universe.sectors.get(t, UNKNOWN_SECTOR) == UNKNOWN_SECTOR]
     if unknown:
         notes.append(f"No sector found for {', '.join(unknown)} (not in the curated list and none in the fundamentals, "
@@ -791,13 +795,21 @@ def goal_portfolio(goal: str, tickers: Optional[Iterable[str]] = None, capital: 
     panels = selection_panels(uni)
     t_last = len(uni.closes) - 1
     notes = [f"Left out {t}: {why}" for t, why in uni.excluded.items()]
-    known = {sec for sec in uni.sectors.values() if sec != UNKNOWN_SECTOR}
-    if known and len(known) * max_per_sector < g.n_stocks and len(uni.tickers) > max_per_sector * len(known):
-        # a universe chosen for one or two sectors (e.g. "Technology"): the per-sector limit would cap the goal at a few
-        # stocks, so raise it just enough to fill the goal from the sectors there are
-        raised = math.ceil(g.n_stocks / len(known))
-        notes.append(f"This universe spans {len(known)} sector{'s' if len(known) > 1 else ''}, so up to {raised} stocks per "
-                     f"sector are allowed (the usual limit is {max_per_sector}).")
+    # A universe chosen for one or two sectors (e.g. "Technology") cannot fill the goal under the per-sector limit:
+    # raise the limit just enough. Stocks without a sector are never limited, so they count toward the room.
+    labels = [uni.sectors.get(t, UNKNOWN_SECTOR) for t in uni.tickers]
+    counts = pd.Series([x for x in labels if x != UNKNOWN_SECTOR], dtype=object).value_counts()
+    n_unknown = len(labels) - int(counts.sum())
+
+    def room(limit: int) -> int:
+        return int(counts.clip(upper=limit).sum()) + n_unknown
+    if len(counts) and room(max_per_sector) < g.n_stocks and room(int(counts.max())) > room(max_per_sector):
+        raised = max_per_sector
+        while room(raised) < g.n_stocks and raised < int(counts.max()):
+            raised += 1
+        extra = f" (plus {n_unknown} without one)" if n_unknown else ""
+        notes.append(f"This universe has {len(counts)} sector{'s' if len(counts) > 1 else ''}{extra}: too few for "
+                     f"{g.n_stocks} stocks at {max_per_sector} per sector, so up to {raised} stocks per sector are allowed.")
         max_per_sector = raised
     picked = select(panels, t_last, g, uni.sectors, max_per_sector)
     if len(picked) < 2:

@@ -123,3 +123,52 @@ def test_orders_are_priced_from_the_quote(live_feed):
     assert pl.price == pytest.approx(r.quote.price) and pl.priced_from.startswith("live quote $")
     hist = analyze("ABC", InvestorProfile.from_cash(10_000, 0), years=2, run_backtest_=False, as_of="2026-06-30")
     assert hist.quote is None                                       # the time machine never uses today's price
+
+
+def test_quote_needs_a_time_and_partial_bars_use_the_exchange_calendar():
+    assert _quote_from_meta("abc", {"regularMarketPrice": 10.0}) is None             # a price without a time
+    tokyo = {"exchangeTimezoneName": "Asia/Tokyo",
+             "currentTradingPeriod": {"regular": {"start": pd.Timestamp("2026-10-13 09:00", tz="Asia/Tokyo"),
+                                                  "end": pd.Timestamp("2026-10-13 15:30", tz="Asia/Tokyo")}}}
+    monday_evening_ny = pd.Timestamp("2026-10-12 21:00", tz=ET)                      # = Tuesday 10:00 in Tokyo
+    assert is_partial_bar("2026-10-13", monday_evening_ny, tokyo)
+    assert not is_partial_bar("2026-10-12", monday_evening_ny, tokyo)
+
+
+def test_explicit_cache_source_ignores_the_session_rule(live_feed):
+    load_prices("ABC", years=2)                                                     # cached at 11:00
+    live_feed["clock"]["now"] = pd.Timestamp("2026-10-13 16:05", tz=ET)
+    df = load_prices("ABC", years=2, source="cache")                                 # asked for: under 20 hours is fine
+    assert df.attrs["source"] == "cache" and live_feed["calls"] == ["ABC"]
+    assert not list(live_feed["cache"].glob("prices/.*.tmp"))                        # atomic writes leave no temp files
+
+
+def test_no_extra_quote_request_after_a_fallback(live_feed, monkeypatch):
+    import lighthouse.engine as engine
+    load_prices("ABC", years=2)
+    down = lambda *a: (_ for _ in ()).throw(data.DataUnavailable("network down"))   # noqa: E731
+    monkeypatch.setattr(data, "_from_yfinance", down)
+    monkeypatch.setattr(data, "_from_stooq", down)
+    live_feed["clock"]["now"] = pd.Timestamp("2026-10-14 11:00", tz=ET)               # the cache is now behind a close
+    asked = []
+    monkeypatch.setattr(engine, "load_quote", lambda *a, **k: asked.append(a) or None)
+    r = analyze("ABC", InvestorProfile.from_cash(10_000, 0), years=2, run_backtest_=False)
+    assert r.prices.attrs["source"] == "stale-cache" and r.quote is None and asked == []
+    # the benchmark fell back to the 2022 sample file, which does not overlap 2026: regime rules off, no crash
+    assert r.regimes is None and any("Benchmark ^GSPC unavailable" in w and "requested window" in w for w in r.warnings)
+
+
+def test_keep_partial_keeps_todays_bar_for_the_position_replay(live_feed):
+    r = analyze("ABC", InvestorProfile.from_cash(10_000, 0), years=2, run_backtest_=False, keep_partial=True)
+    assert r.indicators.index[-1] == pd.Timestamp("2026-10-13") and r.partial_bar is not None
+    assert "kept but not final" in " ".join(r.warnings)
+    assert r.prices.attrs["source"] == "yfinance" and "cleaning" in r.prices.attrs   # metadata is back on the result
+
+
+def test_keep_partial_downloads_during_the_session_even_with_a_fresh_cache(live_feed):
+    load_prices("ABC", years=2)                                   # the cache now holds bars through yesterday
+    df = load_prices("ABC", years=2, keep_partial=True)
+    assert df.index[-1] == pd.Timestamp("2026-10-13") and live_feed["calls"] == ["ABC", "ABC"]
+    load_prices("^GSPC", years=2)
+    bench = load_prices("^GSPC", years=None, start=df.index[0], end=df.index[-1], keep_partial=True)   # as analyze asks
+    assert bench.index[-1] == pd.Timestamp("2026-10-13")

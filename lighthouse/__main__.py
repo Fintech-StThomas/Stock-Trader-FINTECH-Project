@@ -137,18 +137,19 @@ def main(argv=None) -> int:
         return 0
 
     if a.cmd in {"trade", "monitor"}:
-        from .tradeplan import TradeSettings, allocate_ideas, ideas_table, monitor_position, _signed_usd
+        from .tradeplan import TradeSettings, allocate_ideas, monitor_position, signed_usd
         s = TradeSettings(reward_multiples=tuple(sorted(a.targets)), partial_exit=a.partial, time_stop_days=a.time_stop,
                           **({"max_ideas": a.max_ideas, "max_total_risk_pct": a.max_total_risk} if a.cmd == "trade" else {}))
         prof = _profile(a)
         if a.cmd == "monitor":
-            res = analyze(a.ticker, prof, _params(a), years=a.years, source=a.source, run_backtest_=False)
+            # keep today's bar: a stop hit during today's session must show, and an entry made today must replay
+            res = analyze(a.ticker, prof, _params(a), years=a.years, source=a.source, run_backtest_=False, keep_partial=True)
             ms = monitor_position(res, a.side, a.entry, a.shares, a.date, stop=a.stop, settings=s)
             print(f"{ms.ticker} {ms.side} · {ms.status}\n{ms.action}")
             for day, n, px, why in ms.exits:
                 print(f"  {day}: {why}, {n} shares at ${px:,.2f}")
-            print(f"last ${ms.last_price:,.2f} · P&L {_signed_usd(ms.pnl)} ({ms.pnl_pct:+.1f}%, {ms.r_multiple:+.2f}R): "
-                  f"realised {_signed_usd(ms.realised_pnl)}, unrealised {_signed_usd(ms.unrealised_pnl)} on {ms.shares_open} open shares · "
+            print(f"last ${ms.last_price:,.2f} · P&L {signed_usd(ms.pnl)} ({ms.pnl_pct:+.1f}%, {ms.r_multiple:+.2f}R): "
+                  f"realised {signed_usd(ms.realised_pnl)}, unrealised {signed_usd(ms.unrealised_pnl)} on {ms.shares_open} open shares · "
                   f"stop now ${ms.current_stop:,.2f} ({ms.stop_note})")
             for x in ms.alerts:
                 print("! " + x)
@@ -166,7 +167,7 @@ def main(argv=None) -> int:
             print("when to get out:")
             for x in pl.exit_plan():
                 lvl = f" at ${x.price:,.2f} ({x.move_pct:+.1f}%)" if x.price is not None else ""
-                res_ = f" -> {_signed_usd(x.pnl)} ({x.r:+.2f}R) if the trade ends here" if x.pnl is not None else ""
+                res_ = f" -> {signed_usd(x.pnl)} ({x.r:+.2f}R) if the trade ends here" if x.pnl is not None else ""
                 print(f"  - {x.name}{lvl}{res_}" + (f" · history: {x.history}" if x.history else ""))
             if pl.stats:
                 print(f"history: {pl.stats.n_trades} trades, win {pl.stats.win_rate:.0%}, {pl.stats.avg_r:+.2f}R per trade")

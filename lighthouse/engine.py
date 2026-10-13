@@ -87,7 +87,7 @@ class AnalysisResult:
 def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Optional[StrategyParams] = None,
             years: float = 10, benchmark: str = "^GSPC", source: str = "auto", run_backtest_: bool = True,
             fundamentals_overrides: Optional[Dict[str, float]] = None, fundamentals_fixture: Optional[str] = None,
-            as_of=None, live_quote: bool = True, refresh: bool = False) -> AnalysisResult:
+            as_of=None, live_quote: bool = True, refresh: bool = False, keep_partial: bool = False) -> AnalysisResult:
     """Analyse one ticker end-to-end and return everything the product shows.
 
     Parameters
@@ -101,18 +101,27 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     live_quote   : price "buy now" orders from the feed's latest quote (with its timestamp) instead of the last close.
                    The signals always use finished sessions: a session still trading is left out of the indicators.
     refresh      : download prices again even if the cache is fresh
+    keep_partial : keep today's unfinished bar in the series (the position replay needs today's range; the signals
+                   and the backtest were designed on finished sessions, so the default leaves it out)
     """
     prof = profile or InvestorProfile()
     p = params or StrategyParams.for_horizon(prof.horizon)
     ticker = ticker.upper().strip()
     warnings: List[str] = []
 
-    prices = load_prices(ticker, years=years, end=as_of, source=source, refresh=refresh)
-    rep = prices.attrs.get("cleaning")
+    prices = load_prices(ticker, years=years, end=as_of, source=source, refresh=refresh, keep_partial=keep_partial)
+    data_attrs = dict(prices.attrs)          # source, cleaning report, quote: put back on the result at the end
+    rep = data_attrs.get("cleaning")
     if rep is not None:
         warnings += rep.notes
-    partial = prices.attrs.get("partial_bar")
-    quote = (prices.attrs.get("quote") or load_quote(ticker, source)) if live_quote and as_of is None else None
+    partial = data_attrs.get("partial_bar")
+    quote = None
+    if live_quote and as_of is None:
+        quote = data_attrs.get("quote")
+        # a separate quote only for prices that are current (a fresh cache); after a fallback to old or offline data
+        # it would cost another network timeout, and pair today's price with stale signals
+        if quote is None and data_attrs.get("source") in {"yfinance", "stooq", "cache"}:
+            quote = load_quote(ticker, source)
     if len(prices) < p.min_history:
         raise DataUnavailable(f"{ticker}: only {len(prices)} trading days available; need at least {p.min_history} "
                               f"for the 200-day trend and 52-week high indicators")
@@ -120,12 +129,15 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     bench = None
     try:
         # same calendar window as the stock (offline sample series end on different dates)
-        bench = load_benchmark(benchmark, years=None, start=prices.index[0], end=prices.index[-1], source=source)
+        bench = load_benchmark(benchmark, years=None, start=prices.index[0], end=prices.index[-1], source=source,
+                               keep_partial=keep_partial)
         prices, bench = align(prices, bench)
+        bench.attrs = {}
     except DataUnavailable as exc:
         warnings.append(f"Benchmark {benchmark} unavailable ({exc}); market-regime rules disabled.")
         bench = None
-    prices.attrs["ticker"] = ticker
+    # pandas deep-copies attrs into every derived object: only the name travels through the computations
+    prices.attrs = {"ticker": ticker}
 
     ind = compute_indicators(prices, p)
     tscores = technical_score(ind, prof.horizon, p)
@@ -183,6 +195,7 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
         except ValueError as exc:
             warnings.append(f"Backtest skipped: {exc}")
 
+    prices.attrs = {**data_attrs, "ticker": ticker}
     return AnalysisResult(ticker=ticker, profile=prof, params=p, prices=prices, indicators=ind, technical_scores=tscores,
                           benchmark=bench, regimes=regimes, fundamentals=snap, statements=hist, pit_scores=pit,
                           decision=decision, backtest=bt, warnings=list(dict.fromkeys(warnings)), quote=quote,

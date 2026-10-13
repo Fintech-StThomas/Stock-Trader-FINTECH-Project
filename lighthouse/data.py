@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import warnings
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
@@ -33,6 +34,12 @@ CACHE_DIR = Path(os.environ.get("LIGHTHOUSE_CACHE_DIR", REPO_DIR / "data" / "cac
 CACHE_MAX_AGE_HOURS = 20
 PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 STOOQ_SYMBOLS = {"^GSPC": "^spx", "^DJI": "^dji", "^IXIC": "^ndq"}
+
+
+# yfinance and the pandas calls it makes emit deprecation chatter that the investor cannot act on. Silence it once, by
+# module, instead of with warnings.catch_warnings(): that context manager changes process-wide state and is not safe
+# when several tickers download in parallel threads.
+warnings.filterwarnings("ignore", module=r"yfinance(\..*)?$")
 
 
 def offline_mode() -> bool:
@@ -164,13 +171,14 @@ def last_session_close(now: Optional[pd.Timestamp] = None) -> pd.Timestamp:
 
 def _session_window(day: pd.Timestamp, meta: Optional[dict] = None) -> Tuple[pd.Timestamp, pd.Timestamp]:
     """Regular-session start and end on `day` (exchange time): from Yahoo's trading-period metadata when it describes
-    that day, otherwise the standard 9:30-16:00."""
+    that day, otherwise the standard 9:30-16:00 New York session."""
+    tz = (meta or {}).get("exchangeTimezoneName") or EXCHANGE_TZ
     reg = ((meta or {}).get("currentTradingPeriod") or {}).get("regular") or {}
     try:
         start, end = pd.Timestamp(reg["start"]), pd.Timestamp(reg["end"])
         if start.tzinfo is None:
-            start, end = start.tz_localize(EXCHANGE_TZ), end.tz_localize(EXCHANGE_TZ)
-        start, end = start.tz_convert(EXCHANGE_TZ), end.tz_convert(EXCHANGE_TZ)
+            start, end = start.tz_localize(tz), end.tz_localize(tz)
+        start, end = start.tz_convert(tz), end.tz_convert(tz)
         if start.normalize().date() == day.date():
             return start, end
     except (KeyError, TypeError, ValueError):
@@ -182,8 +190,10 @@ def _session_window(day: pd.Timestamp, meta: Optional[dict] = None) -> Tuple[pd.
 
 def is_partial_bar(bar_date, now: Optional[pd.Timestamp] = None, meta: Optional[dict] = None) -> bool:
     """True when the daily bar dated `bar_date` belongs to a session that has not closed yet (trading now, or a bar a feed
-    shows before the open): its high, low, close and volume will still change, so it is not a finished day."""
-    now = _now_et() if now is None else now.tz_convert(EXCHANGE_TZ)
+    shows before the open): its high, low, close and volume will still change, so it is not a finished day. Dates are
+    compared on the exchange's own calendar (the feed's time zone, New York without one): a Tokyo bar is dated in Tokyo."""
+    tz = (meta or {}).get("exchangeTimezoneName") or EXCHANGE_TZ
+    now = (_now_et() if now is None else now).tz_convert(tz)
     day = pd.Timestamp(bar_date)
     if day.date() != now.date() or now.weekday() >= 5:
         return False
@@ -237,6 +247,8 @@ def _quote_from_meta(ticker: str, meta: Optional[dict], now: Optional[pd.Timesta
     if not meta:
         return None
     price, when = meta.get("regularMarketPrice"), meta.get("regularMarketTime")
+    if when is None or (isinstance(when, float) and not np.isfinite(when)) or pd.isna(when):
+        return None                     # a price without a time cannot be shown as live
     try:
         price = float(price)
         ts = pd.Timestamp(when, unit="s", tz="UTC") if isinstance(when, (int, float)) else pd.Timestamp(when)
@@ -256,11 +268,9 @@ def load_quote(ticker: str, source: str = "auto") -> Optional[Quote]:
         return None
     try:
         import yfinance as yf
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            tk = yf.Ticker(ticker)
-            tk.history(period="5d", interval="1d", auto_adjust=True, actions=False)
-            meta = _slim_meta(tk.history_metadata)
+        tk = yf.Ticker(ticker)
+        tk.history(period="5d", interval="1d", auto_adjust=True, actions=False)
+        meta = _slim_meta(tk.history_metadata)
     except Exception:  # noqa: BLE001 - a missing quote only means the last close is used
         return None
     return _quote_from_meta(ticker, meta)
@@ -271,15 +281,13 @@ def load_quote(ticker: str, source: str = "auto") -> Optional[Quote]:
 # --------------------------------------------------------------------------- #
 def _from_yfinance(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
     import yfinance as yf  # imported lazily so the package works without it
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        tk = yf.Ticker(ticker)
-        hist = tk.history(start=start.strftime("%Y-%m-%d"), end=(end + timedelta(days=1)).strftime("%Y-%m-%d"),
-                          auto_adjust=True, actions=False)
-        try:
-            meta = _slim_meta(tk.history_metadata)
-        except Exception:  # noqa: BLE001
-            meta = {}
+    tk = yf.Ticker(ticker)
+    hist = tk.history(start=start.strftime("%Y-%m-%d"), end=(end + timedelta(days=1)).strftime("%Y-%m-%d"),
+                      auto_adjust=True, actions=False)
+    try:
+        meta = _slim_meta(tk.history_metadata)
+    except Exception:  # noqa: BLE001
+        meta = {}
     if hist is None or len(hist) == 0:
         raise DataUnavailable(f"yfinance returned no rows for {ticker}")
     hist.attrs = {"meta": meta}
@@ -332,7 +340,7 @@ def _cache_path(kind: str, ticker: str) -> Path:
 
 
 def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOURS,
-                need_start: Optional[datetime] = None) -> pd.DataFrame:
+                need_start: Optional[datetime] = None, session_check: bool = True) -> pd.DataFrame:
     """Cached prices. With `need_start`, the cache must also cover the requested window: a short download
     (e.g. a 6-year watchlist run) must not silently stand in for a later 10-year analysis."""
     path = _cache_path("prices", ticker)
@@ -346,7 +354,7 @@ def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOUR
         meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
     except (OSError, ValueError):
         meta = {}
-    if max_age_hours is not None:
+    if max_age_hours is not None and session_check:
         # a session that closed after the download has a finished bar the cache does not hold
         try:
             fetched = pd.Timestamp(meta["fetched_at"])
@@ -369,17 +377,39 @@ def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOUR
     return df
 
 
+def _atomic_write(path: Path, write) -> None:
+    """Write through a temporary file and rename it into place, so a reader (another thread or process) sees either
+    the old file or the new one, never a half-written file."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        write(tmp)
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def _to_cache(ticker: str, df: pd.DataFrame, requested_start: Optional[datetime] = None) -> None:
     try:
         path = _cache_path("prices", ticker)
         path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(path)
         meta = {"fetched_at": _now_et().isoformat()}
         if requested_start is not None:
             meta["requested_start"] = pd.Timestamp(requested_start).isoformat()
-        path.with_suffix(".meta.json").write_text(json.dumps(meta))
+        _atomic_write(path, df.to_csv)
+        _atomic_write(path.with_suffix(".meta.json"), lambda p: p.write_text(json.dumps(meta)))
     except OSError:
         pass
+
+
+_ticker_locks: Dict[str, threading.Lock] = {}
+_ticker_locks_guard = threading.Lock()
+
+
+def _ticker_lock(ticker: str) -> threading.Lock:
+    """One loader per ticker at a time: when 8 threads all need ^GSPC, one downloads it and the others read the cache."""
+    with _ticker_locks_guard:
+        return _ticker_locks.setdefault(ticker, threading.Lock())
 
 
 # --------------------------------------------------------------------------- #
@@ -416,44 +446,53 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
     order: List[str]
     if source == "auto":
         order = ["cache", "sample"] if offline_mode() else ["cache", "yfinance", "stooq", "stale-cache", "sample"]
+        today = _now_et().normalize()
+        reaches_today = end is None or pd.Timestamp(end).normalize() >= today.tz_localize(None)
+        if keep_partial and not offline_mode() and reaches_today and is_partial_bar(today):
+            order.remove("cache")       # the cache never holds an unfinished session: today's bar needs a download
     else:
         order = [source]
 
-    for src in order:
-        try:
-            if src == "yfinance":
-                raw = _from_yfinance(ticker, start_dt, end_dt)
-            elif src == "stooq":
-                raw = _from_stooq(ticker, start_dt, end_dt)
-            elif src == "cache":
-                raw = _from_cache(ticker, need_start=start_dt) if use_cache and not refresh else None
-            elif src == "stale-cache":
-                raw = _from_cache(ticker, max_age_hours=None) if use_cache else None
-            elif src == "sample":
-                raw = _from_sample(ticker)
-            else:
-                raise ValueError(f"unknown source {src!r}")
-            if raw is None or len(raw) == 0:
-                raise DataUnavailable("empty")
-            used = src
-            break
-        except Exception as exc:  # noqa: BLE001 - we want to fall through to the next source
-            attempts.append(f"{src}: {type(exc).__name__}: {str(exc)[:120]}")
-            raw = None
+    with _ticker_lock(ticker):          # one download per ticker at a time; the others then read the fresh cache
+        for src in order:
+            try:
+                if src == "yfinance":
+                    raw = _from_yfinance(ticker, start_dt, end_dt)
+                elif src == "stooq":
+                    raw = _from_stooq(ticker, start_dt, end_dt)
+                elif src == "cache":
+                    # in "auto" a live download follows, so a cache missing a finished session is skipped; asked for
+                    # explicitly, the cache is used as long as it is under 20 hours old
+                    raw = (_from_cache(ticker, need_start=start_dt, session_check=source == "auto")
+                           if use_cache and not refresh else None)
+                elif src == "stale-cache":
+                    raw = _from_cache(ticker, max_age_hours=None) if use_cache else None
+                elif src == "sample":
+                    raw = _from_sample(ticker)
+                else:
+                    raise ValueError(f"unknown source {src!r}")
+                if raw is None or len(raw) == 0:
+                    raise DataUnavailable("empty")
+                used = src
+                break
+            except Exception as exc:  # noqa: BLE001 - we want to fall through to the next source
+                attempts.append(f"{src}: {type(exc).__name__}: {str(exc)[:120]}")
+                raw = None
 
-    if raw is None:
-        raise DataUnavailable(f"could not load prices for {ticker}. Tried -> " + " | ".join(attempts))
+        if raw is None:
+            raise DataUnavailable(f"could not load prices for {ticker}. Tried -> " + " | ".join(attempts))
 
-    feed_meta = raw.attrs.get("meta") if used == "yfinance" else None
-    quote = _quote_from_meta(ticker, feed_meta) if feed_meta else None
-    raw = _normalize_index(raw)
-    partial = None
-    if used in {"yfinance", "stooq", "cache"} and len(raw) and is_partial_bar(raw.index[-1], meta=feed_meta):
-        partial = {"date": str(raw.index[-1].date()), **{k: _f(raw[k].iloc[-1]) for k in PRICE_COLUMNS if k in raw}}
-        if not keep_partial:
-            raw = raw.iloc[:-1]
-    if used in {"yfinance", "stooq"} and use_cache:
-        _to_cache(ticker, raw if partial is None or not keep_partial else raw.iloc[:-1], requested_start=start_dt)
+        feed_meta = raw.attrs.get("meta") if used == "yfinance" else None
+        quote = _quote_from_meta(ticker, feed_meta) if feed_meta else None
+        raw = _normalize_index(raw)
+        raw.attrs = {}                  # the feed's metadata is read; it must not ride along into every derived frame
+        partial = None
+        if used in {"yfinance", "stooq", "cache"} and len(raw) and is_partial_bar(raw.index[-1], meta=feed_meta):
+            partial = {"date": str(raw.index[-1].date()), **{k: _f(raw[k].iloc[-1]) for k in PRICE_COLUMNS if k in raw}}
+            if not keep_partial:
+                raw = raw.iloc[:-1]
+        if used in {"yfinance", "stooq"} and use_cache:
+            _to_cache(ticker, raw if partial is None or not keep_partial else raw.iloc[:-1], requested_start=start_dt)
 
     df, report = clean_prices(raw, ticker, used)
     if partial is not None:
@@ -470,6 +509,8 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
         df = df[df.index >= pd.Timestamp(start)]
     elif years is not None and len(df):
         df = df[df.index >= df.index[-1] - timedelta(days=int(365.25 * (years + 1.2)))]
+    if df.empty:
+        raise DataUnavailable(f"{ticker}: the {used} data ({report.start} to {report.end}) has no rows in the requested window")
     df.attrs["ticker"] = ticker
     df.attrs["source"] = used
     df.attrs["cleaning"] = report
@@ -480,16 +521,21 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
 
 
 def load_benchmark(symbol: str = "^GSPC", years: Optional[float] = 10, start=None, end=None,
-                   source: str = "auto") -> pd.DataFrame:
+                   source: str = "auto", keep_partial: bool = False) -> pd.DataFrame:
     """Market benchmark (default: S&P 500 index) used for regime detection and comparison."""
-    return load_prices(symbol, years=years, start=start, end=end, source=source)
+    return load_prices(symbol, years=years, start=start, end=end, source=source, keep_partial=keep_partial)
 
 
 def align(prices: pd.DataFrame, benchmark: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Restrict both frames to their common date range (benchmark is reindexed and forward-filled
     onto the stock's trading days so a missing benchmark day never drops a stock day)."""
+    if prices.empty or benchmark.empty:
+        raise DataUnavailable("no prices to align with the benchmark")
     start = max(prices.index[0], benchmark.index[0])
     end = min(prices.index[-1], benchmark.index[-1])
+    if start > end:      # e.g. live prices with a benchmark that fell back to the 2022 sample file
+        raise DataUnavailable(f"the benchmark ({benchmark.index[0].date()} to {benchmark.index[-1].date()}) does not overlap "
+                              f"the prices ({prices.index[0].date()} to {prices.index[-1].date()})")
     p = prices[(prices.index >= start) & (prices.index <= end)]
     b = benchmark.reindex(p.index.union(benchmark.index)).ffill().reindex(p.index)
     return p, b
@@ -644,20 +690,18 @@ def _snapshot_from_yfinance(ticker: str, info: dict, hist: StatementHistory, pri
 def _fundamentals_from_yfinance(ticker: str, last_price: Optional[float]) -> Tuple[FundamentalSnapshot, StatementHistory]:
     import yfinance as yf
     t = yf.Ticker(ticker)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    try:
+        info = dict(t.info or {})
+    except Exception:  # noqa: BLE001
+        info = {}
+    def grab(attr):
         try:
-            info = dict(t.info or {})
+            v = getattr(t, attr)
+            return v if isinstance(v, pd.DataFrame) and len(v) else None
         except Exception:  # noqa: BLE001
-            info = {}
-        def grab(attr):
-            try:
-                v = getattr(t, attr)
-                return v if isinstance(v, pd.DataFrame) and len(v) else None
-            except Exception:  # noqa: BLE001
-                return None
-        annual = _statements_to_frame(grab("income_stmt"), grab("balance_sheet"), grab("cashflow"))
-        quarterly = _statements_to_frame(grab("quarterly_income_stmt"), grab("quarterly_balance_sheet"), grab("quarterly_cashflow"))
+            return None
+    annual = _statements_to_frame(grab("income_stmt"), grab("balance_sheet"), grab("cashflow"))
+    quarterly = _statements_to_frame(grab("quarterly_income_stmt"), grab("quarterly_balance_sheet"), grab("quarterly_cashflow"))
     hist = StatementHistory(annual=annual, quarterly=quarterly)
     if not info and annual.empty:
         raise DataUnavailable(f"yfinance returned no fundamentals for {ticker}")
@@ -702,12 +746,16 @@ def _sector_from_snapshot_file(path: Path) -> Optional[str]:
         return None
 
 
-def _sector_from_yfinance(ticker: str) -> Optional[str]:
+_NO_SECTOR_TYPES = {"ETF", "MUTUALFUND", "INDEX", "CURRENCY", "CRYPTOCURRENCY", "FUTURE"}
+
+
+def _sector_from_yfinance(ticker: str) -> Tuple[Optional[str], bool]:
+    """(sector, final). "No sector" is final only for instruments that never have one (funds, indices); a stock whose
+    answer came back without a sector (a thin or degraded response) is asked again next time."""
     import yfinance as yf
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        info = yf.Ticker(ticker).info or {}
-    return info.get("sector") or None
+    info = yf.Ticker(ticker).info or {}
+    sector = info.get("sector") or None
+    return sector, bool(sector) or str(info.get("quoteType", "")).upper() in _NO_SECTOR_TYPES
 
 
 def load_sectors(tickers: List[str], source: str = "auto", max_workers: int = 8) -> Dict[str, Optional[str]]:
@@ -756,7 +804,7 @@ def load_sectors(tickers: List[str], source: str = "auto", max_workers: int = 8)
 
     def fetch(t: str):
         try:
-            return t, _sector_from_yfinance(t), True
+            return (t, *_sector_from_yfinance(t))
         except Exception:  # noqa: BLE001 - a failed lookup just leaves the sector unknown (and is retried next time)
             return t, None, False
 
