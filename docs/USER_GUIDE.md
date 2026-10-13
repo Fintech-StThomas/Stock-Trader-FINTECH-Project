@@ -138,7 +138,8 @@ python -m lighthouse portfolio --goal growth --universe technology --cash 10000
 
 `trade` prints each ticket's plan and its *when to get out* list. `monitor` replays a position you hold since its entry
 with the same rules (target 1 sells half, the stop then moves to breakeven and trails) and reports the exits already
-taken, the realised and unrealised P&L, and where the stop is now.
+taken, the realised and unrealised P&L, and where the stop is now. During market hours it includes today's unfinished
+session, so a position bought today can be replayed and a stop hit today shows up.
 
 Add `--as-of 2020-03-20` to `analyze` to ask what Lighthouse would have said on a past day. `--portfolio` still works and
 means "this much cash, nothing else held".

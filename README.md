@@ -37,7 +37,7 @@ python -m lighthouse screen AAPL MSFT NVDA JPM XOM UNH --cash 10000
 python -m lighthouse trade MSFT AAPL JNJ XOM --side long --cash 5000        # what to buy right now, with stops and targets
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 101 tests, runs offline
+python -m pytest                # 112 tests, runs offline
 ```
 
 ```python

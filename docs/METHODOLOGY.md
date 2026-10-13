@@ -12,7 +12,7 @@ This document exists so that the team can defend every number in the product. It
 | Fundamentals | Yahoo snapshot (trailing/forward P/E, PEG, P/B, EV/EBITDA, ROE, margins, D/E, current ratio, FCF, growth) plus annual and quarterly statements | One valuation ratio and one quality/growth measure are required; we use several so a missing field never breaks the score |
 | Cleaning | Sort, de-duplicate dates, drop rows without a positive close, fill missing O/H/L from the close, enforce High ≥ max(O,C) and Low ≤ min(O,C), disable volume if >50% missing, flag >50% one-day moves | Each step is counted and shown to the user (`CleaningReport`) |
 | Offline pack | Real data shipped in open-source packages (Microsoft OHLCV 1986-2017 from `pmdarima`, 19 S&P stocks and the index 1990-2022 from `skfolio`) | The notebook and tests must run end-to-end without internet; provenance in `scripts/build_sample_pack.py` |
-| Caching | Last live download cached in `data/cache/` for at most 20 hours, and only until the next session close (16:00 New York) after the download | Yahoo rate-limits; the product stays usable; a finished session is never missing from the cache |
+| Caching | Last live download cached in `data/cache/` for at most 20 hours, and (in `auto`) only until the next session close (16:00 New York) after the download; files are written atomically and each ticker is downloaded by one thread at a time | Yahoo rate-limits; the product stays usable; a finished session is never missing from the cache; parallel loads never read a half-written file |
 | Unfinished sessions | During market hours today's daily bar is left out of every indicator, and never cached; a note says so | Its close, range and volume are not final (a partial day's volume reads as a collapse), and the rules were tested on finished days |
 | Order price | "Buy now" tickets and the position plan are priced from the feed's latest quote with its timestamp and market state (Yahoo chart metadata: `regularMarketPrice`, `regularMarketTime`, trading periods); the last close when there is none, when it is older than the data, or when it is more than 25% from the close (a split or a bad tick) | The decision is made on finished sessions, the order on the price you can trade at. Yahoo quotes can lag by up to 15 minutes on some exchanges |
 
@@ -227,8 +227,37 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | The app's "Position monitor" asked the investor to type in positions | Not what the tickets are for: the sell decision belongs to the plan | Removed; every ticket shows *When to get out* |
 | Bollinger Bands trailed the price by ~10 sessions | The chart and the beacon described where price was two weeks earlier | Hull-MA price bands (~3 sessions); the classic bands are gone from the score and every chart (§3) |
 | The README's cross-ticker table had no generating script | Its provenance could not be checked | `scripts/cross_ticker_evaluation.py` rebuilds it (it reproduced the old file byte for byte before the band change) |
+| The CLI `monitor` dropped today's unfinished bar | A position entered today could not be replayed, and a stop hit today was not reported | `analyze(keep_partial=True)` keeps today's bar (stock and benchmark) for the replay only |
+| A benchmark with no rows in the stock's window crashed the analysis | E.g. live prices with the S&P 500 falling back to the 2022 sample file | `load_prices` raises when the window is empty and `align` when the frames do not overlap; the regime rules are then switched off with a warning |
+| A quote was requested even after the prices had fallen back to old data | An extra network timeout per ticker, and today's price paired with stale signals | A separate quote is fetched only for current prices |
 
-## 12. Q&A preparation
+## 12. Speed
+
+Measured offline with Streamlit's test harness on the sample pack (before → after this session's work): first page load
+1.75 → 0.70 s; a click with an analysis on screen 2.88 → 0.43 s; with desk and portfolio results on screen 5.69 → 0.58 s;
+a trade-desk scan of 8 tickers 6.66 → 1.53 s; a deep evaluation (layers, sensitivity grid, walk-forward) 7.9 → 1.4 s.
+A cold live screen of the 12 mega caps took 41 s one ticker at a time and 8 s with 8 threads. What made the difference:
+
+* **pandas copies `attrs` into every derived object** (a deep copy, every operation). The price frame carried the cleaning
+  report and the quote, so indicator maths ran several times slower than it should. `analyze` now computes on attr-free
+  frames and puts the metadata back on the result.
+* **`lighthouse/memo.py`** memoises indicators, beacon scores, technical scores and the regime table on a content
+  fingerprint of the input and on the parameters that can change them (trading thresholds and costs are excluded), and
+  returns copies. A deep evaluation's ~80 backtests differ only in thresholds and now share one computation.
+* **Plotly**: `add_vrect` / `add_hline` re-validate the whole layout on every call; the regime shading of a long history
+  took 2.6 s. All shapes are now set in one layout update. The app keeps each figure on the result it was drawn from,
+  so a click re-uses it, and the desk funds its ideas once per scan and settings.
+* **Streamlit caches**: large read-only results use `st.cache_resource` (`st.cache_data` pickles megabytes on every hit).
+* **Threads for the network** (`lighthouse/parallel.py`): live multi-ticker work runs in up to 8 threads; offline work
+  stays serial because Python threads only add contention to pure CPU work.
+* **Imports**: the app no longer loads matplotlib (`palette.py` holds the shared colours), and scipy loads only when an
+  optimiser runs.
+
+Every published number is unchanged by these changes: the cross-ticker table and the MSFT example report regenerate
+byte for byte. What is still slow: a portfolio walk-forward test (6 methods × ~120 monthly optimisations, about 1.5 s
+for 8 stocks), and a cold live scan, which is bound by Yahoo's response time (fundamentals are 7 requests per ticker).
+
+## 13. Q&A preparation
 
 * **Why these indicators?** Trend (200-day) is the most robust timing signal in the literature; RSI/MACD/price bands cover momentum, acceleration and range; volume validates moves; 52-week high is the simplest breakout measure. Fundamentals cover the three questions an analyst asks: is it cheap, is it good, is it growing.
 * **Why should they predict returns?** Trend and momentum persistence are documented anomalies; quality and value premia are documented factors. We do not claim short-term prediction; we claim better risk-adjusted participation.

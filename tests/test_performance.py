@@ -4,7 +4,6 @@ import threading
 import numpy as np
 import pytest
 
-from conftest import make_prices
 from lighthouse import memo
 from lighthouse.config import StrategyParams
 from lighthouse.parallel import map_tickers

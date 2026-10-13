@@ -27,7 +27,7 @@ import pandas as pd
 
 from .config import InvestorProfile, StrategyParams
 from .decision import backtest_size_fraction
-from .indicators import drawdown, max_drawdown
+from .indicators import max_drawdown
 from .regime import regime_table
 from .technicals import compute_indicators, technical_score, beacon_scores
 
@@ -207,7 +207,6 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     pending: Optional[Tuple[str, float, str]] = None   # (side, size_fraction, reason)
     entry_i = entry_px = size_frac = 0.0
     trail_high = stop = np.nan
-    pending_reason = ""
 
     for i in range(n):
         fill = open_[i] if has_open else close[i]
