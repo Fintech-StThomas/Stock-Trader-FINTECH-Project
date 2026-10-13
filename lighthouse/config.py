@@ -40,8 +40,8 @@ HORIZON_STOP_FACTOR: Dict[str, float] = {"long": 2.0, "short": 1.0}
 
 # Technical beacon weights per horizon (must sum to 1).
 TECHNICAL_WEIGHTS: Dict[str, Dict[str, float]] = {
-    "long":  {"trend": 0.35, "rsi": 0.15, "macd": 0.10, "bollinger": 0.10, "volume": 0.10, "breakout": 0.20},
-    "short": {"trend": 0.20, "rsi": 0.20, "macd": 0.20, "bollinger": 0.15, "volume": 0.15, "breakout": 0.10},
+    "long":  {"trend": 0.35, "rsi": 0.15, "macd": 0.10, "bands": 0.10, "volume": 0.10, "breakout": 0.20},
+    "short": {"trend": 0.20, "rsi": 0.20, "macd": 0.20, "bands": 0.15, "volume": 0.15, "breakout": 0.10},
 }
 
 # Fundamental group weights (must sum to 1).
@@ -167,8 +167,8 @@ class StrategyParams:
     macd_slow: int = 26
     macd_signal: int = 9
     # --- volatility / bands --------------------------------------------------
-    bb_window: int = 20
-    bb_std: float = 2.0
+    band_window: int = 20         # price bands: Hull moving average of this many sessions ...
+    band_std: float = 2.0         # ... +/- this many standard deviations of the closes around it
     atr_window: int = 14
     vol_window: int = 20          # realised-volatility window for the regime/beacons (trading days)
     sizing_vol_window: int = 60   # realised-volatility window used for position sizing (smoother)

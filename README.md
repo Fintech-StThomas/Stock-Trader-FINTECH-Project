@@ -11,7 +11,7 @@ with a full risk report.
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lotainc0/Stock-Trader-FINTECH-Project/blob/main/notebooks/Lighthouse.ipynb)
 ![tests](https://github.com/lotainc0/Stock-Trader-FINTECH-Project/actions/workflows/ci.yml/badge.svg)
 
-| Why does MSFT score 73? | How did the rule behave? |
+| Why does MSFT score 71? | How did the rule behave? |
 |---|---|
 | ![beacons](reports/examples/MSFT/MSFT_score_breakdown.png) | ![backtest](reports/examples/MSFT/MSFT_backtest.png) |
 
@@ -19,7 +19,7 @@ with a full risk report.
 
 1. **Collects and cleans** daily prices & volume, the S&P 500 and fundamentals (Yahoo Finance → Stooq → cache → bundled real sample data, so it always runs).
 2. **Fundamental analysis** — 13 beacons (P/E, forward P/E, PEG, P/B, EV/EBITDA, earnings stability, ROE, margin, debt/equity, FCF yield, current ratio, revenue & EPS growth) scored against sector norms.
-3. **Technical analysis** — 6 beacons: trend (50/200-day SMA, Golden/Death Cross), RSI, MACD, Bollinger %B, volume confirmation (OBV), 52-week-high proximity.
+3. **Technical analysis** — 6 beacons: trend (50/200-day SMA, Golden/Death Cross), RSI, MACD, position in low-lag price bands (%B around a Hull moving average, ~3 sessions of lag), volume confirmation (OBV), 52-week-high proximity.
 4. **Market weather** — Bull/Bear × Calm/Turbulent regime of the S&P 500 that penalises scores, raises the entry bar and halves sizes in bear markets.
 5. **Decision** — horizon-weighted composite → verdict → position size from the *smallest* of three rules (your max-loss limit, a volatility target, a concentration cap), paid from the **cash you have available** (risk limits are a % of your whole account).
 6. **Honest evaluation** — point-in-time backtest vs buy-and-hold and the S&P 500, layer attribution, sensitivity grid, walk-forward out-of-sample test, regime breakdown.
@@ -43,7 +43,7 @@ python -m pytest                # 101 tests, runs offline
 ```python
 from lighthouse import analyze, InvestorProfile
 r = analyze("MSFT", InvestorProfile.from_cash(5_000, holdings_value=20_000, horizon="long", risk="balanced", max_loss_pct=2))
-print(r.decision.headline())     # MSFT: STRONG BUY (Lighthouse score 73/100) for a long-term, balanced investor
+print(r.decision.headline())     # e.g. MSFT: BUY (Lighthouse score 71/100) for a long-term, balanced investor (sample data)
 print(r.report())                # the full plain-English report
 r.backtest.summary()             # strategy vs buy & hold vs S&P 500
 
@@ -65,7 +65,7 @@ No internet? Set `LIGHTHOUSE_OFFLINE=1` (or `--source sample`): the bundled pack
 
 | Tab | What you can do |
 |---|---|
-| **Analyse a stock** | verdict dial, score waterfall, a position plan sized from your cash with a *what-if* sizer, a long/short **trade ticket** (entry, stop-loss, take-profits, management plan, historical record of the rules), 19 beacons you can filter by light and hover for the reason, a four-panel price / volume / RSI / MACD chart with low-lag bands that follow the price (or the classic Bollinger Bands the score uses), range buttons and the backtested entries and exits, the backtest with drawdown and exposure, deep evaluation (layers, sensitivity heatmap, walk-forward), trade list, downloads |
+| **Analyse a stock** | verdict dial, score waterfall, a position plan sized from your cash with a *what-if* sizer, a long/short **trade ticket** (entry, stop-loss, take-profits, management plan, historical record of the rules), 19 beacons you can filter by light and hover for the reason, a four-panel price / volume / RSI / MACD chart with low-lag price bands that follow the price, range buttons and the backtested entries and exits, the backtest with drawdown and exposure, deep evaluation (layers, sensitivity heatmap, walk-forward), trade list, downloads |
 | **Trade desk** | pick a pre-built universe (a sideways-scrolling row: mega caps, dividend & defensive, each sector, semiconductors, sector and index ETFs, all large caps) or type your own, then fund the best **long** or **short** setups from your cash, one ticket each with its *when to get out* table, within a total-risk cap |
 | **Portfolio builder** | allocate your own basket with six methods, or let Lighthouse build one for a goal; whole-share orders, risk report (volatility, VaR, expected shortfall, beta, risk contributions, correlations, stress tests) and a walk-forward test of every method |
 | **Rank & compare a watchlist** | presets or your own tickers, ranked bar chart, sortable table (select a row for a summary card and a one-click jump to the full analysis), rebased price comparison |
@@ -89,16 +89,16 @@ Live data comes from Yahoo Finance (with Stooq as a fallback); the bundled sampl
 ## Results in one table
 
 Long-horizon rule, balanced profile, 20 S&P 500 stocks, Dec 1990 – Dec 2022, 10 bps costs per side, next-day fills
-(`reports/examples/cross_ticker_evaluation.csv`):
+(`reports/examples/cross_ticker_evaluation.csv`, rebuilt by `python scripts/cross_ticker_evaluation.py`):
 
 | | CAGR | Volatility | Sharpe | Max drawdown |
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
-| Lighthouse signals + regime (fully invested when in) | 10.1% | — | 0.44 | −58% |
-| **Lighthouse balanced (vol-targeted)** | 6.4% | 12.7% | 0.39 | **−32%** |
-| Lighthouse conservative | 4.6% | 8.8% | 0.32 | −23% |
+| Lighthouse signals + regime (fully invested when in) | 10.2% | — | 0.45 | −57% |
+| **Lighthouse balanced (vol-targeted)** | 6.5% | 12.7% | 0.40 | **−32%** |
+| Lighthouse conservative | 4.6% | 8.8% | 0.33 | −23% |
 
-Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 4 of 20. We say the second
+Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 3 of 20. We say the second
 part out loud: single-stock timing does not out-return relentless compounders, it delivers the risk profile you asked
 for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
 
@@ -108,7 +108,7 @@ for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
 lighthouse/            the product (pure Python, pandas/numpy/matplotlib)
   config.py            investor profiles, strategy parameters, verdict bands  <- all the numbers to defend
   data.py              live/offline data loading, cleaning report, fundamentals parsing, caching
-  indicators.py        causal SMA/EMA/WMA/Hull MA/RSI/MACD/Bollinger/low-lag bands/ATR/OBV/volatility/drawdown
+  indicators.py        causal SMA/EMA/WMA/Hull MA/RSI/MACD/low-lag price bands/ATR/OBV/volatility/drawdown
   technicals.py        technical beacons and score
   fundamentals.py      fundamental beacons, sector norms, point-in-time scores
   regime.py            market weather

@@ -399,7 +399,7 @@ def render_ticket(res, pl, key: str, chart: bool = True, compact: bool = False) 
         render_exits(pl, key)
     st.markdown("**The plan, step by step**\n\n" + "\n".join(f"{i}. {esc(x)}" for i, x in enumerate(pl.management_steps(), 1)))
     if chart and not compact:
-        plotly(ix.trade_chart(res, pl, bands=st.session_state.get("bands") or "lowlag"), key=f"ticket_chart_{key}_{pl.side}_{pl.ticker}")
+        plotly(ix.trade_chart(res, pl), key=f"ticket_chart_{key}_{pl.side}_{pl.ticker}")
     with st.expander("Why this status, how it was sized, and the caveats"):
         st.markdown("**Setup**\n\n" + "\n".join(f"- {esc(x)}" for x in pl.reasons))
         if pl.sizing_notes:
@@ -525,24 +525,16 @@ def render_result(res) -> None:
     st.markdown("#### Price, trend and momentum")
     look = st.segmented_control("Lookback", ["1y", "3y", "5y", "all"], default="3y", key="lookback", label_visibility="collapsed")
     last_days = {"1y": 252, "3y": 756, "5y": 1260, "all": len(res.indicators)}[look or "3y"]
-    st.caption("Shaded bands show market weather (red = bear, amber = turbulent). Triangles are the backtested rule's entries and exits. Drag to zoom, double-click to reset.")
-    bands = st.segmented_control("Bands", ["lowlag", "classic"], default="lowlag", key="bands", label_visibility="collapsed",
-                                 format_func=lambda v: "Low-lag bands (follow the price)" if v == "lowlag" else "Classic Bollinger (used in the score)")
-    plotly(ix.dashboard(res, last_days=last_days, bands=bands or "lowlag"), key="dashboard")
-    with st.expander("Which bands am I looking at, and why do classic Bollinger Bands trail the price?"):
-        n, k = res.params.bb_window, res.params.bb_std
-        st.markdown(f"**Classic Bollinger Bands** are a {n}-day simple moving average ± {k:g} standard deviations of the last {n} "
-                    f"closes. A trailing {n}-day average lags the price by about ({n} − 1) / 2 ≈ {(n - 1) / 2:.1f} sessions, and after a "
-                    f"sharp move the bands keep widening while that move is inside the window. The *Bollinger* beacon in the score uses "
-                    "these, because that is the tested definition.\n\n"
-                    f"**Low-lag bands** (the default view) replace the centre with a {n}-day Hull moving average, which cancels most "
-                    f"of the lag (about 3 sessions instead of 9 on the sample stocks), and set the width from the closes' spread "
-                    f"around that centre (± {k:g}σ). They use only past prices, like every line in Lighthouse; nothing is shifted "
-                    "forward, so nothing peeks at the future. A close outside them means price is stretched relative to where it is "
-                    "now, not where it was two weeks ago.\n\n"
-                    "Scoring on the low-lag bands instead was tested on the 20 sample stocks over 15 years and changed nothing that "
-                    "matters (long-term rule: Sharpe 0.32 either way; short-term: −0.13 vs −0.13), so the score keeps the standard "
-                    "definition and the chart shows whichever you find easier to read.")
+    st.caption("Shaded areas show market weather (red = bear, amber = turbulent). Triangles are the backtested rule's entries and exits. Drag to zoom, double-click to reset.")
+    plotly(ix.dashboard(res, last_days=last_days), key="dashboard")
+    with st.expander("How the price bands are built"):
+        n, k = res.params.band_window, res.params.band_std
+        st.markdown(f"The dashed centre line is a {n}-day **Hull moving average**: a weighted average that cancels most of the "
+                    f"delay of an ordinary average (about 3 sessions behind the price on the sample stocks, against about 9 for "
+                    f"the {n}-day simple average that classic Bollinger Bands use). The bands sit ± {k:g} standard deviations of "
+                    f"the closes around that line over the last {n} sessions. A close above the upper band means price is "
+                    "stretched relative to where it is now; the *Price bands* beacon scores that position (%B). Like every line "
+                    "in Lighthouse they use only past prices: nothing is shifted forward, so nothing peeks at the future.")
 
     # ---- backtest ---------------------------------------------------------
     bt = res.backtest
@@ -991,7 +983,7 @@ with tab_about:
         st.markdown("""
 1. **Collect & clean** daily prices, the S&P 500 and fundamentals (live sources first, then cache, then the bundled sample pack).
 2. **Fundamental beacons** (13): valuation, quality and growth ratios scored against sector norms.
-3. **Technical beacons** (6): trend, RSI, MACD, Bollinger %B, volume confirmation, 52-week-high proximity.
+3. **Technical beacons** (6): trend, RSI, MACD, position in the low-lag price bands (%B), volume confirmation, 52-week-high proximity.
 4. **Market weather**: Bull/Bear × Calm/Turbulent for the S&P 500 removes points, raises the entry bar and halves sizes in bear markets.
 5. **Decision**: horizon-weighted blend → verdict → position size from the *smallest* of three rules (max-loss, volatility target, concentration cap), paid from the **cash you have**.
 6. **Honest evaluation**: point-in-time backtest vs buy & hold and the S&P 500, layer attribution, sensitivity grid, walk-forward test.

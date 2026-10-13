@@ -22,14 +22,6 @@ def test_rsi_bounds_and_extremes():
     assert r.between(0, 100).all()
 
 
-def test_bollinger_pct_b_consistency(prices):
-    mid, up, lo, pct_b, bw = ind.bollinger(prices["Close"], 20, 2.0)
-    valid = pct_b.dropna().index
-    inside = ((prices.loc[valid, "Close"] >= lo[valid]) & (prices.loc[valid, "Close"] <= up[valid]))
-    assert inside.mean() > 0.8          # most closes sit inside the 2-sigma bands (random walks drift outside more often)
-    assert np.allclose(((up - lo) / 2 + lo)[valid], mid[valid])
-
-
 def test_atr_positive(prices):
     a = ind.atr(prices["High"], prices["Low"], prices["Close"], 14).dropna()
     assert (a > 0).all()
@@ -112,5 +104,9 @@ def test_lowlag_bands_follow_the_price(prices):
     gap_low = (close - mid).abs().div(close)[valid].mean()
     gap_sma = (close - ind.sma(close, 20)).abs().div(close)[valid].mean()
     assert gap_low < 0.75 * gap_sma                           # the centre sits much closer to the price
+    inside = ((close >= lo) & (close <= up))[valid]
+    assert inside.mean() > 0.85                               # most closes sit inside the 2-sigma bands
+    assert np.allclose(((up - lo) / 2 + lo)[valid], mid[valid])
     full = compute_indicators(prices)
-    assert {"ll_mid", "ll_upper", "ll_lower", "ll_pct_b"} <= set(full.columns)
+    assert {"band_mid", "band_upper", "band_lower", "pct_b"} <= set(full.columns)
+    assert not [c for c in full.columns if c.startswith("bb_")]   # the classic Bollinger columns are gone

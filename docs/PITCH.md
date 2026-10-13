@@ -16,10 +16,10 @@
 ## Live demo (60 seconds, pre-loaded)
 
 1. Streamlit app, sidebar already filled: MSFT, long-term, balanced, max loss 2%, $25,000. Press **Analyse**.
-2. Point at the verdict card: *Strong Buy, 73/100 — fundamental 63, technical 88, weather Bull/Calm.*
-3. Point at the position plan: *21 shares ≈ $1,768 (7.1%), exit $64.73, worst case $403. Size limited by the max-loss rule.* "The exit sits 23% below the price, so your 2% rule sizes it small — that is the product protecting you from yourself."
-4. Scroll to the beacon chart: "Every point of the 73 is right here. PEG is red — you're paying for growth. ROE and EPS growth are green. Trend and 52-week high carry the technical score."
-5. Switch risk to *aggressive* and horizon to *short*: verdict stays Strong Buy at 75, size jumps to 30%, exit tightens to an ATR stop at $81.56. "Same stock, different investor, different plan."
+2. Point at the verdict card: *Buy, 71/100 — fundamental 63, technical 83, weather Bull/Calm.*
+3. Point at the position plan: *19 shares ≈ $1,594 (6.5%), exit $64.73, worst case $364. Size limited by the max-loss rule.* "The exit sits 23% below the price, so your 2% rule sizes it small — that is the product protecting you from yourself."
+4. Scroll to the beacon chart: "Every point of the 71 is right here. PEG is red — you're paying for growth. ROE and EPS growth are green. Trend and 52-week high carry the technical score."
+5. Switch risk to *aggressive* and horizon to *short*: verdict stays Buy at 70, size jumps to 25%, exit tightens to an ATR stop at $81.56. "Same stock, different investor, different plan."
 6. Flash the backtest chart: strategy sat out 2008 (drawdown −29% vs −59%).
 
 Fallback if the network is down: the app's data source dropdown → `sample` (bundled real data) — the demo is identical.

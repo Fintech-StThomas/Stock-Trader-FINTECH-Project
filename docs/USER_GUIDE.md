@@ -41,10 +41,9 @@ $500 at its stop, but it can never cost more than the $5,000 of cash.
   worst-case loss if the stop fills at its price, and *which rule limited the size* (max loss, volatility target,
   concentration cap or your cash). Hold means keep what you own; Reduce means trim about half; Sell means exit.
 * **Trade ticket**: switch between 📈 Long and 📉 Short. See *Trade tickets* below.
-* **Price chart**: close, 50/200-day averages and price bands. The default **low-lag bands** follow the price (a 20-day
-  Hull moving average ± 2 standard deviations, about 3 sessions of lag). Switch to **Classic Bollinger** to see the bands
-  the score uses (a 20-day SMA ± 2σ, which trails the price by about 10 sessions by construction). Both use only past
-  prices; the expander under the chart explains the difference.
+* **Price chart**: close, 50/200-day averages and **price bands** that follow the price: a 20-day Hull moving average
+  (dashed) ± 2 standard deviations of the closes around it, about 3 sessions behind the price instead of the ~10 of
+  classic Bollinger Bands. They use only past prices; the *Price bands* beacon scores where the close sits in them.
 * **Backtest**: how the rule behind the verdict behaved historically versus buy-and-hold and the S&P 500.
 * **Warnings**: data-source notes (offline data, missing volume, fixture fundamentals) and anything to know before acting.
 

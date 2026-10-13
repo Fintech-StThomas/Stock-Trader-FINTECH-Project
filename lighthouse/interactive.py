@@ -178,21 +178,11 @@ def score_breakdown(decision, height: Optional[int] = None, beacons=None) -> go.
 # --------------------------------------------------------------------------- #
 # Price dashboard
 # --------------------------------------------------------------------------- #
-BANDS = ("lowlag", "classic")
-
-
-def _band_spec(p, bands: str) -> dict:
-    """Columns and labels of the band overlay. "lowlag": Hull-MA centre +/- k standard deviations of the closes around it
-    (follows the price, ~3 sessions of lag); "classic": Bollinger's SMA +/- k sigma (the one the score uses, ~10 sessions)."""
-    if bands not in BANDS:
-        raise ValueError(f"bands must be one of {BANDS}")
-    if bands == "lowlag":
-        return dict(up="ll_upper", lo="ll_lower", mid="ll_mid", name=f"Low-lag bands (±{p.bb_std:g}σ)",
-                    mid_name=f"Band centre (Hull MA {p.bb_window})", short=f"Hull {p.bb_window}",
-                    title=f"low-lag bands (Hull MA {p.bb_window} ± {p.bb_std:g}σ)", extra="low-lag bands")
-    return dict(up="bb_upper", lo="bb_lower", mid="bb_mid", name=f"Bollinger bands (±{p.bb_std:g}σ)",
-                mid_name=f"Bollinger middle (SMA {p.bb_window})", short=f"SMA {p.bb_window}",
-                title=f"Bollinger Bands (SMA {p.bb_window} ± {p.bb_std:g}σ, trailing)", extra="Bollinger")
+def _band_spec(p) -> dict:
+    """Columns and labels of the price-band overlay: a Hull-MA centre +/- k standard deviations of the closes around it."""
+    return dict(up="band_upper", lo="band_lower", mid="band_mid", name=f"Price bands (±{p.band_std:g}σ)",
+                mid_name=f"Band centre (Hull MA {p.band_window})", short=f"Hull {p.band_window}",
+                title=f"price bands (Hull MA {p.band_window} ± {p.band_std:g}σ)", extra="price bands")
 
 
 def _add_bands(fig, ind: pd.DataFrame, spec: dict, alpha: float, **rc) -> None:
@@ -207,12 +197,11 @@ def _add_bands(fig, ind: pd.DataFrame, spec: dict, alpha: float, **rc) -> None:
                                            f"<extra>{spec['extra']}</extra>"), **rc)
 
 
-def dashboard(result, last_days: int = 756, height: Optional[int] = None, bands: str = "lowlag") -> go.Figure:
-    """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons.
-    `bands`: "lowlag" (bands that follow the price) or "classic" (Bollinger's, which the score uses)."""
+def dashboard(result, last_days: int = 756, height: Optional[int] = None) -> go.Figure:
+    """Price with trend/bands/trades/regimes, volume, RSI and MACD: four linked panels with range buttons."""
     ind = result.indicators.tail(last_days)
     p = result.params
-    spec = _band_spec(p, bands)
+    spec = _band_spec(p)
     has_vol = ind["Volume"].notna().any()
     rows = 4 if has_vol else 3
     heights = [0.5, 0.14, 0.18, 0.18] if has_vol else [0.56, 0.22, 0.22]
@@ -421,11 +410,11 @@ def all_figures(result) -> Dict[str, go.Figure]:
 # --------------------------------------------------------------------------- #
 # Trade desk
 # --------------------------------------------------------------------------- #
-def trade_chart(result, plan, last_days: int = 180, height: int = 420, bands: str = "lowlag") -> go.Figure:
-    """Recent price with the ticket's levels: entry, stop, targets (and the bands for context)."""
+def trade_chart(result, plan, last_days: int = 180, height: int = 420) -> go.Figure:
+    """Recent price with the ticket's levels: entry, stop, targets (and the price bands for context)."""
     ind = result.indicators.tail(last_days)
     fig = go.Figure()
-    _add_bands(fig, ind, _band_spec(result.params, bands), 0.25)
+    _add_bands(fig, ind, _band_spec(result.params), 0.25)
     fig.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="Close", line=dict(color=SERIES["price"], width=1.8),
                              hovertemplate="close $%{y:,.2f}<extra></extra>"))
     levels = [("entry", plan.price, INK2, "solid")]

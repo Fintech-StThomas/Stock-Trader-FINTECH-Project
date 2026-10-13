@@ -49,27 +49,26 @@ All indicators are causal (rolling windows, `ewm(adjust=False)`): the value on d
 | Trend | 0.5·clip((Close/SMA200 − 1)/10%) + 0.5·clip((SMA50/SMA200 − 1)/5%) | Continuous Golden/Death Cross: fewer whipsaws than a binary cross | 35% / 20% |
 | RSI(14) | linear from −1 at 30 to +1 at 70, then fading (+1 → −1 from 70 to 100) | Confirms momentum; extremes signal exhaustion | 15% / 20% |
 | MACD(12/26/9) | histogram / ATR, clipped | Momentum acceleration, scale-free | 10% / 20% |
-| Bollinger %B (20, 2σ) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits in its recent range; above the band = over-extended | 10% / 15% |
+| Price bands %B (Hull 20, 2σ) | 2·(%B − 0.5) inside the bands, fading above 1 / below 0 | Where price sits around its low-lag centre line; above the band = over-extended | 10% / 15% |
 | Volume | 0.5·sign(20-day return)·clip((vol20/vol60 − 1)/0.5, 0, 1) + 0.5·sign(OBV − SMA20(OBV)) | A move on expanding volume is more trustworthy; excluded (grey) when volume is unavailable | 10% / 15% |
 | 52-week high | +1 at the high, 0 at 20% below, −1 at 40% below | Breakout proximity; momentum literature | 20% / 10% |
 
 Technical score = 50 + 50 × weighted mean, with weights re-normalised over available beacons. Long-term weights lean on slow beacons (trend, breakout); short-term on oscillators.
 
-**Why the Bollinger Bands trail the price.** The bands are the 20-day simple moving average (the *middle band*, drawn dashed on
-every chart) ± 2 population standard deviations of the same 20 closes, as John Bollinger defines them. A trailing 20-day average
-lags price by (20 − 1) / 2 = 9.5 sessions, and after a sharp move the band width keeps growing until the move leaves the
-20-day window. On the sample data the middle band lines up best with the close from 9–10 sessions earlier, exactly as
-theory says. Centring the bands on the price would use the next ~10 days of prices, which is look-ahead, so they are not
-shifted.
+**Price bands: low lag instead of Bollinger's.** Classic Bollinger Bands are a 20-day simple moving average ± 2σ of the
+same closes. A trailing 20-day average lags price by (20 − 1) / 2 = 9.5 sessions (the sample data agree: the middle band
+lines up best with the close from 9 sessions earlier), so the bands trail every move. Lighthouse uses a 20-day Hull moving
+average (Hull 2005: WMA(2·WMA(10) − WMA(20), 4)) as the centre and ± 2 standard deviations of the closes around it over
+the same 20 sessions. On the 20 sample stocks the centre's best-matching lag is 3.0 sessions instead of 9.2, at about
+twice the roughness; a rolling-regression endpoint lagged 2.1 but was rougher still, and a 10-day SMA lagged 4.2. The
+bands are causal (nothing is shifted forward; the truncation test covers them), and the *price bands* beacon scores %B
+on them exactly as it scored Bollinger's %B.
 
-**Low-lag bands for the charts.** The app draws, by default, bands that follow the price: a 20-day Hull moving average
-(Hull 2005: WMA(2·WMA(10) − WMA(20), 4)) ± 2 standard deviations of the closes around it over the same 20 sessions. They are
-causal (no shift forward; the truncation test covers them). On the 20 sample stocks the best-matching lag of the centre
-line fell from 9.2 sessions (SMA 20) to 3.0, at about twice the roughness; a rolling-regression endpoint lagged 2.1 but
-was rougher still, and a 10-day SMA lagged 4.2. Scoring the Bollinger beacon on the low-lag bands instead was tested on the
-same 20 stocks over 15 years: long-term rule Sharpe 0.323 → 0.322, short-term −0.134 → −0.127, better on 21 of 40
-stock-horizon pairs. That is no evidence either way, so the score keeps the standard definition and the classic bands are
-one click away on the chart. The static charts (CLI, report, notebook) still draw the classic bands.
+Switching the beacon from Bollinger's bands to these was tested before it was made: on the 20 sample stocks over 15
+years the long-term rule's average Sharpe went 0.323 → 0.322 and the short-term rule's −0.134 → −0.127 (better on 21 of
+40 stock-horizon pairs), and over the full 1990-2022 cross-ticker test the balanced profile's average Sharpe went
+0.394 → 0.399 (better on 9 stocks, worse on 10). In other words a wash on returns; the gain is a chart and a beacon that
+describe the price as it is now. The classic bands were removed in October 2026.
 
 ## 4. Market weather (regime)
 
@@ -118,7 +117,7 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 ## 8. Results and interpretation
 
-See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 6.4%, vol 12.7%, Sharpe 0.39, max DD −32%; conservative vol 8.8%, max DD −23%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 4/20.
+See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 6.5%, vol 12.7%, Sharpe 0.40, max DD −32%; conservative vol 8.8%, max DD −23%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 3/20.
 
 Interpretation: on a universe of survivors that compounded at 13% a year, a rule that is sometimes in cash cannot win on return. The product's value is that it delivers *the risk profile the investor asked for* — a balanced investor who said "15% volatility, lose at most 2% per idea" actually gets ~13% volatility and a defined worst case — while keeping most of the up-trend exposure. We state this plainly rather than hiding it behind a cherry-picked ticker.
 
@@ -204,7 +203,7 @@ the most estimation-sensitive.
 
 | Issue | Effect | Fix |
 |---|---|---|
-| Bollinger middle band computed but never drawn | The bands appeared to float around nothing | Dashed 20-day SMA on both chart sets, plus the lag explanation above |
+| Bollinger middle band computed but never drawn | The bands appeared to float around nothing | Dashed 20-day SMA on both chart sets (the classic bands were later replaced by low-lag price bands, §3) |
 | Market-weather shading never appeared in the interactive charts | Plotly silently drops shapes aimed at a subplot that has no trace yet; the legend listed regimes that were not drawn | Shapes are added with `exclude_empty_subplots=False` |
 | Sortino ratio used the standard deviation of the negative returns only | Wrong formula (overstated or understated depending on the series) | Downside deviation below the risk-free rate over **all** periods (Sortino & Price 1994) |
 | Profit factor summed unweighted trade returns | A small trade counted as much as a large one | Gross profit / gross loss of size-weighted P&L |
@@ -226,13 +225,15 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | A bar for a session still trading was used as a finished day | Signals, especially volume, moved during the day; a partial bar could sit in the cache for 20 hours | Unfinished bar left out and never cached; orders priced from a timestamped quote |
 | A cache written before a session closed was reused after it | A finished session could be missing for most of a day | The cache expires at the first session close after the download |
 | The app's "Position monitor" asked the investor to type in positions | Not what the tickets are for: the sell decision belongs to the plan | Removed; every ticket shows *When to get out* |
+| Bollinger Bands trailed the price by ~10 sessions | The chart and the beacon described where price was two weeks earlier | Hull-MA price bands (~3 sessions); the classic bands are gone from the score and every chart (§3) |
+| The README's cross-ticker table had no generating script | Its provenance could not be checked | `scripts/cross_ticker_evaluation.py` rebuilds it (it reproduced the old file byte for byte before the band change) |
 
 ## 12. Q&A preparation
 
-* **Why these indicators?** Trend (200-day) is the most robust timing signal in the literature; RSI/MACD/Bollinger cover momentum, acceleration and range; volume validates moves; 52-week high is the simplest breakout measure. Fundamentals cover the three questions an analyst asks: is it cheap, is it good, is it growing.
+* **Why these indicators?** Trend (200-day) is the most robust timing signal in the literature; RSI/MACD/price bands cover momentum, acceleration and range; volume validates moves; 52-week high is the simplest breakout measure. Fundamentals cover the three questions an analyst asks: is it cheap, is it good, is it growing.
 * **Why should they predict returns?** Trend and momentum persistence are documented anomalies; quality and value premia are documented factors. We do not claim short-term prediction; we claim better risk-adjusted participation.
 * **Why these thresholds?** Chosen *before* tuning for interpretability (60 = clearly positive evidence; 35 = clearly negative), then checked with a sensitivity grid: results form a plateau and in-sample tuning did not improve out-of-sample results.
 * **Different market conditions?** The regime table shows the rule loses roughly half as much as buy-and-hold in Bear/Turbulent markets and keeps 60-65% exposure in Bull/Calm markets.
-* **Sensitivity?** Sharpe across 20 threshold pairs on Microsoft ranged 0.05-0.20 (default 0.18); the biggest sensitivity is the review frequency and the stop design, which is why both are documented above.
+* **Sensitivity?** Sharpe across 25 threshold pairs on Microsoft ranged 0.08-0.20 (median 0.16, default 0.18); the biggest sensitivity is the review frequency and the stop design, which is why both are documented above.
 * **Biggest weaknesses?** Whipsaw losses in long sideways markets; sector norms are assumptions; short fundamental history; survivorship in our test universe; no transaction-tax modelling.
 * **What did GenAI contribute?** Code scaffolding, indicator implementations and the experiment harness. The team decided the customer, the signals, the weights, the exit design, what to reject, and how to present results honestly.

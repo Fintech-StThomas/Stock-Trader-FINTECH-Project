@@ -41,17 +41,6 @@ def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
     return line, sig, hist
 
 
-def bollinger(close: pd.Series, window: int = 20, num_std: float = 2.0):
-    mid = sma(close, window)
-    std = close.rolling(window, min_periods=window).std(ddof=0)
-    upper = mid + num_std * std
-    lower = mid - num_std * std
-    width = (upper - lower)
-    pct_b = (close - lower) / width.replace(0.0, np.nan)
-    bandwidth = width / mid.replace(0.0, np.nan)
-    return mid, upper, lower, pct_b, bandwidth
-
-
 def wma(series: pd.Series, window: int) -> pd.Series:
     """Linearly weighted moving average (weights 1..window, the newest bar weighs most)."""
     x = series.to_numpy(dtype=float)
@@ -70,9 +59,10 @@ def hull_ma(series: pd.Series, window: int) -> pd.Series:
 
 
 def lowlag_bands(close: pd.Series, window: int = 20, num_std: float = 2.0):
-    """Bands that follow the price: a Hull moving average as the centre, +/- `num_std` standard deviations of the
-    closes around it over the last `window` sessions. They answer the same question as Bollinger Bands (is price
-    stretched?) relative to where price is now rather than where it was ~10 sessions ago. Causal: no shift forward."""
+    """Price bands that follow the price: a Hull moving average as the centre, +/- `num_std` standard deviations of the
+    closes around it over the last `window` sessions. They ask the question Bollinger Bands ask (is price stretched?)
+    relative to where price is now: Bollinger's 20-day SMA centre trails the price by ~10 sessions, this one by ~3.
+    Returns (centre, upper, lower, %B). Causal: nothing is shifted forward."""
     mid = hull_ma(close, window)
     std = (close - mid).rolling(window, min_periods=window).std(ddof=0)
     upper, lower = mid + num_std * std, mid - num_std * std
