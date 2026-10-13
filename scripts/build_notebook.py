@@ -172,9 +172,11 @@ display(ranking[["ticker", "name", "verdict", "score", "fundamental", "technical
 fig = ch.plot_screener(ranking); plt.show()""")
 md("""## 9 · Trade ticket: buy or short it right now
 
-The ticket sizes the trade from your **cash**, sets the stop-loss, two take-profit levels (in multiples of the risk, *R*),
-a trailing stop and a time stop, and replays those exact rules on the stock's own history. Shorts mirror the long rules and
-always use the tactical short-horizon stop.""")
+The ticket sizes the trade from your **cash**, sets the stop-loss and the exits, and replays those exact rules on the
+stock's own history. A long-term buy has no fixed profit target: it is sold after a month-end close below the 200-day SMA
+− 8% (a level that rises with the trend) or when the technical score fades to 35, the backtest's own exits. Short-term
+trades and shorts take profit at two levels in multiples of the risk (*R*) with a trailing and a time stop. Shorts mirror
+the long rules and always use the tactical short-horizon stop.""")
 code("""from lighthouse.tradeplan import build_trade_plan, TradeSettings
 settings = TradeSettings(reward_multiples=(2, 3), partial_exit=0.5)
 for side in ("long", "short"):

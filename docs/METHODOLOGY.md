@@ -162,26 +162,58 @@ Interpretation: on a universe of survivors that compounded at 13% a year, a rule
 | Stop-loss | Longs: the horizon's stop (200-day SMA − 8% long term, 2.5 × ATR short term). **Shorts always use the short-horizon ATR stop** | A short's loss is open-ended and borrow fees accrue daily; a wide SMA stop would make its targets meaningless |
 | Size | The three risk rules as % of the account × conviction × regime, capped by the cash; shorts are capped at 1:1 collateral (Regulation T would allow 2:1) | Same engine as the Position plan, so the long ticket and the plan agree |
 | Entry | Limit order at the last price; skip if price has run 0.5 × ATR beyond it | Do not chase |
-| Targets | Target 1 = entry ± 2R, target 2 = entry ± 3R (R = entry-to-stop distance; editable) | R-multiples express reward in units of risk; a 2R target needs a win rate above 1/3 to pay |
-| Management | Sell 50% at target 1, move the stop on the rest to breakeven, then trail it at the best close ∓ k × ATR (chandelier exit); time stop after 40 (short horizon) / 252 (long) sessions | Locks in gains, caps dead money |
+| Long-horizon buys: trend plan (default) | No fixed target. The stop order stays where it was placed; at the last close of each month, sell at the next open if the close is below the 200-day SMA − 8% (the *trend exit*, a level that rises with the average) or the technical score is ≤ 35 (the *signal exit*). No time stop | The long-horizon backtest's own exits, so the ticket and the backtest agree; tested against R targets below |
+| Short horizon and shorts: targets | Target 1 = entry ± 2R, target 2 = entry ± 3R (R = entry-to-stop distance; editable). Long-horizon buys can use them too (`TradeSettings.long_exit = "targets"`) | R-multiples express reward in units of risk; a 2R target needs a win rate above 1/3 to pay |
+| Management (targets) | Sell 50% at target 1, move the stop on the rest to breakeven, then trail it at the best close ∓ k × ATR (chandelier exit); time stop after 40 (short horizon) / 252 (long) sessions | Locks in gains, caps dead money |
 | Portfolio heat | Ideas are funded best-first until the cash, the idea count (5) or the total planned risk (6% of the account) runs out; leftovers smaller than 25% of an idea's full size are not funded | Limits correlated losses across many open trades |
 
 **Historical setup test.** For every past day the stock met the (point-in-time) setup rule, the trade is entered at the next
 session's open (the close for close-only data) and managed with exactly the rules above, one trade at a time, after costs.
+A trend plan's review-day exits fill at the next session's open, as in the backtest.
 Gaps fill at the open; when a stop and a target fall in the same session the stop is assumed first. Results are in R
 (expectancy, win rate, profit factor, share of trades reaching target 1 / stopped / timed out). A ticket whose rules lost
 money on that stock is flagged in red. Shorts are simulated on the dividend-adjusted series, so the dividends a short seller
 owes are reflected; borrow fees are not.
 
+**Long-horizon exits: trend plan instead of far targets.** The long-horizon stop sits 8% below the 200-day SMA, typically
+15-30% under the price, so R is large and 2R / 3R targets sat 30-80% away (MSFT in October 2026: stop 26% away, targets
++53% and +79%). Candidate plans were replayed with the setup test on every long-horizon setup of the 20 sample stocks,
+balanced profile, after costs, all with the same entries and the same initial stop (so R is comparable):
+
+| Plan (1990-2022) | Trades | Avg R | Win rate | Avg sessions | Return a year held |
+|---|---|---|---|---|---|
+| 2R / 3R targets, 5 × ATR trail, 252-session time stop (until October 2026) | 707 | +0.56 | 63% | 170 | 16.8% |
+| Volatility targets: 1σ / 2σ of the 1-year move, 5 × ATR trail | 767 | +0.51 | 66% | 158 | 16.1% |
+| Stop raised monthly to the 200-day SMA − 8%, tightened to a 5 × ATR trail after a 1σ (1-year) gain | 745 | +0.53 | 56% | 153 | 16.7% |
+| Stop order raised to the 200-day SMA − 8% each month | 361 | +2.17 | 44% | 310 | 26.4% |
+| Same, plus the signal exit | 369 | +2.26 | 45% | 302 | 26.3% |
+| Same, but half sold at +1σ | 361 | +1.32 | 46% | 310 | 16.2% |
+| Chandelier 5 × ATR trail from entry (with the SMA trail) | 3,566 | +0.09 | 43% | 27 | 12.9% |
+| **Trend plan: stop order kept; month-end trend and signal exits (the backtest's)** | **296** | **+3.56** | **45%** | **392** | **33.9%** |
+
+The trend plan had the higher average R on all 20 stocks, in each decade (1990s +6.3R vs +0.75R, 2000s +1.5R vs +0.26R,
+2010-22 +3.4R vs +0.64R), and over the app's shorter windows (`scripts/exit_plan_evaluation.py`): last 15 years +2.53R vs
++0.57R (20.1% vs 13.2% a year held; better on 18 of 20 stocks), last 10 years +2.09R vs +0.62R (19.5% vs 15.3%; 16 of 20).
+Loss tails were similar: 5% of trend-plan trades lost more than 1.3R (gaps through the stop) against 1.2R for the targets.
+What it costs: a lower median trade (−0.22R; most trades lose a little, a few win a lot), fewer trades, long holding periods,
+and a large give-back from the peak before a trend exit fires. Faster profit-taking (volatility targets, partial sales,
+tight ATR trails) cut the winners that pay for everything else. Checking the trend rules at month-end closes rather than
+resting the raised stop as an order avoided intra-month shake-outs (+3.56R vs +2.26R). Caveat: the sample stocks are 2022
+survivors, which flatters any plan that lets winners run; the trend plan still beat the targets on GE, BBY and RRC, the
+pack's weakest stocks. Long-term investors who prefer fixed targets can switch them back on.
+
 **When to get out.** Every ticket lists its exits with a trigger, the result for the *whole* position if the trade ends
-that way, and how often (and how fast) the setup test's trades ended that way on that stock: the stop (−1R); target 1 (the
+that way, and how often (and how fast) the setup test's trades ended that way on that stock. A trend plan lists the stop
+order (−1R), the trend exit (today's level; its result depends on how far the trend ran, so the row shows the average
+result of past trend exits) and the signal exit (today's technical score against 35). A targets plan lists the stop (−1R); target 1 (the
 partial sold there, which is also the result if the rest is then stopped at breakeven); the trailing stop (between target 1
 and target 2); target 2 (the best planned outcome); the time stop (between the stop and target 1); and a verdict turning
 against the trade at the weekly (short horizon) or monthly (long horizon) review. The exits are decided, and the stop
 order placed, when the trade is entered.
 
 **Position replay (CLI `monitor`).** An open position is replayed from the session after its entry with the same rules,
-assuming the plan was followed: the shares sold at target 1 are the ticket's split (half by default, all of a single
+assuming the plan was followed. A trend plan reports a stop hit, a trend or signal exit already taken, or a review at the
+last close that says sell at the next open. On a targets plan: the shares sold at target 1 are the ticket's split (half by default, all of a single
 share), every later exit closes what is left. P&L is realised on those fills (the fill price, so a gap through a target
 or a stop counts at the open) and unrealised only on the shares still held, at the last close; R is that total over the
 initial risk of the whole position. It also reports how far price is from the current (breakeven or trailing) stop, a
@@ -266,6 +298,7 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 
 | Issue | Effect | Fix |
 |---|---|---|
+| Long-horizon targets sat 30-80% away (2R / 3R on a stop 8% below the 200-day SMA), and the ticket's fixed stop differed from the backtest's monthly SMA exit | Profit targets that a long-term trade rarely reached; two different exit models | Long-horizon buys follow the backtest's month-end trend and signal exits, no fixed target (+3.56R vs +0.56R per trade on the sample setups, §9); `scripts/exit_plan_evaluation.py` |
 | The Hull-MA band centre still trailed the price by ~3 sessions and swung 26% past a jump | The chart's centre line and the *price bands* beacon described the price of three days earlier | Holt's trend filter (0.4 / 0.1): ~1 session behind, no lag in a trend, 9% overshoot (§3); `scripts/band_lag_evaluation.py` measures every candidate |
 
 ## 12. Speed

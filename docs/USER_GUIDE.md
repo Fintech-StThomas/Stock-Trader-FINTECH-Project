@@ -54,16 +54,29 @@ A ticket is a complete order plan:
 1. **Entry**: a limit order near the last price, and a do-not-chase price (skip the trade if it has already run 0.5 ATR past the entry).
 2. **Stop-loss**: placed immediately. Longs use the horizon's stop; shorts always use a 2.5 × ATR stop (balanced risk).
    The planned loss is shown in dollars and as % of your account.
-3. **Take profit 1** (2R by default, R = the distance to the stop): sell half and move the stop on the rest to breakeven.
-4. **Trailing stop**: after target 1, the stop follows the best close since entry minus k × ATR. It never loosens.
-5. **Take profit 2** (3R by default): sell the rest.
-6. **Time stop**: close a trade that has reached neither the stop nor target 1 after 40 sessions (short horizon) or 252 (long).
+3. **How the profit is taken** depends on the trade:
+   * **Long-term buys: trend exits, no fixed target.** At the last close of each month, sell everything at the next open if
+     the close is below the 200-day SMA − 8% (a level that rises with the trend, so it locks in more of the gain the
+     longer the trend runs) or the technical score has faded to 35 or lower. These are the long-horizon backtest's own
+     exits. The stop order stays where it was placed and caps the loss between reviews.
+   * **Short-term trades and shorts: profit targets.** Take profit 1 (2R by default, R = the distance to the stop): sell
+     half and move the stop on the rest to breakeven. Then a **trailing stop** follows the best close since entry minus
+     k × ATR and never loosens. Take profit 2 (3R by default) sells the rest. A **time stop** closes a trade that has
+     reached neither the stop nor target 1 after 40 sessions (252 for a long-term trade on profit targets).
+
+Why no target on long-term buys: the long-term stop sits 8% below the 200-day SMA, often 20-30% under the price, so a 2R
+target needed a 40-80% rise. Replayed on every past setup of the 20 sample stocks, the trend exits earned +3.6R per trade
+against +0.6R for the targets (1990-2022; +2.5R vs +0.6R over the last 15 years). Profit targets stay available under
+*Trade management* ("Long-term buys: how to take profit").
 
 Each ticket shows **how these exact rules did on this stock's own history**: number of trades, win rate, average result
 in R per trade after costs, and profit factor. If the rules lost money on that stock, the ticket says so in red. Change the
 targets, the partial exit, the time stop, the number of ideas and the total-risk cap under *Trade management* in the sidebar.
 
-**When to get out** (on every ticket): one row per exit, for a loss or a profit, decided before you enter:
+**When to get out** (on every ticket): one row per exit, for a loss or a profit, decided before you enter. A long-term buy
+lists the stop order (−1R), the 📈 trend exit (its level today; the result depends on how far the trend ran, so the row
+shows the average result of past trend exits) and the 🧭 signal exit (the technical score today against 35). A trade on
+profit targets lists:
 
 | Exit | Trigger | Result shown |
 |---|---|---|
@@ -136,9 +149,11 @@ python -m lighthouse portfolio --goal balanced --cash 10000
 python -m lighthouse portfolio --goal growth --universe technology --cash 10000
 ```
 
-`trade` prints each ticket's plan and its *when to get out* list. `monitor` replays a position you hold since its entry
-with the same rules (target 1 sells half, the stop then moves to breakeven and trails) and reports the exits already
-taken, the realised and unrealised P&L, and where the stop is now. During market hours it includes today's unfinished
+`trade` prints each ticket's plan and its *when to get out* list (`--long-exit targets` puts long-term buys on profit
+targets). `monitor` replays a position you hold since its entry with the same rules (a long-term buy: the stop order and
+the month-end trend and signal exits; otherwise target 1 sells half, the stop then moves to breakeven and trails) and
+reports the exits already taken, the realised and unrealised P&L, where the stop is now, and whether the last review says
+sell at the next open. During market hours it includes today's unfinished
 session, so a position bought today can be replayed and a stop hit today shows up.
 
 Add `--as-of 2020-03-20` to `analyze` to ask what Lighthouse would have said on a past day. `--portfolio` still works and
