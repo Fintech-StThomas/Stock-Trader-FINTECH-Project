@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from .config import InvestorProfile, StrategyParams
-from .decision import backtest_size_fraction
+from .decision import backtest_size_fraction, stop_level
 from .indicators import max_drawdown
 from .regime import regime_table
 from .technicals import compute_indicators, technical_score, beacon_scores
@@ -210,8 +210,11 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
 
     close = ind["Close"].values[first:last + 1]
     open_ = ind["Open"].values[first:last + 1]
+    low = ind["Low"].values[first:last + 1]
     has_open = bool(np.nanmean(np.abs(open_ / close - 1.0)) > 1e-6)   # sample files without real opens use the close
+    has_range = bool(np.nanmean(np.abs(ind["High"].values[first:last + 1] - low) / close) > 1e-6)
     atr = ind["atr"].values[first:last + 1]
+    sma = ind["sma_slow"].values[first:last + 1]
     rvol = ind["sizing_vol"].values[first:last + 1]
     ts = tscore.values[first:last + 1]
     tr = trend.values[first:last + 1]
@@ -220,7 +223,32 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     fs = fscore[first:last + 1]
     bull, turb, regime_known = bull[first:last + 1], turb[first:last + 1], regime_known[first:last + 1]
 
-    cost = (p.cost_bps + p.slippage_bps) / 10_000.0
+    # costs per side: fixed, or commission + Corwin-Schultz half spread (floored at the slippage) + square-root impact
+    fixed_cost = (p.cost_bps + p.slippage_bps) / 10_000.0
+    liquid = p.cost_model == "liquidity"
+    if liquid:
+        from .costs import corwin_schultz_spread, dollar_volume, impact_bps
+        half = (corwin_schultz_spread(ind["High"], ind["Low"]) * 1e4 / 2.0).fillna(0.0).clip(lower=p.slippage_bps)
+        half = half.values[first:last + 1]
+        lr = np.log(ind["Close"] / ind["Close"].shift(1))
+        dvol = lr.rolling(21, min_periods=5).std().values[first:last + 1]
+        adv = dollar_volume(ind["Close"], ind["Volume"] if "Volume" in ind else None).values[first:last + 1]
+
+    def side_cost(i: int, weight: float) -> float:
+        """Cost of trading `weight` of the sleeve on day i: the order is that share of the investor's account."""
+        if not liquid:
+            return fixed_cost
+        dollars = p.order_value if p.order_value is not None else abs(weight) * prof.account_value
+        return float((p.cost_bps + half[i] + impact_bps(dollars, adv[i], dvol[i])) / 10_000.0)
+
+    # uninvested cash earns the risk-free rate (the T-bill series when given, else the fixed rate)
+    if p.cash_yield:
+        rf_d = (rate_on(risk_free, idx).to_numpy() if risk_free is not None and len(risk_free)
+                else np.full(n, p.risk_free_rate)) / p.trading_days
+    else:
+        rf_d = np.zeros(n)
+    resting = use_stops and p.resting_stops
+
     cash, shares = 1.0, 0.0
     equity = np.empty(n)
     exposure = np.zeros(n)
@@ -229,55 +257,90 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     pending: Optional[Tuple[str, float, str]] = None   # (side, size_fraction, reason)
     entry_i = entry_px = size_frac = 0.0
     trail_high = stop = np.nan
+    stop_order = np.nan                                  # the resting stop order (NaN: none)
+
+    def close_trade(i: int, px_raw: float, reason: str) -> None:
+        nonlocal cash, shares
+        c = side_cost(i, size_frac)
+        px = px_raw * (1.0 - c)
+        cash += shares * px
+        ret = px / entry_px - 1.0
+        trades.append(Trade(idx[int(entry_i)], float(entry_px), idx[i], float(px), float(size_frac),
+                            float(ret), float(ret * size_frac), int(i - entry_i), reason))
+        shares = 0.0
 
     for i in range(n):
+        if i > 0:
+            cash *= 1.0 + rf_d[i]
         fill = open_[i] if has_open else close[i]
-        # 1) execute yesterday's decision
+        entered_today = False
+        # 1) execute yesterday's decision at the open
         if pending is not None:
             side, frac, reason = pending
             if side == "rebalance" and shares > 0:
                 target_value = frac * (cash + shares * fill)
                 delta_shares = target_value / fill - shares
+                c = side_cost(i, frac - size_frac)
                 if delta_shares > 0:
-                    px = fill * (1.0 + cost); cash -= delta_shares * px
+                    px = fill * (1.0 + c); cash -= delta_shares * px
                 else:
-                    px = fill * (1.0 - cost); cash += -delta_shares * px
+                    px = fill * (1.0 - c); cash += -delta_shares * px
                 shares += delta_shares
                 size_frac = frac
             elif side == "buy" and shares == 0:
-                px = fill * (1.0 + cost)
+                c = side_cost(i, frac)
+                px = fill * (1.0 + c)
                 alloc = cash * frac
                 shares = alloc / px
                 cash -= alloc
                 entry_i, entry_px, size_frac = i, px, frac
+                entered_today = True
                 trail_high = close[i - 1] if i > 0 else fill
                 stop = trail_high - prof.stop_atr_multiple * (atr[i - 1] if i > 0 else atr[i])
+                if resting:
+                    if p.atr_stop:
+                        stop_order = stop
+                    else:   # long horizon: the ticket's stop order, the 200-day SMA minus the buffer, left in place
+                        lvl, _, _ = stop_level(fill, atr[i - 1] if i > 0 else atr[i], sma[i - 1] if i > 0 else sma[i],
+                                               prof, p)
+                        stop_order = lvl if lvl is not None else np.nan
             elif side == "sell" and shares > 0:
-                px = fill * (1.0 - cost)
-                cash += shares * px
-                ret = px / entry_px - 1.0
-                trades.append(Trade(idx[int(entry_i)], float(entry_px), idx[i], float(px), float(size_frac),
-                                    float(ret), float(ret * size_frac), int(i - entry_i), reason))
-                shares = 0.0
+                close_trade(i, fill, reason)
+                stop_order = np.nan
             pending = None
-        # 2) mark to market
+        # 2) the resting stop during the day: at the open on a gap through it, else at the stop price
+        if resting and shares > 0 and np.isfinite(stop_order):
+            hit = None
+            if not has_range:                      # close-only data: the close is all that is known
+                if close[i] <= stop_order:
+                    hit = close[i]
+            elif not entered_today and has_open and open_[i] <= stop_order:
+                hit = open_[i]
+            elif low[i] <= stop_order:
+                hit = stop_order
+            if hit is not None:
+                close_trade(i, hit, "stop order")
+                stop_order = np.nan
+        # 3) mark to market
         equity[i] = cash + shares * close[i]
         exposure[i] = (shares * close[i]) / equity[i] if equity[i] > 0 else 0.0
         in_market[i] = shares > 0
-        # 3) decide for tomorrow (only information up to today's close is used)
+        # 4) decide for tomorrow (only information up to today's close is used)
         if i == n - 1:
             break
         if shares > 0:
             trail_high = max(trail_high, close[i])
             if np.isfinite(atr[i]):
                 stop = max(stop, trail_high - prof.stop_atr_multiple * atr[i]) if np.isfinite(stop) else trail_high - prof.stop_atr_multiple * atr[i]
+                if resting and p.atr_stop:
+                    stop_order = stop              # the trailing stop order is raised at the close, never lowered
             if dec[i] and np.isfinite(ts[i]) and ts[i] <= p.exit_score:
                 pending = ("sell", 0.0, "signal exit")
             elif dec[i] and p.exit_below_sma is not None and np.isfinite(sd[i]) and sd[i] < -p.exit_below_sma:
                 pending = ("sell", 0.0, "below 200-day SMA")
             elif dec[i] and p.trend_exit is not None and np.isfinite(tr[i]) and tr[i] < p.trend_exit:
                 pending = ("sell", 0.0, "trend broken")
-            elif use_stops and p.atr_stop and np.isfinite(stop) and close[i] < stop:
+            elif use_stops and p.atr_stop and not resting and np.isfinite(stop) and close[i] < stop:
                 pending = ("sell", 0.0, "trailing stop")
             elif dec[i] and sizing != "full":
                 # review day: steer the position back toward its volatility target
@@ -305,7 +368,8 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
 
     # close any open position at the final close so the trade list is complete
     if shares > 0:
-        px = close[-1] * (1.0 - cost)
+        c = side_cost(n - 1, size_frac)
+        px = close[-1] * (1.0 - c)
         ret = px / entry_px - 1.0
         trades.append(Trade(idx[int(entry_i)], float(entry_px), idx[-1], float(px), float(size_frac),
                             float(ret), float(ret * size_frac), int(n - 1 - entry_i), "end of data (open)"))
@@ -321,7 +385,13 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     return BacktestResult(prices.attrs.get("ticker", ""), eq, bh, bench, pd.Series(exposure, index=idx), signals, trades,
                           p, prof, {"use_regime": use_regime, "use_fundamental_gate": use_fundamental_gate,
                                     "use_stops": use_stops, "sizing": sizing, "fills": "next open" if has_open else "next close",
-                                    "risk_free": describe_risk_free(risk_free, idx, p.risk_free_rate)},
+                                    "risk_free": describe_risk_free(risk_free, idx, p.risk_free_rate),
+                                    "costs": ("commission + Corwin-Schultz half spread (floor "
+                                              f"{p.slippage_bps:g} bps) + square-root impact" if liquid else
+                                              f"fixed {p.cost_bps + p.slippage_bps:g} bps per side"),
+                                    "stops": ("resting orders (gaps fill at the open)" if resting else
+                                              "checked at the close, filled next open" if use_stops else "off"),
+                                    "cash": "earns the risk-free rate" if p.cash_yield else "earns 0%"},
                           risk_free=risk_free)
 
 

@@ -206,8 +206,13 @@ class StrategyParams:
     turbulent_score_penalty: float = 3.0    # composite-score points removed when volatility is elevated
     # --- costs & evaluation ------------------------------------------------------
     cost_bps: float = 5.0          # commission per side, basis points
-    slippage_bps: float = 5.0      # slippage per side, basis points
-    risk_free_rate: float = 0.02   # annual, for Sharpe/Sortino
+    slippage_bps: float = 5.0      # slippage per side, basis points (the floor of the half spread with cost_model "liquidity")
+    cost_model: str = "liquidity"  # "liquidity": commission + Corwin-Schultz half spread + square-root impact; "fixed"
+    order_value: Optional[float] = None   # $ size of an order for the impact estimate (None: the position's own size)
+    resting_stops: bool = True     # stops are orders: filled during the day at the stop, or at the open on a gap
+    cash_yield: bool = True        # uninvested cash earns the risk-free rate (the T-bill live; risk_free_rate offline)
+    short_borrow_fee: float = 0.005  # annual borrow fee on shorts (an assumption: free data has no borrow rates)
+    risk_free_rate: float = 0.02   # annual, for Sharpe/Sortino (and cash) when no T-bill series is available
     trading_days: int = 252
 
     @classmethod

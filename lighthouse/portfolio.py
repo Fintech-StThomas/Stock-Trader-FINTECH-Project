@@ -518,14 +518,22 @@ def _rebalance_flags(index: pd.DatetimeIndex, freq: str) -> np.ndarray:
 
 def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[..., Tuple[np.ndarray, float]], lookback: int = 252,
                      rebalance: str = "monthly", cost_bps: float = 10.0, risk_free_rate: Union[float, pd.Series] = 0.02,
-                     label: str = "portfolio", pass_holdings: bool = False) -> PortfolioBacktest:
+                     label: str = "portfolio", pass_holdings: bool = False, cash_yield: bool = True) -> PortfolioBacktest:
     """Walk forward: on each rebalance day t, `weight_fn(t)` sees returns up to and including day t and returns
     (risky weights, invested fraction); with `pass_holdings` it is called as `weight_fn(t, w)` with the weights held
     at that close (after drift), so a rule can keep what it owns. The trade executes at the NEXT day's close (no
     look-ahead), pays `cost_bps` on every dollar traded (turnover = buys + sells as a share of the portfolio), and the
-    weights then drift with prices until the next rebalance. Cash earns 0%."""
+    weights then drift with prices until the next rebalance. The part not invested (a volatility target's cash
+    buffer) earns `risk_free_rate` (the T-bill series day by day, or a fixed rate) unless `cash_yield` is False."""
     r = returns.to_numpy(dtype=float)
     dates = returns.index
+    if not cash_yield:
+        rf_d = np.zeros(len(dates))
+    elif isinstance(risk_free_rate, pd.Series):
+        from .backtest import rate_on
+        rf_d = rate_on(risk_free_rate, dates).to_numpy() / TRADING_DAYS
+    else:
+        rf_d = np.full(len(dates), float(risk_free_rate) / TRADING_DAYS)
     t_n, n = r.shape
     flags = _rebalance_flags(dates, rebalance)
     flags[: lookback - 1] = False
@@ -539,7 +547,7 @@ def backtest_weights(returns: pd.DataFrame, weight_fn: Callable[..., Tuple[np.nd
     eq, w_rows, w_dates, turns, turn_dates = [], [], [], [], []
     for t in range(t0, t_n):
         if t > t0:
-            rp = float(w @ r[t])
+            rp = float(w @ r[t]) + max(0.0, 1.0 - float(w.sum())) * rf_d[t]
             v *= 1.0 + rp
             if 1.0 + rp > 0:
                 w = w * (1.0 + r[t]) / (1.0 + rp)

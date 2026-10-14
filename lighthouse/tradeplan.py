@@ -650,7 +650,9 @@ def build_trade_plan(result, side: str = "long", settings: Optional[TradeSetting
             "hard-to-borrow stocks charge a daily borrow fee and the lender can recall the shares.",
             "A short's loss is not capped by the purchase price: if the stock gaps up through the stop (or is squeezed), "
             "the loss can exceed the plan.",
-            "Short sellers owe any dividends paid while short (payment in lieu).",
+            "Short sellers owe any dividends paid while short (payment in lieu); the historical test includes them.",
+            f"Borrow fee assumed {p.short_borrow_fee * 100:g}% a year (StrategyParams.short_borrow_fee) in the historical "
+            "test: free data has no borrow rates, and hard-to-borrow stocks can cost far more.",
             "SEC Rule 201: after a 10% one-day fall, shorts may only be sold above the national best bid for the rest of "
             "that day and the next.",
         ]
@@ -905,6 +907,8 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
         gross_r = sum(f * (px - entry_ls) for f, px, _, _ in exits) / risk
         exit_avg = sum(f * abs(px) for f, px, _, _ in exits)
         cost_r = cost * (entry_raw + exit_avg) / risk
+        if side == "short":     # the borrow fee on the shorted shares for every session held (an assumption)
+            cost_r += p.short_borrow_fee * (max(x[3] for x in exits) - e + 1) / p.trading_days * entry_raw / risk
         r = gross_r - cost_r
         reasons = [x[2] for x in exits]
         exit_bar = max(x[3] for x in exits)

@@ -142,7 +142,16 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 * Enter when trend beacon > 0, technical score ≥ 60 (+10 in a bear market), not Bear/Turbulent, point-in-time fundamental score ≥ 35 if known.
 * Exit when score ≤ 35 (long) / 40 (short), close < 200-SMA × 0.92 (long) / 0.97 (short), or the ATR stop (short, checked daily).
 * Size: volatility target / 60-day realised vol × regime multiplier, re-balanced on review days when the target moves by more than 10 points.
-* Fills at the next day's open (close when no open data), 5 bps commission + 5 bps slippage per side.
+* Fills at the next day's open (close when no open data). Costs per side (`cost_model = "liquidity"`, `lighthouse/costs.py`):
+  5 bps commission + the Corwin-Schultz half spread estimated from the last 21 sessions' highs and lows (floored at
+  5 bps, which is what close-only data such as most of the sample pack gets) + square-root market impact
+  (daily volatility × √(order / average daily dollar volume)), the order being the position's share of the account.
+  `cost_model = "fixed"` restores a flat 10 bps.
+* Stops are resting orders (`resting_stops`): filled during the day at the stop price, or at the open when the stock
+  gaps through it (the setup test already worked this way). Long horizon: the ticket's stop order, the 200-day SMA
+  minus 8% at entry, never moved; short horizon: the ATR trailing stop, raised at each close.
+* Uninvested cash earns the risk-free rate (`cash_yield`): the 3-month T-bill day by day on live data, the fixed 2%
+  offline. Sharpe ratios subtract the same rate, so a rule is no longer charged for cash that earned nothing.
 * Metrics: total return, CAGR, volatility, Sharpe and Sortino (risk-free rate: the 3-month T-bill day by day, FRED `DTB3`, when the prices are current; a fixed 2% for offline and sample data, so the published tables stay reproducible), max drawdown, Calmar, trades, win rate, average win/loss, profit factor, exposure; plus layer attribution, sensitivity grid (entry 50-70 × exit 25-45), walk-forward (tune on 60%, test on 40%) and regime breakdown.
 * No look-ahead: unit-tested by re-running on truncated data and comparing equity curves.
 
@@ -160,7 +169,22 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 ## 8. Results and interpretation
 
-See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 6.2%, vol 12.3%, Sharpe 0.38, max DD −31%; conservative vol 8.6%, max DD −22%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 3/20.
+See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 7.3%, vol 12.2%, Sharpe 0.47, max DD −27%; conservative vol 8.5%, max DD −18%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 9/20.
+
+What changed the published numbers this session, one step at a time (20 sample stocks, balanced, averages):
+
+| Step | CAGR | Sharpe | Max drawdown | Beat buy-and-hold (Sharpe) |
+|---|---|---|---|---|
+| Published before this session (fundamentals for MSFT only) | 6.5% | 0.401 | −32% | 4 of 20 |
+| Fundamental gate from SEC filings on all 20 stocks | 6.2% | 0.383 | −31% | 3 |
+| + uninvested cash earns the risk-free rate (2% offline) | 7.4% | 0.476 | −27% | 9 |
+| + stops as resting orders (71 stop-order exits) | 7.3% | 0.471 | −27% | 9 |
+| + liquidity-scaled costs (now) | 7.3% | 0.470 | −27% | 9 |
+
+The largest change is the cash: the rule spends much of its time partly or wholly in cash, which used to earn nothing
+while the Sharpe ratio subtracted 2% a year for it. Liquidity costs barely move these numbers because 19 of the 20
+sample series are close-only (no range, so the spread estimate falls to its 5 bps floor); on live data with highs, lows
+and volume they matter more.
 
 Since the fourth October 2026 session the backtest dates every fundamental by its SEC filing, so the point-in-time
 fundamental gate (score ≥ 35 to enter) now acts from 2009 on all 20 stocks instead of MSFT alone. It cost return:
@@ -380,6 +404,10 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | Today's ticker map pointed XOM at a new holding company (2026) with two quarters of filings | Exxon's history would have disappeared | `edgar.PREDECESSOR_CIKS` merges a successor issuer's predecessors |
 | A ticket could be produced from sample, stale or past data | An order priced from data that is not current | The live-mode rule (§1) |
 | The market clock ignored exchange holidays | A cache was treated as stale one close too early on holidays | NYSE holiday calendar (`data.nyse_holidays`) |
+| Uninvested backtest cash earned 0% while Sharpe ratios subtracted the risk-free rate | A rule that holds cash was charged for it twice (Sharpe 0.38 → 0.48 on the sample once fixed) | Cash earns the T-bill (live) or 2% (offline) in the strategy backtest and the portfolio walk-forward |
+| The strategy backtest checked stops at the close and sold at the next open; the long horizon had no stop at all | Gaps and intraday falls through a stop were filled at the wrong price; the backtest and the ticket's stop order disagreed | Resting stop orders, filled at the stop or at the open on a gap |
+| A fixed 10 bps per side regardless of liquidity | Small, illiquid or volatile stocks looked cheaper to trade than they are | Corwin-Schultz half spread + square-root impact (`lighthouse/costs.py`) |
+| Shorts carried no borrow cost | The short setup test overstated shorts | A configurable borrow fee (default 0.5% a year, an assumption) in the short setup test, shown on every short ticket |
 
 ## 12. Speed
 
