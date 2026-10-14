@@ -28,6 +28,7 @@ Nothing here is a guarantee: a stop is an order, not a price, and an overnight g
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -50,6 +51,51 @@ REG_T_INITIAL_SHORT = 0.50        # Regulation T: 150% of the short value = the 
 FINRA_SHORT_MAINT_PCT = 0.30      # FINRA Rule 4210(c): short stock >= $5: greater of $5/share or 30% of market value
 FINRA_SHORT_MAINT_PER_SHARE = 5.0
 FINRA_LOW_PRICE_MAINT_PER_SHARE = 2.5   # short stock < $5: greater of $2.50/share or 100% of market value
+
+
+class StaleDataError(RuntimeError):
+    """A trade ticket was asked for on data that is not current (bundled sample data, a stale cache, a past date, or
+    a series missing finished sessions). Pass allow_stale=True (CLI --allow-stale-data) to override, for testing only."""
+
+
+ALLOW_STALE_ENV = "LIGHTHOUSE_ALLOW_STALE_DATA"
+LIVE_SOURCES = {"yfinance", "stooq", "cache"}       # a fresh cache holds the last finished session (it expires at each close)
+
+
+def allow_stale_default() -> bool:
+    """The override from the environment (LIGHTHOUSE_ALLOW_STALE_DATA=1); off unless set."""
+    return os.environ.get(ALLOW_STALE_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def data_freshness(result, now: Optional[pd.Timestamp] = None) -> Tuple[bool, str]:
+    """(current?, why). Current means: prices from a live feed or a fresh cache, not a "what would it have said" date,
+    and a last bar that is the last finished trading session (NYSE calendar)."""
+    from .data import sessions_behind
+    attrs = getattr(result.prices, "attrs", {}) or {}
+    src = attrs.get("source")
+    last = result.prices.index[-1]
+    if src == "sample":
+        return False, f"these are the bundled sample prices (they end {last.date()})"
+    if src == "stale-cache":
+        return False, f"these prices come from an old cache copy (they end {last.date()}): the live feed could not be reached"
+    if src not in LIVE_SOURCES:
+        return False, f"the prices' source ({src or 'unknown'}) is not a live feed"
+    behind = sessions_behind(last, now)
+    if behind > 0:
+        return False, (f"the prices end {last.date()}, {behind} finished trading session{'s' if behind > 1 else ''} ago "
+                       "(a past date or an outdated download)")
+    return True, f"current: {src} prices through {last.date()}, the last finished session"
+
+
+def require_current_data(result, allow_stale: Optional[bool] = None, now: Optional[pd.Timestamp] = None) -> str:
+    """Raise StaleDataError unless the data is current or the override is given. Returns the freshness note."""
+    ok, why = data_freshness(result, now)
+    allowed = allow_stale_default() if allow_stale is None else bool(allow_stale)
+    if not ok and not allowed:
+        raise StaleDataError(f"{result.ticker}: no trade ticket, because {why}. Tickets are orders: they need current "
+                             "prices. Refresh with a live connection, or override for testing only (CLI --allow-stale-data, "
+                             f"app 'allow stale data', or {ALLOW_STALE_ENV}=1).")
+    return why if ok else f"OVERRIDE: {why}"
 
 
 @dataclass
@@ -187,6 +233,7 @@ class TradePlan:
     signal_exit_score: Optional[float] = None   # trend plans: a review-day technical score at or below this ends the trade
     review: str = "month"                       # the review period of a trend plan: "month" | "week" | "session"
     typical_days: int = 252                     # window of `typical_move_pct`
+    data_status: str = ""                       # data_freshness note: "current: ..." or "OVERRIDE: ..."
 
     @property
     def is_actionable(self) -> bool:
@@ -503,9 +550,14 @@ def _split_shares(shares: int, partial: float) -> Tuple[int, int]:
 
 
 def build_trade_plan(result, side: str = "long", settings: Optional[TradeSettings] = None, cash: Optional[float] = None,
-                     with_stats: bool = True) -> TradePlan:
+                     with_stats: bool = True, allow_stale: Optional[bool] = None) -> TradePlan:
     """The trade ticket for one analysed stock. `cash` overrides the profile's cash available (used when several
-    ideas share one pot of cash)."""
+    ideas share one pot of cash).
+
+    Refuses (StaleDataError) when the data is not current (bundled sample, a stale cache, a past date, missing
+    sessions) unless `allow_stale` (default: the LIGHTHOUSE_ALLOW_STALE_DATA environment variable) says otherwise; an
+    overridden ticket says so in its first warning."""
+    freshness = require_current_data(result, allow_stale)
     s = settings or TradeSettings()
     d, prof, p = result.decision, result.profile, result.params
     if cash is not None:
@@ -617,6 +669,10 @@ def build_trade_plan(result, side: str = "long", settings: Optional[TradeSetting
                      else f"close of {d.as_of}"),
         horizon=rprof.horizon, partial_exit=s.partial_exit, typical_days=typical_days, **trend_fields,
     )
+    plan.data_status = freshness
+    if freshness.startswith("OVERRIDE"):
+        plan.warnings.insert(0, f"Not for trading: {freshness[len('OVERRIDE: '):]}. This ticket was made with the "
+                                "stale-data override.")
     if with_stats:
         attach_stats(plan, result, s)
     return plan
@@ -888,7 +944,8 @@ def _trend_inputs(result, p: StrategyParams) -> Tuple[np.ndarray, np.ndarray, np
 # Trade ideas for a pot of cash
 # --------------------------------------------------------------------------- #
 def allocate_ideas(results: Sequence, side: str = "long", settings: Optional[TradeSettings] = None,
-                   include_watch: bool = True, with_stats: bool = False) -> Tuple[List[TradePlan], List[TradePlan], pd.DataFrame]:
+                   include_watch: bool = True, with_stats: bool = False,
+                   allow_stale: Optional[bool] = None) -> Tuple[List[TradePlan], List[TradePlan], pd.DataFrame]:
     """Fund the strongest actionable setups from the profile's cash, best first.
 
     Each idea is sized by the usual rules against the cash still unspent, and the total planned risk across ideas is
@@ -899,7 +956,18 @@ def allocate_ideas(results: Sequence, side: str = "long", settings: Optional[Tra
     if not results:
         return [], [], pd.DataFrame()
     prof = results[0].profile
-    plans = [build_trade_plan(r, side, s, with_stats=False) for r in results]
+    current, refused = [], []
+    for r in results:
+        try:
+            require_current_data(r, allow_stale)
+            current.append(r)
+        except StaleDataError as exc:
+            refused.append((r.ticker, str(exc)))
+    if not current:
+        raise StaleDataError(refused[0][1] + (f" ({len(refused) - 1} more tickers refused for the same reason.)"
+                                              if len(refused) > 1 else ""))
+    results = current
+    plans = [build_trade_plan(r, side, s, with_stats=False, allow_stale=allow_stale) for r in results]
     key = (lambda pl: -pl.composite_score) if side == "long" else (lambda pl: pl.composite_score)
     candidates = sorted([pl for pl in plans if pl.status == "actionable"], key=key)
     watch = sorted([pl for pl in plans if pl.status == "watch"], key=key) if include_watch else []
@@ -912,7 +980,7 @@ def allocate_ideas(results: Sequence, side: str = "long", settings: Optional[Tra
             break
         if cash_left < cand.price:
             continue                      # a cheaper idea further down may still fit
-        pl = build_trade_plan(by_ticker[cand.ticker], side, s, cash=cash_left, with_stats=False)
+        pl = build_trade_plan(by_ticker[cand.ticker], side, s, cash=cash_left, with_stats=False, allow_stale=allow_stale)
         if funded and pl.notional < s.min_fill_ratio * cand.notional:
             continue                      # the leftover cash would only buy a crumb of this idea
         if pl.shares > 0 and pl.dollars_at_risk > heat_left:
@@ -927,7 +995,11 @@ def allocate_ideas(results: Sequence, side: str = "long", settings: Optional[Tra
     if with_stats:
         for pl in funded + watch:
             attach_stats(pl, by_ticker[pl.ticker], s)
-    return funded, watch, ideas_table(funded + watch)
+    table = ideas_table(funded + watch)
+    if refused:      # left out: their data is not current
+        table = pd.concat([table, pd.DataFrame([{"ticker": t, "status": "refused: data not current", "binding": why}
+                                                for t, why in refused])], ignore_index=True)
+    return funded, watch, table
 
 
 def _resize(pl: TradePlan, shares: int, s: TradeSettings, note: str) -> TradePlan:

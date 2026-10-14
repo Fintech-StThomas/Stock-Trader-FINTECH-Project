@@ -30,7 +30,8 @@ from lighthouse.regime import regime_adjustments
 from lighthouse.report import format_metrics, LIGHT_ICON
 from lighthouse import portfolio as pf
 from lighthouse.parallel import map_tickers
-from lighthouse.tradeplan import TradeSettings, build_trade_plan, allocate_ideas, signed_usd, TIME_STOP_DEFAULT
+from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_ideas, signed_usd, TIME_STOP_DEFAULT,
+                                  StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
@@ -310,6 +311,9 @@ with st.sidebar:
                               help="What would Lighthouse have said on this day? Leave empty for today.")
         f_json = st.text_area("Fundamental overrides (JSON)", value="", key="f_json",
                               help='Type your own numbers when a feed is missing a field, e.g. {"pe_trailing": 22, "roe": 0.18}')
+        allow_stale = st.checkbox("Allow trade tickets from sample or stale data (testing only)", value=False, key="allow_stale",
+                                  help="Tickets are orders and need current prices: by default none is made from the bundled "
+                                       "sample, an old cache copy, a time-machine date or data missing a finished session.")
     run = st.button("Analyse", type="primary", width="stretch", key="analyse", disabled=cash + holdings <= 0)
     if _is_offline():
         st.info("Offline sample pack: " + ", ".join(t for t in sample_pack_tickers() if not t.startswith("^")))
@@ -317,6 +321,7 @@ with st.sidebar:
 
 run = run or st.session_state.pop("auto_run", False)
 NONCE = st.session_state.get("live_nonce", 0)
+ALLOW_STALE = True if allow_stale else None          # None: the LIGHTHOUSE_ALLOW_STALE_DATA environment variable decides
 try:
     SETTINGS = TradeSettings(reward_multiples=(float(min(tp1, tp2)), float(max(tp1, tp2))), partial_exit=partial / 100.0,
                              time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat),
@@ -576,7 +581,12 @@ def ticket_section(res) -> None:
     st.markdown("#### Trade ticket: buy or sell short right now")
     side = st.segmented_control("Side", ["long", "short"], default="long", key="ticket_side", label_visibility="collapsed",
                                 format_func=lambda v: "📈 Long (buy)" if v == "long" else "📉 Short (sell short)")
-    render_ticket(res, build_trade_plan(res, side or "long", SETTINGS), key="analyse")
+    try:
+        pl = build_trade_plan(res, side or "long", SETTINGS, allow_stale=ALLOW_STALE)
+    except StaleDataError as exc:
+        st.warning(f"{exc}", icon="⏱️")
+        return
+    render_ticket(res, pl, key="analyse")
 
 
 @st.fragment
@@ -762,8 +772,13 @@ def render_side(side: str, desk: dict) -> None:
     results = desk["results"]
     plans = desk.setdefault("plans", {})            # funding the ideas replays every setup's history: do it once
     pkey = (side, tuple(sorted(asdict(SETTINGS).items())))
+    pkey = pkey + (ALLOW_STALE,)
     if pkey not in plans:
-        plans[pkey] = allocate_ideas(results, side, SETTINGS, include_watch=True, with_stats=True)
+        try:
+            plans[pkey] = allocate_ideas(results, side, SETTINGS, include_watch=True, with_stats=True, allow_stale=ALLOW_STALE)
+        except StaleDataError as exc:
+            st.warning(f"{exc}", icon="⏱️")
+            return
     funded, watch, table = plans[pkey]
     by = {r.ticker: r for r in results}
     prof = results[0].profile

@@ -11,8 +11,17 @@ history with the long-horizon rule:
 
 Costs: 5 bps commission + 5 bps slippage per side; fills at the next session's open (close for close-only files).
 
+The sample pack holds today's survivors, which flatters every rule. `--cohort DATE` runs the same test on every S&P 500
+member on DATE (historical membership, lighthouse.membership), followed until today or until its prices stop, with live
+data (Yahoo prices, FRED T-bill, SEC filing-dated fundamentals when LIGHTHOUSE_SEC_EMAIL is set), under both delisting
+rules, and reports the share of members that had prices (coverage):
+
+  reports/examples/cross_ticker_sp500_<DATE>.csv           one row per member and delisting rule
+  reports/examples/cross_ticker_sp500_<DATE>_summary.csv   averages per rule, coverage, how many beat buy-and-hold
+
 Run:  LIGHTHOUSE_OFFLINE=1 python scripts/cross_ticker_evaluation.py            # writes the CSV, prints the summary
       LIGHTHOUSE_OFFLINE=1 python scripts/cross_ticker_evaluation.py --check    # fails if the CSV is out of date
+      LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/cross_ticker_evaluation.py --cohort 1996-01-02
 """
 from __future__ import annotations
 
@@ -22,7 +31,8 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-os.environ.setdefault("LIGHTHOUSE_OFFLINE", "1")
+if "--cohort" not in sys.argv:
+    os.environ.setdefault("LIGHTHOUSE_OFFLINE", "1")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -85,10 +95,106 @@ def summary(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------- cohort (survivorship-aware) mode
+_INPUTS = None
+
+
+def _init(inputs) -> None:
+    global _INPUTS
+    _INPUTS = inputs
+
+
+def _eval_member(job):
+    from lighthouse.research.cohort import evaluate_member
+    ticker, start, rule = job
+    return evaluate_member(ticker, _INPUTS, start, rule)
+
+
+def cohort(date: str, workers: int) -> int:
+    import multiprocessing as mp
+    from lighthouse import membership
+    from lighthouse.data import load_benchmark, load_risk_free
+    from lighthouse.engine import edgar_enabled
+    from lighthouse.fundamentals import point_in_time_scores
+    from lighthouse.pit import load_statements
+    from lighthouse.research import panel
+    from lighthouse.research.cohort import CohortInputs, DELISTING_RULES, summarize
+    from lighthouse.total_return import load_actions
+    from lighthouse.universe import SECTORS
+
+    start = pd.Timestamp(date)
+    uni = membership.sp500()
+    members = uni.members_on(start)
+    print(f"{uni.summary()}\n{len(members)} members on {start.date()} (sources: {'; '.join(uni.sources)})")
+    frames, missing = panel.load_frames(members, start=start - pd.Timedelta(days=int(365.25 * 1.3)))
+    frames = {t: df for t, df in frames.items() if df.index[-1] >= start + pd.Timedelta(days=30)}
+    bench = load_benchmark("^GSPC", years=None, start=start - pd.Timedelta(days=int(365.25 * 1.3)))
+    bench.attrs = {}
+    rf = load_risk_free()
+    pit = {}
+    if edgar_enabled("yfinance"):
+        for k, t in enumerate(sorted(frames)):
+            h = load_statements(t)
+            if h.has_filing_dates:
+                acts = load_actions(t)
+                df = frames[t]
+                pit[t] = point_in_time_scores(df, h, SECTORS.get(t), StrategyParams(), actions=None if acts.empty else acts)
+    data_end = bench.index[-1]
+    inputs = CohortInputs(frames=frames, benchmark=bench, risk_free=rf, pit=pit, data_end=data_end)
+    jobs = [(t, start, rule) for t in sorted(frames) for rule in DELISTING_RULES]
+    ctx = mp.get_context("fork")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_init, initargs=(inputs,)) as pool:
+        rows = [r for r in pool.map(_eval_member, jobs, chunksize=4) if r is not None]
+    return report_cohort(pd.DataFrame(rows), members, missing, pit, uni, start, data_end)
+
+
+def report_cohort(df, members, missing, pit, uni, start, data_end) -> int:
+    from lighthouse.research.cohort import summarize
+    tested = df["ticker"].nunique()
+    summ = summarize(df, len(members))
+    summ["members_with_fundamentals"] = len(pit)
+    summ["start"], summ["end"] = str(start.date()), str(data_end.date())
+    summ["sources"] = "; ".join(uni.sources)
+    out = ROOT / "reports" / "examples" / f"cross_ticker_sp500_{start.date()}.csv"
+    df.to_csv(out, index=False)
+    summ.to_csv(out.with_name(out.stem + "_summary.csv"))
+    print(f"\n{tested} of {len(members)} members tested ({tested / len(members):.0%} coverage); "
+          f"{len(missing)} without prices; {len(pit)} with SEC filing-dated fundamentals")
+    pct = lambda v: f"{v * 100:.1f}%"   # noqa: E731
+    for rule, r in summ.iterrows():
+        print(f"\n[{rule}] buy & hold CAGR {pct(r.bh_cagr)}, Sharpe {r.bh_sharpe:.2f}, max DD {pct(r.bh_mdd)} | "
+              f"signals + regime Sharpe {r.signals_sharpe:.2f} | Lighthouse balanced CAGR {pct(r.lighthouse_cagr)}, "
+              f"vol {pct(r.lighthouse_vol)}, Sharpe {r.lighthouse_sharpe:.2f}, max DD {pct(r.lighthouse_mdd)} | "
+              f"beats buy & hold on Sharpe {int(r.beat_bh_sharpe)} / {int(r.tested)}, on CAGR {int(r.beat_bh_cagr)}, "
+              f"lower drawdown {int(r.lower_mdd)}; {r.trades_per_stock:.1f} trades per stock | as one equal-weight cohort "
+              f"over {r.cohort_years:.1f} years: buy & hold {pct(r.cohort_bh_cagr)} a year, Lighthouse {pct(r.cohort_lighthouse_cagr)}, "
+              f"signals {pct(r.cohort_signals_cagr)}")
+    print(f"\nwrote {out.relative_to(ROOT)} and its _summary.csv")
+    return 0
+
+
+def resummarize(date: str) -> int:
+    """Rebuild the summary of a cohort run from its saved per-member CSV (no downloads, no backtests)."""
+    from lighthouse import membership
+    out = ROOT / "reports" / "examples" / f"cross_ticker_sp500_{pd.Timestamp(date).date()}.csv"
+    df = pd.read_csv(out)
+    uni = membership.sp500()
+    members = uni.members_on(pd.Timestamp(date))
+    old = pd.read_csv(out.with_name(out.stem + "_summary.csv"), index_col=0)
+    pit = range(int(old["members_with_fundamentals"].iloc[0]))
+    missing = range(len(members) - df["ticker"].nunique())
+    return report_cohort(df, members, missing, pit, uni, pd.Timestamp(date), pd.Timestamp(old["end"].iloc[0]))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--check", action="store_true", help="compare with the committed CSV instead of writing it")
+    ap.add_argument("--cohort", default=None, help="test every S&P 500 member on this date (live data) instead")
+    ap.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
+    ap.add_argument("--resummarize", action="store_true", help="with --cohort: rebuild the summary from the saved CSV")
     a = ap.parse_args(argv)
+    if a.cohort:
+        return resummarize(a.cohort) if a.resummarize else cohort(a.cohort, a.workers)
     df = build()
     if a.check:
         old = pd.read_csv(OUT, index_col="ticker")

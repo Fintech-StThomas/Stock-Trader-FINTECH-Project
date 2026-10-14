@@ -54,6 +54,8 @@ def main(argv=None) -> int:
         sp.add_argument("--years", type=float, default=10)
         sp.add_argument("--source", default="auto", help="auto | yfinance | stooq | cache | sample")
         sp.add_argument("--params", help='JSON overrides, e.g. \'{"entry_score": 65}\'')
+        sp.add_argument("--allow-stale-data", action="store_true",
+                        help="make trade tickets even from sample, stale or past data (testing only; never trade on them)")
 
     a1 = sub.add_parser("analyze", help="full analysis of one ticker"); common(a1)
     a1.add_argument("ticker"); a1.add_argument("--out", help="folder for report + charts")
@@ -165,7 +167,15 @@ def main(argv=None) -> int:
         for t, e in errors.items():
             print(f"{t}: {e}", file=sys.stderr)
         results = list(by.values())
-        funded, watch, table = allocate_ideas(results, a.side, s, with_stats=True)
+        from .tradeplan import StaleDataError
+        try:
+            funded, watch, table = allocate_ideas(results, a.side, s, with_stats=True,
+                                                  allow_stale=True if a.allow_stale_data else None)
+        except StaleDataError as exc:
+            print(exc, file=sys.stderr)
+            return 2
+        for _, row in table[table["status"].astype(str).str.startswith("refused")].iterrows():
+            print(f"{row['ticker']}: {row['binding']}", file=sys.stderr)
         print(prof.describe())
         for pl in funded:
             print(f"\n=== {pl.side.upper()} {pl.ticker}: {pl.shares} shares ===")
