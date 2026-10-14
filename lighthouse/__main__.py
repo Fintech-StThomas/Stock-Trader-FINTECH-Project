@@ -40,6 +40,87 @@ def _params(a) -> StrategyParams:
     return p
 
 
+def _journal(a) -> int:
+    """`journal run | score | export` (see lighthouse/journal.py)."""
+    from .journal import Journal, check_positions, record_run
+    from .tradeplan import TradeSettings
+    j = Journal(a.journal)
+    if a.action == "export":
+        for pth in j.export(a.out or "reports/journal", a.format):
+            print(f"wrote {pth}")
+        return 0
+    if a.action == "score":
+        from .scorecard import build_scorecard, price_closes
+        sc = build_scorecard(j, price_closes(a.source))
+        for k, v in sc.summary().items():
+            print(f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}")
+        cal = sc.calibration()
+        if len(cal):
+            print("\ncalibration (ticket win probability)\n" + cal.to_string(index=False))
+        if a.out:
+            from pathlib import Path
+            Path(a.out).mkdir(parents=True, exist_ok=True)
+            sc.verdicts.to_csv(Path(a.out) / "scored_verdicts.csv", index=False)
+            sc.tickets.to_csv(Path(a.out) / "scored_tickets.csv", index=False)
+            cal.to_csv(Path(a.out) / "calibration.csv", index=False)
+        return 0
+    if not a.tickers and not getattr(a, "universe", None):
+        print("give tickers, or --universe NAME", file=sys.stderr); return 1
+    from .engine import analyze_many
+    s = TradeSettings(reward_multiples=tuple(sorted(a.targets)), partial_exit=a.partial, time_stop_days=a.time_stop,
+                      long_exit=a.long_exit)
+    prof = _profile(a)
+    open_now = j.open_positions()
+    tickers = list(dict.fromkeys([t.upper() for t in a.tickers] + list(open_now["ticker"] if len(open_now) else [])))
+    by, errors = analyze_many(tickers, prof, _params(a), years=a.years, source=a.source, run_backtest_=False)
+    rep = record_run([by[t] for t in a.tickers if t.upper() in by], a.sides, j, s,
+                     allow_stale=True if a.allow_stale_data else None)
+    rep.errors.update(errors)
+    checks = check_positions(by, j, s, rep.run_id)
+    rep.alerts = [c["text"] for c in checks]
+    if a.paper:
+        rep.paper = _paper(j, by, checks, s, a)
+    text = rep.markdown()
+    print(text)
+    if a.summary:
+        with open(a.summary, "a") as fh:
+            fh.write(text + "\n")
+    if a.alerts:
+        with open(a.alerts, "w") as fh:
+            fh.write("\n".join(rep.alerts) + ("\n" if rep.alerts else ""))
+    return 0
+
+
+def _paper(j, by, checks, s, a) -> list:
+    """Mirror today's actionable tickets at Alpaca (paper) and act on the replay's exits. Returns lines for the log."""
+    from .broker import AlpacaPaper, mirror, review_exit_order
+    from .tradeplan import build_trade_plan
+    broker = AlpacaPaper()
+    lines = [f"paper trading: {'DRY RUN (no Alpaca keys in the environment)' if broker.dry_run else 'Alpaca paper account'}"]
+    d = j.decisions()
+    if len(d):
+        today = d[d["run_id"] == d["run_id"].iloc[-1]]
+        plans = {}
+        for _, row in today.iterrows():
+            r = by.get(row["ticker"])
+            if r is None or row["status"] != "actionable" or not row["shares"]:
+                continue
+            plans[int(row["id"])] = build_trade_plan(r, row["side"], s, with_stats=False,
+                                                     allow_stale=True if a.allow_stale_data else None)
+        for o in mirror(broker, plans):
+            lines.append(f"order: {o.get('side')} {o.get('qty')} {o.get('symbol')} ({o.get('order_class', 'simple')}, "
+                         f"limit {o.get('limit_price')})")
+    for c in checks:
+        if c["status"] == "SELL AT THE OPEN" and c["shares"]:
+            if not broker.dry_run:
+                op = broker.orders(status="open")
+                for _, o in (op[op["symbol"] == c["ticker"]].iterrows() if len(op) else []):
+                    broker.cancel(o["id"])
+            o = broker.submit(review_exit_order(c["ticker"], c["side"], c["shares"], c["decision_id"], c["status"]))
+            lines.append(f"order: review exit {o.get('side')} {o.get('qty')} {o.get('symbol')} at the open")
+    return lines
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="lighthouse", description="Lighthouse - explainable stock decisions")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -104,6 +185,19 @@ def main(argv=None) -> int:
 
     sub.add_parser("universes", help="list the pre-built universes")
 
+    a7 = sub.add_parser("journal", help="forward decision journal: record today's calls, check positions, score, export")
+    common(a7); trade_opts(a7); universe_opt(a7)
+    a7.add_argument("action", choices=["run", "score", "export"])
+    a7.add_argument("tickers", nargs="*")
+    a7.add_argument("--sides", nargs="+", default=["long"], choices=["long", "short"])
+    a7.add_argument("--journal", help="journal file (default data/journal/lighthouse_journal.sqlite or LIGHTHOUSE_JOURNAL)")
+    a7.add_argument("--paper", action="store_true", help="mirror the tickets at Alpaca's paper account (keys from the "
+                    "environment; a dry run without them)")
+    a7.add_argument("--summary", help="append the run's Markdown summary to this file (e.g. $GITHUB_STEP_SUMMARY)")
+    a7.add_argument("--alerts", help="write the alert lines to this file (empty when none fired)")
+    a7.add_argument("--out", help="score / export: folder for the CSV files")
+    a7.add_argument("--format", choices=["csv", "jsonl"], default="csv")
+
     a = ap.parse_args(argv)
     pd.set_option("display.width", 160); pd.set_option("display.max_columns", 30)
 
@@ -118,6 +212,8 @@ def main(argv=None) -> int:
             a.tickers = list(dict.fromkeys([t.upper() for t in a.tickers] + get_universe(a.universe, a.source)))
         except ValueError as exc:
             print(exc, file=sys.stderr); return 1
+    if a.cmd == "journal":
+        return _journal(a)
     if a.cmd in {"trade", "screen"} and not a.tickers:
         print("give tickers, or --universe NAME", file=sys.stderr); return 1
 

@@ -387,9 +387,12 @@ def _cache_path(kind: str, ticker: str) -> Path:
 
 
 def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOURS,
-                need_start: Optional[datetime] = None, session_check: bool = True) -> pd.DataFrame:
+                need_start: Optional[datetime] = None, session_check: bool = True,
+                need_current: bool = False) -> pd.DataFrame:
     """Cached prices. With `need_start`, the cache must also cover the requested window: a short download
-    (e.g. a 6-year watchlist run) must not silently stand in for a later 10-year analysis."""
+    (e.g. a 6-year watchlist run) must not silently stand in for a later 10-year analysis. With `need_current`, it
+    must hold the last finished session: a download made just after a close, before the feed published that day's
+    bar, is not trusted for the rest of the day."""
     path = _cache_path("prices", ticker)
     if not path.exists():
         raise DataUnavailable("no cache")
@@ -410,6 +413,14 @@ def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOUR
         if fetched.tz_convert(EXCHANGE_TZ) < last_session_close():
             raise DataUnavailable("cache stale: a trading session has closed since it was downloaded")
     df = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
+    if need_current and len(df):
+        # the last row with a real close: a feed can list today's date before the bar is final (an empty close)
+        closes = pd.to_numeric(df["Close"], errors="coerce") if "Close" in df else pd.Series(dtype=float)
+        valid = closes[closes > 0]
+        last = valid.index[-1] if len(valid) else None
+        if last is None or sessions_behind(last) > 0:
+            raise DataUnavailable(f"cache stale: its last close is {pd.Timestamp(last).date() if last is not None else 'missing'}, "
+                                  "before the last finished session")
     if need_start is not None and len(df):
         requested = None
         try:
@@ -491,10 +502,10 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
     raw, used = None, None
 
     order: List[str]
+    today = _now_et().normalize()
+    reaches_today = (end is None or pd.Timestamp(end).normalize() >= today.tz_localize(None)) and not offline_mode()
     if source == "auto":
         order = ["cache", "sample"] if offline_mode() else ["cache", "yfinance", "stooq", "stale-cache", "sample"]
-        today = _now_et().normalize()
-        reaches_today = end is None or pd.Timestamp(end).normalize() >= today.tz_localize(None)
         if keep_partial and not offline_mode() and reaches_today and is_partial_bar(today):
             order.remove("cache")       # the cache never holds an unfinished session: today's bar needs a download
     else:
@@ -510,7 +521,8 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
                 elif src == "cache":
                     # in "auto" a live download follows, so a cache missing a finished session is skipped; asked for
                     # explicitly, the cache is used as long as it is under 20 hours old
-                    raw = (_from_cache(ticker, need_start=start_dt, session_check=source == "auto")
+                    raw = (_from_cache(ticker, need_start=start_dt, session_check=source == "auto",
+                                       need_current=source == "auto" and reaches_today)
                            if use_cache and not refresh else None)
                 elif src == "stale-cache":
                     raw = _from_cache(ticker, max_age_hours=None) if use_cache else None
