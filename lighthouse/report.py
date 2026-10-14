@@ -277,6 +277,9 @@ def build_memo(memo) -> str:
         L.append(_md_table(show) + "\n")
         L += [f"- {x}" for x in pc.explanation]
         L.append("")
+    fv = getattr(m, "fundamental_view", None)
+    if fv is not None:
+        L += _fundamental_view_lines(fv)
 
     L.append("## Quality and balance sheet")
     for x in m.quality + m.balance:
@@ -302,6 +305,21 @@ def build_memo(memo) -> str:
     L.append("- The text is generated from the numbers by fixed rules; it cannot be backtested as judgment, and it is not "
              "investment advice.")
     return "\n".join(L)
+
+
+def _fundamental_view_lines(fv) -> List[str]:
+    """The memo's opt-in section: its own numbers' fundamental beacons against the peer medians (or, without peers,
+    the sector norms and why), with the score both ways."""
+    score = lambda s: "n/a" if s is None else f"{s:.0f}/100"   # noqa: E731
+    head = "against the peer medians" if fv.peer_based else "against the sector norms"
+    L = [f"## Fundamental beacons {head}",
+         f"*Norms: {fv.source}. Fundamental score {score(fv.score)} {head}"
+         + (f" ({score(fv.sector_score)} against the sector norms for {fv.sector or 'the overall market'})"
+            if fv.peer_based else "")
+         + ". The rule-based verdict keeps the sector norms it was tested with; P/E, P/B, EV/EBITDA and operating "
+           "margin are scored against the norms, the other beacons against fixed bands.*\n",
+         beacon_table(fv.beacons) + "\n"]
+    return L
 
 
 LABELS_PEERS = {"pe": "P/E", "ev_ebitda": "EV/EBITDA", "ev_sales": "EV/sales", "pb": "P/B", "fcf_yield": "FCF yield",

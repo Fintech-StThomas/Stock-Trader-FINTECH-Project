@@ -1180,18 +1180,21 @@ def memo_tab() -> None:
                "earnings-quality and balance-sheet checks, capital allocation, catalysts, the variant view and what would "
                "prove the thesis wrong. Every number comes from SEC filings, prices, FRED or the Ken French library.")
     res = st.session_state.get("result")
-    c1, c2, c3 = st.columns([1, 1, 1])
+    c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
     t = c1.text_input("Ticker", value=(res.ticker if res is not None else ticker), key="memo_ticker").upper().strip()
     when = c2.date_input("As of", value=None, key="memo_asof", help="Leave empty for the last close. Filings after this "
                          "date are not used.")
     peers = c3.checkbox("Find peers", value=not _is_offline(), key="memo_peers",
                         help="Reads the filings of every same-industry S&P 500 company (slower the first time).")
+    pnorms = c4.checkbox("Beacons vs peer medians", value=False, key="memo_peer_norms",
+                         help="Adds the fundamental beacons on the memo's numbers, scored against the peers' medians "
+                              "instead of the sector norms (needs Find peers). The verdict keeps the sector norms.")
     if st.button("Build memo", key="memo_build", type="primary"):
         use = res if res is not None and res.ticker == t and when is None else None
         with st.spinner(f"Reading {t}'s filings and building the memo ..."):
             try:
                 st.session_state["memo"] = memo_mod.build(t, as_of=str(when) if when else None, source=source,
-                                                          result=use, peers=peers)
+                                                          result=use, peers=peers, peer_norms=pnorms)
                 st.session_state.pop("memo_error", None)
             except Exception as exc:  # noqa: BLE001
                 st.session_state.pop("memo", None)

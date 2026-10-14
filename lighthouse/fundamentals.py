@@ -146,13 +146,49 @@ def _num(x: Optional[float], nd: int = 1) -> str:
 # --------------------------------------------------------------------------- #
 # Beacons from a snapshot
 # --------------------------------------------------------------------------- #
+NORM_KEYS = ("pe", "pb", "ev_ebitda", "op_margin")
+
+
+def _norms_in_use(sector: Optional[str], norms: Optional[Dict[str, object]]) -> tuple:
+    """(values, per-key label or None, source) for the beacons. Without `norms`: the sector norms, label None (the
+    beacons keep their sector wording). With `norms` (e.g. `analyst.peers.peer_norms`): each usable value replaces the
+    sector norm and is labelled (norms["label"], e.g. "peer median"); a missing or unusable one (None, not finite, a
+    non-positive multiple) keeps the sector norm. EV/EBITDA stays off for financials whatever the norms say (debt is a
+    bank's raw material, so enterprise value means nothing there)."""
+    base = dict(sector_norms(sector))
+    labels: Dict[str, Optional[str]] = {k: None for k in NORM_KEYS}
+    if norms is None:
+        return base, labels, None
+    tag = str(norms.get("label") or "given norm")
+    for k in NORM_KEYS:
+        v = norms.get(k)
+        if v is None or not np.isfinite(float(v)) or (k != "op_margin" and float(v) <= 0):
+            continue
+        base[k], labels[k] = float(v), tag
+    if sector == "Financial Services":
+        base["ev_ebitda"], labels["ev_ebitda"] = None, None
+    return base, labels, str(norms.get("source") or tag)
+
+
 def fundamental_beacons(snap: FundamentalSnapshot, history: Optional[StatementHistory] = None,
-                        params: Optional[StrategyParams] = None) -> List[Beacon]:
-    """Explainable valuation / quality / growth beacons for the current snapshot."""
-    norms = sector_norms(snap.sector)
+                        params: Optional[StrategyParams] = None,
+                        norms: Optional[Dict[str, object]] = None) -> List[Beacon]:
+    """Explainable valuation / quality / growth beacons for the current snapshot.
+
+    `norms` (opt-in, e.g. the peer medians from `analyst.peers.peer_norms`) replaces the sector norms for P/E, P/B,
+    EV/EBITDA and operating margin; each beacon that used one says so in its reading ("vs peer median") and names the
+    norms' source in its explanation. Left at None (the decision, the backtest and every published number) the
+    beacons are exactly the sector-norm ones."""
+    norms, label, source = _norms_in_use(snap.sector, norms)
     sector_label = snap.sector or "the overall market"
     is_financial = (snap.sector == "Financial Services")
     beacons: List[Beacon] = []
+
+    def vs(k: str) -> str:            # the reading: "vs Technology ~28" / "vs peer median ~31"
+        return f"{label[k]} " if label[k] else ""
+
+    def cite(k: str) -> str:          # appended to the explanation when a beacon used a given norm
+        return f" Norm: {label[k]}, {source}." if label[k] else ""
 
     # ---------------- Valuation ----------------
     val: List[Beacon] = []
@@ -161,6 +197,11 @@ def fundamental_beacons(snap: FundamentalSnapshot, history: Optional[StatementHi
         s = score_multiple_vs_norm(pe, norms["pe"])
         if pe <= 0:
             txt, why = "negative (loss-making)", "The company is not profitable on a trailing basis, so the share price is not supported by current earnings."
+        elif label["pe"]:
+            txt = f"P/E {pe:.1f} vs {label['pe']} ~{norms['pe']:.0f}"
+            why = (f"Trailing P/E of {pe:.1f} is {'below' if s > 0 else 'above'} the {label['pe']} multiple "
+                   f"(~{norms['pe']:.0f}): you pay {'less' if s > 0 else 'more'} per dollar of earnings than for a typical peer."
+                   + cite("pe"))
         else:
             txt = f"P/E {pe:.1f} vs {sector_label} ~{norms['pe']:.0f}"
             why = (f"Trailing P/E of {pe:.1f} is {'below' if s > 0 else 'above'} the typical {sector_label} multiple "
@@ -170,7 +211,8 @@ def fundamental_beacons(snap: FundamentalSnapshot, history: Optional[StatementHi
         s = score_multiple_vs_norm(snap.pe_forward, norms["pe"] * 0.9)
         val.append(Beacon("pe_fwd", "Price / Earnings (forward)", "fundamental", f"fwd P/E {snap.pe_forward:.1f}", s, 0,
                           f"Analysts' next-12-month earnings put the forward P/E at {snap.pe_forward:.1f}; "
-                          f"{'cheaper' if s > 0 else 'richer'} than the sector norm after expected growth."))
+                          f"{'cheaper' if s > 0 else 'richer'} than the {label['pe'] or 'sector norm'} after expected growth."
+                          + cite("pe")))
     if snap.peg is not None and snap.peg > 0:
         s = _clip((1.5 - snap.peg) / 1.0)
         val.append(Beacon("peg", "PEG ratio", "fundamental", f"PEG {snap.peg:.2f}", s, 0,
@@ -179,15 +221,18 @@ def fundamental_beacons(snap: FundamentalSnapshot, history: Optional[StatementHi
                           "PEG between 1.2 and 1.8: the multiple is roughly in line with growth."))
     if snap.pb is not None:
         s = score_multiple_vs_norm(snap.pb, norms["pb"], spread=0.6)
-        val.append(Beacon("pb", "Price / Book", "fundamental", f"P/B {snap.pb:.2f} vs ~{norms['pb']:.1f}", s, 0,
-                          f"Price-to-book of {snap.pb:.2f} is {'below' if s > 0 else 'above'} the {sector_label} norm; "
+        val.append(Beacon("pb", "Price / Book", "fundamental", f"P/B {snap.pb:.2f} vs {vs('pb')}~{norms['pb']:.1f}", s, 0,
+                          f"Price-to-book of {snap.pb:.2f} is {'below' if s > 0 else 'above'} the "
+                          f"{label['pb'] or sector_label + ' norm'}; "
                           + ("book value matters most for asset-heavy and financial companies." if is_financial else
-                             "for asset-light companies this is a secondary check.")))
+                             "for asset-light companies this is a secondary check.") + cite("pb")))
     if snap.ev_ebitda is not None and norms["ev_ebitda"]:
         s = score_multiple_vs_norm(snap.ev_ebitda, norms["ev_ebitda"])
-        val.append(Beacon("ev_ebitda", "EV / EBITDA", "fundamental", f"EV/EBITDA {snap.ev_ebitda:.1f} vs ~{norms['ev_ebitda']:.0f}", s, 0,
+        val.append(Beacon("ev_ebitda", "EV / EBITDA", "fundamental",
+                          f"EV/EBITDA {snap.ev_ebitda:.1f} vs {vs('ev_ebitda')}~{norms['ev_ebitda']:.0f}", s, 0,
                           "Enterprise value per dollar of operating cash earnings, which is capital-structure neutral, "
-                          f"is {'below' if s > 0 else 'above'} the sector norm."))
+                          f"is {'below' if s > 0 else 'above'} the {label['ev_ebitda'] or 'sector norm'}."
+                          + cite("ev_ebitda")))
     hist_beacon = _pe_vs_own_history(snap, history)
     if hist_beacon is not None:
         val.append(hist_beacon)
@@ -203,9 +248,11 @@ def fundamental_beacons(snap: FundamentalSnapshot, history: Optional[StatementHi
     if snap.operating_margin is not None:
         s = score_band(snap.operating_margin, norms["op_margin"], 0.15)
         qual.append(Beacon("margin", "Operating margin", "fundamental",
-                           f"op. margin {_pct(snap.operating_margin)} vs ~{_pct(norms['op_margin'])}", s, 0,
-                           f"Operating margin is {'above' if s > 0 else 'below'} the {sector_label} norm, which "
-                           f"{'suggests pricing power or cost advantages' if s > 0 else 'leaves less cushion if revenue slows'}."))
+                           f"op. margin {_pct(snap.operating_margin)} vs {vs('op_margin')}~{_pct(norms['op_margin'])}", s, 0,
+                           f"Operating margin is {'above' if s > 0 else 'below'} the "
+                           f"{label['op_margin'] or sector_label + ' norm'}, which "
+                           f"{'suggests pricing power or cost advantages' if s > 0 else 'leaves less cushion if revenue slows'}."
+                           + cite("op_margin")))
     if snap.debt_to_equity is not None and not is_financial:
         s = _clip((1.0 - snap.debt_to_equity) / 1.0)
         qual.append(Beacon("leverage", "Debt / Equity", "fundamental", f"D/E {_num(snap.debt_to_equity, 2)}", s, 0,

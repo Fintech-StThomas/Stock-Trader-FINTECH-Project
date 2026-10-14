@@ -10,6 +10,7 @@
   python -m lighthouse trade --universe semiconductors --cash 5000                      # a pre-built universe
   python -m lighthouse universes                                                         # list the pre-built universes
   python -m lighthouse memo MSFT --out reports/memos --open-thesis                      # investment memo, thesis saved
+  python -m lighthouse memo MSFT --peer-norms                                            # + beacons vs peer medians
   python -m lighthouse thesis check | list | close ID --reason "..."                    # follow the saved theses
 """
 from __future__ import annotations
@@ -132,7 +133,11 @@ def _memo(a) -> int:
         res = analyze(a.ticker, _profile(a), _params(a), years=max(a.years, 11), source=a.source, run_backtest_=False,
                       as_of=a.as_of)
     try:
-        m = memo_mod.build(a.ticker, as_of=a.as_of, source=a.source, result=res, peers=not a.no_peers)
+        if a.peer_norms and a.no_peers:
+            print("--peer-norms needs the peer search: the beacons are scored against the sector norms",
+                  file=sys.stderr)
+        m = memo_mod.build(a.ticker, as_of=a.as_of, source=a.source, result=res, peers=not a.no_peers,
+                           peer_norms=a.peer_norms)
     except DataUnavailable as exc:
         print(exc, file=sys.stderr); return 1
     text = m.markdown()
@@ -279,6 +284,8 @@ def main(argv=None) -> int:
     a8.add_argument("--as-of", help="the memo's date (default: the last close); filings after it are not used")
     a8.add_argument("--out", help="folder for the Markdown file")
     a8.add_argument("--no-peers", action="store_true", help="skip the peer search (it reads every same-industry filer)")
+    a8.add_argument("--peer-norms", action="store_true", help="add the fundamental beacons on the memo's numbers, "
+                    "scored against the peer medians instead of the sector norms (the verdict keeps the sector norms)")
     a8.add_argument("--no-signals", action="store_true", help="leave out the rule-based verdict")
     a8.add_argument("--open-thesis", action="store_true", help="save the thesis and its kill criteria to the journal")
     a8.add_argument("--red-team", action="store_true", help="ask a local language model (LIGHTHOUSE_LLM=ollama) for the "

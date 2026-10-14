@@ -51,6 +51,48 @@ def test_financials_skip_leverage_beacon():
     assert not any(x.key.endswith("leverage") for x in b)
 
 
+def test_default_beacons_keep_the_sector_norms_and_wording():
+    """Without `norms` the beacons are the sector-norm ones the decision and the backtest were tested with."""
+    b = {x.key: x for x in fundamental_beacons(snap())}
+    assert b["valuation:pe"].value == "P/E 20.0 vs Technology ~28"
+    assert b["valuation:pb"].value == "P/B 5.00 vs ~7.0"
+    assert b["valuation:ev_ebitda"].value == "EV/EBITDA 15.0 vs ~20"
+    assert b["quality:margin"].value == "op. margin 30.0% vs ~22.0%"
+    assert "typical Technology multiple (~28)" in b["valuation:pe"].rationale
+    assert not any("peer" in x.value or "Norm:" in x.rationale for x in b.values())
+    same = fundamental_beacons(snap(), norms=None)
+    assert [vars(x) for x in same] == [vars(x) for x in b.values()]
+
+
+def test_peer_norms_replace_the_sector_norms_and_say_which():
+    norms = {"pe": 40.0, "pb": None, "ev_ebitda": 25.0, "op_margin": 0.35, "label": "peer median",
+             "source": "median of 6 peers (4-digit SIC 7372): A, B, C, D, E, F"}
+    base = {x.key: x for x in fundamental_beacons(snap())}
+    peer = {x.key: x for x in fundamental_beacons(snap(), norms=norms)}
+    assert peer["valuation:pe"].score > base["valuation:pe"].score         # P/E 20 is cheap against a 40x median
+    assert peer["valuation:pe"].value == "P/E 20.0 vs peer median ~40"
+    assert "median of 6 peers (4-digit SIC 7372)" in peer["valuation:pe"].rationale
+    assert peer["valuation:ev_ebitda"].value == "EV/EBITDA 15.0 vs peer median ~25"
+    assert peer["quality:margin"].score < base["quality:margin"].score     # a 30% margin against 35% at the peers
+    assert "vs peer median" in peer["quality:margin"].value
+    # a peer median that is missing keeps the sector norm, and the sector wording
+    assert vars(peer["valuation:pb"]) == vars(base["valuation:pb"])
+    # beacons on fixed bands are untouched (same scores, texts and weights)
+    for k in ("valuation:peg", "quality:roe", "quality:fcf", "growth:rev_growth", "growth:eps_growth"):
+        assert vars(peer[k]) == vars(base[k])
+    # norms equal to the sector's score exactly like the default
+    from lighthouse.fundamentals import SECTOR_NORMS
+    eq = fundamental_beacons(snap(), norms={**SECTOR_NORMS["Technology"], "label": "peer median", "source": "x"})
+    assert [x.score for x in eq] == [x.score for x in base.values()]
+
+
+def test_peer_norms_never_turn_ev_ebitda_on_for_financials():
+    b = fundamental_beacons(snap(sector="Financial Services"),
+                            norms={"pe": 11.0, "ev_ebitda": 9.0, "label": "peer median", "source": "x"})
+    assert not any(x.key.endswith("ev_ebitda") for x in b)
+    assert any(x.value == "P/E 20.0 vs peer median ~11" for x in b)
+
+
 def test_point_in_time_scores_respect_reporting_lag(prices):
     annual = pd.DataFrame({"revenue": [100, 120], "net_income": [10, 15], "eps": [1.0, 1.5], "operating_income": [20, 28],
                            "equity": [50, 60], "total_debt": [20, 20]},
