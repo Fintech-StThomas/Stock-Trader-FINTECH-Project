@@ -10,6 +10,8 @@ Per side, in basis points of the traded value:
                 sample pack, and is noisy day to day).
   impact        the square-root law: k x daily volatility x sqrt(order value / average daily dollar volume), with
                 k = 1 (Toth et al. 2011; Almgren et al. 2005). Zero when volume is unknown.
+  cap           the total is capped at MAX_COST_BPS (300) per side: a higher figure comes from a series without volume
+                (stale data, or another company's history under a reused ticker), not from a price anyone would pay
 
 Shorts also pay a borrow fee: StrategyParams.short_borrow_fee, an annual rate charged on the short's value for every
 day it is held. Free data has no borrow rates; the default (0.5% a year, a typical general-collateral rate for large
@@ -24,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 _K = 3.0 - 2.0 * np.sqrt(2.0)
+MAX_COST_BPS = 300.0
 
 
 def corwin_schultz_spread(high: pd.Series, low: pd.Series, window: int = 21) -> pd.Series:
@@ -63,6 +66,7 @@ class CostModel:
     min_half_spread_bps: float = 5.0     # floor: the old fixed "slippage" (and the value on close-only data)
     impact_k: float = 1.0
     spread_window: int = 21
+    max_bps: float = MAX_COST_BPS
 
     def per_side_bps(self, df: pd.DataFrame, order_value: float) -> pd.Series:
         """Cost per side (bps) for every day of an OHLCV frame, for an order of `order_value` dollars."""
@@ -72,7 +76,7 @@ class CostModel:
         dvol = r.rolling(self.spread_window, min_periods=5).std()
         adv = dollar_volume(df["Close"], df["Volume"] if "Volume" in df else None, self.spread_window)
         imp = pd.Series(impact_bps(order_value, adv.to_numpy(), dvol.to_numpy(), self.impact_k), index=df.index)
-        return (self.commission_bps + half + imp).rename("cost_bps")
+        return (self.commission_bps + half + imp).clip(upper=self.max_bps).rename("cost_bps")
 
 
 def borrow_cost(value_held: float, days: int, annual_fee: float, trading_days: int = 252) -> float:
@@ -80,4 +84,4 @@ def borrow_cost(value_held: float, days: int, annual_fee: float, trading_days: i
     return float(value_held) * float(annual_fee) * float(days) / float(trading_days)
 
 
-__all__ = ["CostModel", "corwin_schultz_spread", "dollar_volume", "impact_bps", "borrow_cost"]
+__all__ = ["CostModel", "corwin_schultz_spread", "dollar_volume", "impact_bps", "borrow_cost", "MAX_COST_BPS"]

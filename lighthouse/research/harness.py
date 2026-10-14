@@ -32,6 +32,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from ..costs import MAX_COST_BPS
 from ..data import REPO_DIR
 from ..total_return import DELISTING_RULES
 
@@ -238,7 +239,7 @@ def deflated_sharpe(sr: float, n_obs: int, skew: float, kurt: float, n_trials: i
 # --------------------------------------------------------------------------- #
 # Costs per stock and month
 # --------------------------------------------------------------------------- #
-MAX_COST = 0.03               # per side: anything above is a data error (no volume), not a price anyone pays
+MAX_COST = MAX_COST_BPS / 1e4    # per side: anything above is a data error (no volume), not a price anyone pays
 
 
 def cost_panel(frames: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex, portfolio_value: float = 1e6,

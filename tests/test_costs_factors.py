@@ -9,7 +9,7 @@ import pytest
 from lighthouse import factors as ff
 from lighthouse.backtest import run_backtest
 from lighthouse.config import InvestorProfile, StrategyParams
-from lighthouse.costs import CostModel, corwin_schultz_spread, impact_bps
+from lighthouse.costs import MAX_COST_BPS, CostModel, corwin_schultz_spread, impact_bps
 from conftest import make_prices
 
 FIX = Path(__file__).parent / "fixtures" / "french"
@@ -30,6 +30,12 @@ def test_impact_grows_with_the_square_root_of_size():
     assert b == pytest.approx(2 * a) and impact_bps(1e5, np.nan, 0.02) == 0.0
     c = CostModel().per_side_bps(make_prices(200), 1e4)
     assert (c.dropna() >= 10.0 - 1e-9).all()                                  # commission 5 + half-spread floor 5
+    # a series that barely trades (stale data, or another company's history under a reused ticker) would cost
+    # thousands of bps in impact: the total is capped
+    thin = make_prices(200)
+    thin["Volume"] = 1.0
+    t = CostModel().per_side_bps(thin, 1e5)
+    assert t.max() == pytest.approx(MAX_COST_BPS)
 
 
 def _gap_series():
