@@ -185,3 +185,102 @@ def test_predecessor_ciks_cover_a_reorganised_registrant():
     assert 34088 in edgar.PREDECESSOR_CIKS[2115436]             # ExxonMobil Holdings Corp <- Exxon Mobil Corp
     h = pit.build_statements(edgar.company_facts(ticker="XOM", source="sample"))
     assert h.annual.index.min() < pd.Timestamp("2010-01-01") and len(h.annual) > 15
+
+
+# --------------------------------------------------------------------------- #
+# The facts cache and the concept list it was filtered to
+# --------------------------------------------------------------------------- #
+class _FactsServer:
+    """Stands in for data.sec.gov: answers every companyfacts request with the recorded MSFT payload and counts the
+    requests; `down = True` behaves like an unreachable EDGAR."""
+
+    def __init__(self):
+        self.payload = json.loads((FIX / "msft_companyfacts_2016_2018.json").read_text())
+        self.calls = 0
+        self.down = False
+
+    def __call__(self, url, **kw):
+        if self.down:
+            raise DataUnavailable("EDGAR unreachable (test)")
+        assert "companyfacts/CIK0000789019" in url
+        self.calls += 1
+        payload = self.payload
+
+        class Reply:
+            def json(self):
+                return payload
+        return Reply()
+
+
+@pytest.fixture
+def facts_server(monkeypatch, tmp_path):
+    from lighthouse import data
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")          # the fetch is replaced below: nothing reaches the network
+    srv = _FactsServer()
+    monkeypatch.setattr(edgar, "_get", srv)
+    return srv
+
+
+GROWN = "PaymentsToAcquirePropertyPlantAndEquipment"       # MSFT files it; the "old" concept list below lacks it
+
+
+def test_facts_cache_refetches_when_the_concept_list_grows(facts_server, monkeypatch):
+    srv, full_list = facts_server, list(pit.CONCEPTS)
+    old_list = [c for c in full_list if c != GROWN]
+    monkeypatch.setattr(pit, "CONCEPTS", old_list)          # the code as it was before the line item was added
+    old = edgar.company_facts(cik=789019)
+    meta = edgar.store.read_json("edgar_facts", "0000789019")
+    assert srv.calls == 1 and GROWN not in set(old.concept)
+    assert meta["concepts"] == sorted(old_list) and meta["rows"] == len(old)
+    edgar.company_facts(cik=789019, concepts=["NetIncomeLoss", "Assets"])        # within the recorded list: cached
+    edgar.company_facts(cik=789019)
+    assert srv.calls == 1
+    monkeypatch.setattr(pit, "CONCEPTS", full_list)         # the concept list grew: the cache cannot answer for it
+    grown = edgar.company_facts(cik=789019)
+    assert srv.calls == 2 and GROWN in set(grown.concept)
+    meta = edgar.store.read_json("edgar_facts", "0000789019")
+    assert GROWN in meta["concepts"] and meta["rows"] == len(grown)
+    edgar.company_facts(cik=789019)
+    assert srv.calls == 2
+    # an explicit concept beyond pit.CONCEPTS downloads once; the record then says the company has no rows for it, so
+    # asking again does not download again
+    extra = edgar.company_facts(cik=789019, concepts=["EntityCommonStockSharesOutstanding", "SomeNewConcept"])
+    assert srv.calls == 3 and {"NetIncomeLoss", "EntityCommonStockSharesOutstanding"} <= set(extra.concept)
+    edgar.company_facts(cik=789019, concepts=["SomeNewConcept"])
+    assert srv.calls == 3
+    # the cache never shrinks: a narrow request with refresh keeps everything recorded before
+    edgar.company_facts(cik=789019, concepts=["Assets"], refresh=True)
+    meta = edgar.store.read_json("edgar_facts", "0000789019")
+    assert srv.calls == 4 and {"SomeNewConcept", GROWN} <= set(meta["concepts"])
+
+
+def test_facts_cache_without_a_record_covers_only_the_concepts_it_has(facts_server):
+    """A table cached before the record existed: a request within the concepts it has rows for is served from it; one
+    that adds a concept it lacks counts as stale. A record whose row count disagrees with the table is no record."""
+    srv = facts_server
+    legacy = edgar.flatten_company_facts(srv.payload, ["NetIncomeLoss", "Assets"])
+    edgar.store.write_frame("edgar_facts", "0000789019", legacy)
+    got = edgar.company_facts(cik=789019, concepts=["NetIncomeLoss"])
+    assert srv.calls == 0 and set(got.concept) == {"NetIncomeLoss", "Assets"}
+    full = edgar.company_facts(cik=789019, concepts=["NetIncomeLoss", "StockholdersEquity"])
+    assert srv.calls == 1 and "StockholdersEquity" in set(full.concept)
+    # a record from another write (its row count is not this table's) is ignored
+    edgar.store.write_frame("edgar_facts", "0000789019", legacy)
+    edgar.store.write_json("edgar_facts", "0000789019", {"concepts": sorted(pit.CONCEPTS), "rows": len(legacy) + 1})
+    assert edgar.cached_fact_concepts("0000789019", legacy) is None
+    edgar.company_facts(cik=789019, concepts=["StockholdersEquity"])
+    assert srv.calls == 2
+
+
+def test_facts_cache_is_used_as_it_is_offline_or_when_edgar_is_unreachable(facts_server, monkeypatch):
+    srv = facts_server
+    legacy = edgar.flatten_company_facts(srv.payload, ["NetIncomeLoss"])
+    edgar.store.write_frame("edgar_facts", "0000789019", legacy)
+    srv.down = True                                         # lacks Assets: tries EDGAR, falls back to the cache
+    got = edgar.company_facts(cik=789019, concepts=["NetIncomeLoss", "Assets"])
+    assert set(got.concept) == {"NetIncomeLoss"} and len(got) == len(legacy)
+    srv.down = False
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "1")           # offline: no attempt at all
+    got = edgar.company_facts(cik=789019, concepts=["NetIncomeLoss", "Assets"])
+    assert srv.calls == 0 and set(got.concept) == {"NetIncomeLoss"}
