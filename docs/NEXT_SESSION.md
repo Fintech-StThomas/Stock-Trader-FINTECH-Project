@@ -47,6 +47,9 @@ unit-tested offline but has not been run on live data or written up; Phase 8 is 
   The delisting rules cannot bite (no priced member delisted). Results are bounds where failures matter.
 * Exit plans on the 2009 cohort: trend exit better than R targets for long-horizon longs (default kept) and for
   short-horizon longs; shorts lost under both. Cohort numbers in `reports/research/exit_plans_2009-01-02.csv`.
+* Timing cohorts re-run with cash at the T-bill, resting stops and liquidity costs (capped at 300 bps a side):
+  balanced Sharpe 0.24 (1996, 78 of 258 beat buy-and-hold) and 0.30 (2009, 43 of 330) against buy-and-hold's 0.36 and
+  0.48 (`reports/examples/cross_ticker_sp500_<DATE>*.csv`, METHODOLOGY §8, README).
 
 ## Order of work for the next session
 

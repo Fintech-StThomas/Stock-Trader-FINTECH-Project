@@ -194,25 +194,28 @@ the cross-sectional harness (Phase 3 of `docs/ROADMAP_STATUS.md`), not for this 
 
 **Survivorship-aware cohorts.** The 20 sample stocks are the survivors of 1990-2022. `--cohort DATE` tests every
 S&P 500 member on DATE, from DATE until today or until its prices stop, with live Yahoo prices, the S&P 500 regime,
-the FRED T-bill for Sharpe ratios and SEC filing-dated fundamentals, 10 bps per side, cash at 0%
-(`reports/examples/cross_ticker_sp500_<DATE>.csv` and `_summary.csv`):
+the FRED T-bill for Sharpe ratios and for uninvested cash, SEC filing-dated fundamentals, resting stop orders and
+liquidity-scaled costs (`reports/examples/cross_ticker_sp500_<DATE>.csv` and `_summary.csv`; re-run 14 October 2026):
 
 | Cohort | Members | With prices (coverage) | Buy & hold: CAGR / Sharpe / max DD | Signals + regime Sharpe | Lighthouse balanced: CAGR / vol / Sharpe / max DD | Beat buy & hold (Sharpe / CAGR) | Lower drawdown |
 |---|---|---|---|---|---|---|---|
-| 1996-01-02 → 2026-10 | 487 | 258 (53%) | 7.6% / 0.36 / −72% | 0.23 | 3.9% / 11.5% / 0.13 / −32% | 29 / 45 of 258 | 253 |
-| 2009-01-02 → 2026-10 | 498 | 330 (66%) | 12.0% / 0.48 / −59% | 0.35 | 4.1% / 12.1% / 0.23 / −31% | 29 / 24 of 330 | 314 |
+| 1996-01-02 → 2026-10 | 487 | 258 (53%) | 7.6% / 0.36 / −72% | 0.25 | 5.1% / 11.4% / 0.24 / −28% | 78 / 55 of 258 | 254 |
+| 2009-01-02 → 2026-10 | 498 | 330 (66%) | 12.0% / 0.48 / −59% | 0.36 | 4.9% / 11.9% / 0.30 / −28% | 43 / 31 of 330 | 314 |
 
 Per-stock averages. As one equal-weight cohort (one sleeve per member, never rebalanced), buy-and-hold earned 11.1% a
-year from 1996 and 17.0% from 2009; the Lighthouse rule 4.3% and 4.9%; the signals alone, fully invested when in, 8.0%
-and 10.6%. Those figures leave out the members Yahoo cannot price. If every one of them was worth nothing (the
-pessimistic bound), the cohort earned 8.8% / 2.2% / 5.8% from 1996 and 14.3% / 2.5% / 8.1% from 2009. Every member
+year from 1996 and 17.0% from 2009; the Lighthouse rule 5.4% and 5.5%; the signals alone, fully invested when in, 8.5%
+and 10.8%. Those figures leave out the members Yahoo cannot price. If every one of them was worth nothing (the
+pessimistic bound), the cohort earned 8.8% / 3.2% / 6.3% from 1996 and 14.3% / 3.1% / 8.3% from 2009. Before cash
+earned the T-bill (and with a fixed 10 bps per side and close-checked stops) the balanced rule's Sharpe was 0.13 and
+0.23 and it beat buy-and-hold on 29 stocks in each cohort: the rule holds cash for much of the time, and that cash had
+earned nothing. Every member
 Yahoo could price still trades today: free data has no price history for the delisted, so the delisting rules change
 nothing at the stock level and the whole bias sits in the untested 47% (1996) and 34% (2009). Ticker reuse is a second
 risk: Yahoo's history for a recycled ticker can belong to another company.
 
 Interpretation: on these data the rule has no edge as a stock-timing tool. It lowers volatility and drawdown on nearly
-every stock, but it gives up most of the return, beats buy-and-hold on risk-adjusted terms on about 1 stock in 10, and
-the regime filter plus sizing sit in cash (earning nothing in these tests) for much of a long bull market. The product
+every stock, but it gives up most of the return, beats buy-and-hold on risk-adjusted terms on 1 stock in 8 (2009) to
+1 in 3 (1996), and the regime filter plus sizing sit in cash (earning the T-bill) for much of a long bull market. The product
 still delivers *the risk profile the investor asked for*; it does not deliver extra return, and it should not be
 presented as if it did. What comes next is cross-stock research (which stocks to own, not when to own one), forward
 testing with a journal that cannot contain look-ahead, and honest costs (`docs/ROADMAP_STATUS.md`).

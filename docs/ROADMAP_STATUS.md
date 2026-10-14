@@ -19,6 +19,8 @@ phases; the budget is $0 (free data, free libraries, free hosting).
 * **The rule has shown no edge in stock timing.** On every S&P 500 member of 2 January 1996 (258 of 487 with prices)
   the balanced rule's Sharpe averaged 0.13 against buy-and-hold's 0.36 and beat it on 29 stocks; on the members of
   2 January 2009 (330 of 498) 0.23 against 0.48, again 29 stocks. It lowered drawdown on 98% and 95% of them.
+  Re-run in Phase 3 with cash at the T-bill, resting stops and liquidity costs: 0.24 (78 of 258 beat buy-and-hold)
+  and 0.30 (43 of 330), still well below buy-and-hold.
 * **Coverage is the binding gap.** Yahoo prices 53% of the 1996 cohort and 66% of the 2009 cohort; every priced member
   still trades today. Member-day coverage of the index: 36% in 1996, 60% in 2009, 95% in 2026. The delisting rules
   therefore act only at the cohort level (unpriced members excluded, or worth nothing).

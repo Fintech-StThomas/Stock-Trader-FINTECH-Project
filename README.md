@@ -105,13 +105,14 @@ its prices stop (`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, 
 
 | Cohort (members with prices / all) | Buy & hold Sharpe | Lighthouse balanced Sharpe | Beats buy & hold (Sharpe) | Equal-weight cohort, a year: buy & hold → Lighthouse |
 |---|---|---|---|---|
-| 2 Jan 1996, to Oct 2026 (258 / 487, 53%) | 0.36 | 0.13 | 29 of 258 | 11.1% → 4.3% (8.8% → 2.2% if every unpriced member went to zero) |
-| 2 Jan 2009, to Oct 2026 (330 / 498, 66%) | 0.48 | 0.23 | 29 of 330 | 17.0% → 4.9% (14.3% → 2.5%) |
+| 2 Jan 1996, to Oct 2026 (258 / 487, 53%) | 0.36 | 0.24 | 78 of 258 | 11.1% → 5.4% (8.8% → 3.2% if every unpriced member went to zero) |
+| 2 Jan 2009, to Oct 2026 (330 / 498, 66%) | 0.48 | 0.30 | 43 of 330 | 17.0% → 5.5% (14.3% → 3.1%) |
 
-We say it out loud: as a way to time single stocks, the rule has shown no edge. It delivers the risk profile you asked
-for (lower volatility and drawdown on nearly every stock), at a large cost in return. Cash earned 0% in these cohort tests
-(they are re-run with cash at the T-bill in `docs/ROADMAP_STATUS.md`);
-`docs/METHODOLOGY.md` §8 has the details, and `docs/ROADMAP_STATUS.md` the research that follows from it.
+Cash earns the T-bill, stops rest as orders and costs scale with liquidity in these runs. We say it out loud: as a way to
+time single stocks, the rule has shown no edge. It delivers the risk profile you asked for (lower volatility and drawdown
+on nearly every stock), at a large cost in return. Nor do its scores pick stocks: on the point-in-time S&P 500 none of
+them ranked next month's returns, before or after costs (`docs/METHODOLOGY.md` §8b). §8 has the timing details, and
+`docs/ROADMAP_STATUS.md` the research that follows from it.
 
 ## Repository map
 
