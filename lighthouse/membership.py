@@ -97,8 +97,14 @@ def parse_wiki_changes(html: str) -> pd.DataFrame:
         "added_name": tab[col("Added Security")], "removed_name": tab[col("Removed Security")],
         "reason": tab[next((c for c in tab.columns if "Reason" in c), col("Effective Date"))]})
     for c in ("added", "removed"):
-        out[c] = out[c].map(lambda x: normalize_ticker(x) if isinstance(x, str) and x.strip() and x.strip() != "nan" else None)
+        # object dtype keeps a blank as None (pandas 3 would store it as NaN in a string column, and NaN is truthy)
+        out[c] = pd.Series([_ticker_or_none(x) for x in out[c]], index=out.index, dtype=object)
     return out.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+
+
+def _ticker_or_none(x) -> Optional[str]:
+    """A normalised ticker, or None for a blank cell (None, NaN, '' or the text 'nan')."""
+    return normalize_ticker(x) if isinstance(x, str) and x.strip() and x.strip().lower() != "nan" else None
 
 
 def parse_wiki_current(html: str) -> pd.DataFrame:
@@ -117,17 +123,18 @@ def apply_changes(intervals: pd.DataFrame, changes: pd.DataFrame, after: pd.Time
     notes = []
     for _, ch in changes[changes["date"] > after].iterrows():
         d = ch["date"]
-        if ch["removed"]:
-            m = (iv["ticker"] == ch["removed"]) & iv["end"].isna()
+        removed, added = _ticker_or_none(ch["removed"]), _ticker_or_none(ch["added"])
+        if removed:
+            m = (iv["ticker"] == removed) & iv["end"].isna()
             if m.any():
                 iv.loc[m, "end"] = d - pd.Timedelta(days=1)
             else:
-                notes.append(f"{d.date()}: removal of {ch['removed']} does not match a current member")
-        if ch["added"]:
-            if ((iv["ticker"] == ch["added"]) & iv["end"].isna()).any():
-                notes.append(f"{d.date()}: {ch['added']} is already a member")
+                notes.append(f"{d.date()}: removal of {removed} does not match a current member")
+        if added:
+            if ((iv["ticker"] == added) & iv["end"].isna()).any():
+                notes.append(f"{d.date()}: {added} is already a member")
             else:
-                iv = pd.concat([iv, pd.DataFrame([{"ticker": ch["added"], "start": d, "end": pd.NaT}])], ignore_index=True)
+                iv = pd.concat([iv, pd.DataFrame([{"ticker": added, "start": d, "end": pd.NaT}])], ignore_index=True)
     return iv.sort_values(["ticker", "start"]).reset_index(drop=True), notes
 
 

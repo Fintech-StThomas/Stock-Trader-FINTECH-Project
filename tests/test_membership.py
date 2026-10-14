@@ -96,3 +96,13 @@ def test_delisting_names_match_edgar_filers(monkeypatch):
     monkeypatch.setattr(edgar, "delistings", lambda start_year=2001, end_year=None, refresh=False: fake)
     d = mb.delisting_dates({"LEH": "Lehman Brothers Holdings Inc.", "WM": "Washington Mutual", "XYZ": "Nobody Corp"})
     assert d.set_index("ticker").loc["LEH", "form"] == "25-NSE" and set(d["ticker"]) == {"LEH", "WM"}
+
+
+def test_a_blank_ticker_in_the_change_log_adds_no_member():
+    """pandas 3 stores a blank text cell as NaN, which is truthy: a pure removal must not add a member without a ticker."""
+    iv = pd.DataFrame({"ticker": ["AAA", "BBB"], "start": pd.Timestamp("2020-01-01"), "end": pd.NaT})
+    changes = pd.DataFrame({"date": pd.to_datetime(["2021-03-01", "2021-04-01"]), "added": [np.nan, "CCC"],
+                            "removed": ["BBB", float("nan")]})
+    out, notes = mb.apply_changes(iv, changes, pd.Timestamp("2020-12-31"))
+    assert out["ticker"].notna().all() and set(out["ticker"]) == {"AAA", "BBB", "CCC"}
+    assert mb.Universe("t", out).members_on("2021-05-01") == ["AAA", "CCC"] and not notes
