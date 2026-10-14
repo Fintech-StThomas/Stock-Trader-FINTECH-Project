@@ -9,6 +9,8 @@
   python -m lighthouse portfolio --goal balanced --cash 10000                           # Lighthouse picks the stocks
   python -m lighthouse trade --universe semiconductors --cash 5000                      # a pre-built universe
   python -m lighthouse universes                                                         # list the pre-built universes
+  python -m lighthouse memo MSFT --out reports/memos --open-thesis                      # investment memo, thesis saved
+  python -m lighthouse thesis check | list | close ID --reason "..."                    # follow the saved theses
 """
 from __future__ import annotations
 
@@ -121,6 +123,63 @@ def _paper(j, by, checks, s, a) -> list:
     return lines
 
 
+def _memo(a) -> int:
+    from .analyst import memo as memo_mod
+    from .analyst.thesis import ThesisBook, open_thesis
+    from .data import DataUnavailable
+    res = None
+    if not a.no_signals:
+        res = analyze(a.ticker, _profile(a), _params(a), years=max(a.years, 11), source=a.source, run_backtest_=False,
+                      as_of=a.as_of)
+    try:
+        m = memo_mod.build(a.ticker, as_of=a.as_of, source=a.source, result=res, peers=not a.no_peers)
+    except DataUnavailable as exc:
+        print(exc, file=sys.stderr); return 1
+    text = m.markdown()
+    print(text)
+    if a.out:
+        from pathlib import Path
+        out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+        pth = out / f"memo_{m.ticker}_{m.as_of.date()}.md"
+        pth.write_text(text)
+        print(f"wrote {pth}", file=sys.stderr)
+    if a.open_thesis:
+        tid = open_thesis(m, ThesisBook(path=a.journal))
+        print(f"thesis {tid} saved; `python -m lighthouse thesis check` follows it", file=sys.stderr)
+    return 0
+
+
+def _thesis(a) -> int:
+    from .analyst.thesis import ThesisBook, check_theses, close_thesis, coverage
+    book = ThesisBook(path=a.journal)
+    if a.action == "check":
+        sts = check_theses(book, source=a.source, date=a.as_of)
+        for s in sts:
+            head = f"{s.ticker} (thesis {s.thesis_id}, {s.stance}, opened {s.opened}): ${s.price_then:,.2f} -> ${s.price_now:,.2f}"
+            print(head + (f"; new filing {s.new_filing}" if s.new_filing else ""))
+            for b in s.breaches:
+                print(f"  BROKEN: {b}")
+        if not sts:
+            print("no open theses")
+        if a.alerts:
+            with open(a.alerts, "w") as fh:
+                for s in sts:
+                    for b in s.breaches:
+                        fh.write(f"{s.ticker} thesis {s.thesis_id}: {b}\n")
+        return 0
+    if a.action == "list":
+        cov = coverage(book, source=a.source, date=a.as_of)
+        print(cov.to_string() if len(cov) else "no theses")
+        return 0
+    if a.action == "close":
+        if a.id is None:
+            print("close needs the thesis id", file=sys.stderr); return 1
+        for line in close_thesis(a.id, a.reason or "", book, source=a.source, date=a.as_of):
+            print(line)
+        return 0
+    return 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="lighthouse", description="Lighthouse - explainable stock decisions")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -198,6 +257,25 @@ def main(argv=None) -> int:
     a7.add_argument("--out", help="score / export: folder for the CSV files")
     a7.add_argument("--format", choices=["csv", "jsonl"], default="csv")
 
+    a8 = sub.add_parser("memo", help="investment memo: valuation, peers, quality checks, thesis and kill criteria")
+    common(a8)
+    a8.add_argument("ticker")
+    a8.add_argument("--as-of", help="the memo's date (default: the last close); filings after it are not used")
+    a8.add_argument("--out", help="folder for the Markdown file")
+    a8.add_argument("--no-peers", action="store_true", help="skip the peer search (it reads every same-industry filer)")
+    a8.add_argument("--no-signals", action="store_true", help="leave out the rule-based verdict")
+    a8.add_argument("--open-thesis", action="store_true", help="save the thesis and its kill criteria to the journal")
+    a8.add_argument("--journal", help="journal file (default data/journal/lighthouse_journal.sqlite or LIGHTHOUSE_JOURNAL)")
+
+    a9 = sub.add_parser("thesis", help="follow saved theses: check them against new filings, list coverage, close")
+    a9.add_argument("action", choices=["check", "list", "close"])
+    a9.add_argument("id", nargs="?", type=int)
+    a9.add_argument("--reason", help="close: why")
+    a9.add_argument("--as-of", help="check as of this date (default: today)")
+    a9.add_argument("--source", default="auto")
+    a9.add_argument("--journal")
+    a9.add_argument("--alerts", help="check: write broken criteria to this file")
+
     a = ap.parse_args(argv)
     pd.set_option("display.width", 160); pd.set_option("display.max_columns", 30)
 
@@ -214,6 +292,10 @@ def main(argv=None) -> int:
             print(exc, file=sys.stderr); return 1
     if a.cmd == "journal":
         return _journal(a)
+    if a.cmd == "memo":
+        return _memo(a)
+    if a.cmd == "thesis":
+        return _thesis(a)
     if a.cmd in {"trade", "screen"} and not a.tickers:
         print("give tickers, or --universe NAME", file=sys.stderr); return 1
 

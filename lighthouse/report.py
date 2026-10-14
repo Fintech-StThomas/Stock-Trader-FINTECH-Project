@@ -138,9 +138,12 @@ def build_report(result, include_backtest: bool = True) -> str:
     bt = result.backtest
     if include_backtest and bt is not None:
         L.append(f"### How this rule behaved in the past ({bt.start.date()} → {bt.end.date()})")
-        L.append(f"Long-only, reviewed {result.params.decision_frequency} at the close, filled at the {bt.options.get('fills')}, "
-                 f"{result.params.cost_bps + result.params.slippage_bps:.0f} bps commission + slippage per side, statements lagged "
-                 f"{result.params.reporting_lag_days} days. Returns are for the capital allocated to this stock. "
+        pit = getattr(result, "pit_statements", None)
+        dated = ("statements dated by their SEC filing date" if pit is not None and pit.has_filing_dates else
+                 f"statements lagged {result.params.reporting_lag_days} days")
+        L.append(f"Long-only, reviewed {result.params.decision_frequency} at the close, filled at the {bt.options.get('fills')}; "
+                 f"costs: {bt.options.get('costs', 'fixed bps per side')}; stops: {bt.options.get('stops', 'n/a')}; cash "
+                 f"{bt.options.get('cash', 'earns 0%')}; {dated}. Returns are for the capital allocated to this stock. "
                  f"Sharpe and Sortino use {bt.options.get('risk_free', 'a fixed risk-free rate')}.\n")
         L.append(_md_table(format_metrics(bt.summary())) + "\n")
         layers = result.extras.get("layers")
@@ -174,9 +177,133 @@ def build_report(result, include_backtest: bool = True) -> str:
     L.append("### Limitations you should know")
     L += [
         "- Sector norms are long-run approximations, not live peer data; a cheap stock in an expensive sector can still be expensive.",
-        "- Fundamentals are the latest reported figures; the backtest's fundamental gate uses only the years of statements the feed provides.",
-        "- The backtest is long-only with simple costs; it ignores taxes, dividends on cash, and intraday stop execution.",
+        "- The fundamental beacons use the latest reported figures; the backtest's fundamental gate uses SEC filings as "
+        "first reported, from the day after each was filed (when EDGAR is reachable).",
+        "- The backtest is long-only; costs are estimated from the stock's own spread and volume, stops rest as orders (an "
+        "overnight gap fills at the open), and it ignores taxes. Run `python -m lighthouse memo` for the analyst view.",
         "- Past behaviour of a rule is evidence about its *design*, not a promise about its future returns.",
         "- Lighthouse is a decision-support tool, not investment advice.",
     ]
     return "\n".join(L)
+
+
+
+# --------------------------------------------------------------------------- #
+# The investment memo (lighthouse.analyst.memo)
+# --------------------------------------------------------------------------- #
+def _p(x, digits: int = 1) -> str:
+    return "n/a" if x is None or not np.isfinite(x) else f"{x * 100:.{digits}f}%"
+
+
+def _x(x, digits: int = 1) -> str:
+    return "n/a" if x is None or not np.isfinite(x) else f"{x:.{digits}f}x"
+
+
+def build_memo(memo) -> str:
+    """The memo as Markdown: the recommendation first, then the evidence for it."""
+    m, f = memo, memo.financials
+    r = f.ratios()
+    v = m.valuation
+    name = m.profile.get("name") or m.ticker
+    L: List[str] = [f"# Investment memo: {name} ({m.ticker})",
+                    f"*As of {f.as_of.date()} · price ${f.price:,.2f} · market value ${f.market_cap / 1e9:,.1f}bn · "
+                    f"SIC {m.profile.get('sic') or 'n/a'} {m.profile.get('sicDescription') or ''}*\n"]
+    from .analyst.memo import STANCE_RULE
+    L.append(f"## Recommendation: **{m.stance.upper()}**")
+    L.append(m.thesis + "\n")
+    L.append(f"*{STANCE_RULE}*\n")
+    if m.supporting:
+        L.append("**Why**")
+        L += [f"- {x}" for x in m.supporting]
+        L.append("")
+    if m.risks:
+        L.append("**Risks**")
+        L += [f"- {x}" for x in m.risks]
+        L.append("")
+    if m.variant_view:
+        L.append("## Variant view: what the price assumes")
+        L += [f"- {x}" for x in m.variant_view]
+        L.append("")
+
+    L.append("## The numbers (trailing twelve months)")
+    rows = [("Revenue", f"${f.get('revenue') / 1e9:,.2f}bn" if np.isfinite(f.get('revenue')) else "n/a", _p(r["revenue_growth"])),
+            ("Operating income", f"${f.get('operating_income') / 1e9:,.2f}bn" if np.isfinite(f.get('operating_income')) else "n/a",
+             _p(r["operating_margin"]) + " margin"),
+            ("Net income", f"${f.get('net_income') / 1e9:,.2f}bn" if np.isfinite(f.get('net_income')) else "n/a",
+             _p(r["eps_growth"]) + " growth"),
+            ("Free cash flow", f"${f.fcf / 1e9:,.2f}bn" if np.isfinite(f.fcf) else "n/a", _p(r["fcf_yield"]) + " yield"),
+            ("ROIC", _p(r["roic"]), ""), ("Gross margin", _p(r["gross_margin"]), ""),
+            ("Net debt", f"${f.net_debt / 1e9:,.2f}bn", _x(r["net_debt_ebitda"]) + " EBITDA"),
+            ("Stock-based pay", _p(r["sbc_revenue"]) + " of revenue", "")]
+    L.append(_md_table(pd.DataFrame(rows, columns=["line", "value", "note"]).set_index("line")) + "\n")
+
+    L.append("## Valuation")
+    if v is not None:
+        t = v.table()
+        show = pd.DataFrame({"weight": t["weight"].map(lambda x: f"{x:.0%}"),
+                             "value / share": t["value_per_share"].map(lambda x: f"${x:,.2f}"),
+                             "vs price": t["vs_price"].map(lambda x: f"{x:+.0%}"),
+                             "growth yr 1 → 5": [f"{_p(a)} → {_p(b)}" for a, b in zip(t["growth_y1"], t["growth_last"])],
+                             "margin yr 5": t["margin_last"].map(_p),
+                             "terminal share": t["terminal_share"].map(lambda x: f"{x:.0%}")}, index=t.index)
+        L.append(_md_table(show) + "\n")
+        ud = v.upside_downside
+        ud_text = ("the bull case is below the price" if v.cases["bull"].per_share < f.price else
+                   "the bear case is above the price" if not np.isfinite(ud) or ud == float("inf") else
+                   f"upside-to-downside {ud:.2f} (bull gain ÷ bear loss)")
+        L.append(f"- Probability-weighted value **${v.target:,.2f}** ({v.target / f.price - 1:+.0%}); {ud_text}.")
+        L.append(f"- Reverse DCF: the price implies **{_p(v.implied_growth)}** revenue growth a year for five years at today's "
+                 f"margin, or a **{_p(v.implied_margin)}** operating margin at the base case's growth.")
+        L.append(f"- Discount rate (WACC) {_p(v.rate.wacc, 2)}: risk-free {_p(v.rate.risk_free, 2)}, beta {v.rate.beta:.2f}, "
+                 f"equity premium {_p(v.rate.equity_premium)}, cost of debt {_p(v.rate.cost_of_debt, 2)}; terminal growth "
+                 f"{_p(v.terminal_growth)}. Free cash flow is after stock-based pay.")
+        if not v.bands.empty:
+            b = v.bands.copy()
+            labels = {"earnings_yield": "earnings yield", "fcf_yield": "FCF yield", "ebitda_ev": "EBITDA / EV"}
+            show = pd.DataFrame({"now": b["now"].map(_p), "10th pct": b["p10"].map(_p), "median": b["median"].map(_p),
+                                 "90th pct": b["p90"].map(_p), "cheaper than": b["percentile"].map(lambda x: f"{x:.0%} of days"),
+                                 "since": b["since"]})
+            show.index = [labels.get(i, i) for i in b.index]
+            L.append("\n**Against its own history** (higher yield = cheaper)\n")
+            L.append(_md_table(show) + "\n")
+    else:
+        L.append("_No DCF: the filings lack the lines it needs._\n")
+    if m.peers is not None:
+        pc = m.peers
+        L.append(f"**Peers** ({pc.level}, closest in market value)\n")
+        tab = pc.table.copy()
+        fmt = {"pe": _x, "ev_ebitda": _x, "ev_sales": _x, "pb": _x, "net_debt_ebitda": _x}
+        show = pd.DataFrame({LABELS_PEERS.get(c, c): tab[c].map(fmt.get(c, _p)) for c in tab.columns}, index=tab.index)
+        L.append(_md_table(show) + "\n")
+        L += [f"- {x}" for x in pc.explanation]
+        L.append("")
+
+    L.append("## Quality and balance sheet")
+    for x in m.quality + m.balance:
+        L.append(f"- {LIGHT_ICON.get(x.severity, '')} *{x.area}*: {x.text}")
+    L.append("")
+    if m.capital.get("lines"):
+        L.append("## Capital allocation")
+        L += [f"- {x}" for x in m.capital["lines"]]
+        L.append("")
+    if m.catalysts is not None and len(m.catalysts):
+        L.append("## Catalyst calendar (estimated from last year's filing dates)")
+        L.append(_md_table(m.catalysts.set_index("event")) + "\n")
+
+    L.append("## What would prove this wrong")
+    L += [f"- {c.text}" for c in m.criteria]
+    L.append("\n`python -m lighthouse thesis` checks these against every new filing.\n")
+    L.append("## Pre-mortem")
+    L += [f"- {x}" for x in m.premortem]
+    L.append("")
+    L.append("## Sources and notes")
+    L += [f"- {x}" for x in m.sources]
+    L += [f"- Note: {x}" for x in m.notes]
+    L.append("- The text is generated from the numbers by fixed rules; it cannot be backtested as judgment, and it is not "
+             "investment advice.")
+    return "\n".join(L)
+
+
+LABELS_PEERS = {"pe": "P/E", "ev_ebitda": "EV/EBITDA", "ev_sales": "EV/sales", "pb": "P/B", "fcf_yield": "FCF yield",
+                "gross_margin": "gross margin", "operating_margin": "op. margin", "roic": "ROIC",
+                "revenue_growth": "rev. growth", "net_debt_ebitda": "ND/EBITDA"}

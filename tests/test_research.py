@@ -144,3 +144,13 @@ def test_residual_momentum_finds_a_planted_residual_drift(monkeypatch):
     rm = PS.residual_momentum(panel)
     last = rm.iloc[-1].dropna()
     assert last.idxmax() == "S00" and len(last) == 20
+
+
+def test_coverage_counts_members_without_any_price():
+    uni, frames = _universe_frames(n=40, months=24)
+    iv = pd.concat([uni.intervals, pd.DataFrame({"ticker": [f"DEAD{k}" for k in range(10)], "start": uni.intervals["start"].iloc[0],
+                                                 "end": pd.NaT})], ignore_index=True)
+    panel = H.build_panel(mb.Universe("with unpriced members", iv), frames, start="2010-01-01")
+    assert panel.coverage().iloc[3] == pytest.approx(40 / 50)        # 10 members never had a price
+    res = H.evaluate(panel, panel.prices.pct_change(3), "mom3", "exclude", ("2010-01-01", None), min_names=20)
+    assert res.summary["coverage"] <= 0.8 + 1e-9

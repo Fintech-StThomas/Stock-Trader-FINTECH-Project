@@ -56,13 +56,20 @@ class Panel:
     data_end: pd.Timestamp
     universe_name: str = ""
     sources: List[str] = field(default_factory=list)
+    member_count: Optional[pd.Series] = None    # ALL members at each month end, priced or not (the coverage denominator)
 
     @property
     def investable(self) -> pd.DataFrame:
         return self.members & self.prices.notna()
 
+    def members_on(self, d) -> int:
+        """Every member at month end d, including those without any price (they cannot be tested)."""
+        if self.member_count is not None:
+            return int(self.member_count.get(d, 0))
+        return int(self.members.loc[d].sum())
+
     def coverage(self) -> pd.Series:
-        m = self.members.sum(axis=1)
+        m = self.member_count if self.member_count is not None else self.members.sum(axis=1)
         return (self.investable.sum(axis=1) / m.replace(0, np.nan)).rename("coverage")
 
 
@@ -91,8 +98,13 @@ def build_panel(universe, frames: Dict[str, pd.DataFrame], start="2008-01-01", e
         a[dates > c.index[-1]] = np.nan
         a[dates < c.index[0]] = np.nan
         px[t] = a
-    mem = universe.membership_matrix(dates).reindex(columns=tickers, fill_value=False) if universe is not None else \
-        pd.DataFrame(True, index=dates, columns=tickers)
+    if universe is not None:
+        full = universe.membership_matrix(dates)
+        member_count = full.sum(axis=1)
+        mem = full.reindex(columns=tickers, fill_value=False)
+    else:
+        mem = pd.DataFrame(True, index=dates, columns=tickers)
+        member_count = mem.sum(axis=1)
     last_price = pd.Series(last)
     # the month t during whose next month each stock stopped trading (its last price after month end t, on or before
     # month end t+1), when that is well before the end of the data: a delisting (or a merger, or a ticker change)
@@ -116,7 +128,8 @@ def build_panel(universe, frames: Dict[str, pd.DataFrame], start="2008-01-01", e
         r.iloc[-1] = np.nan                      # no next month after the last month end
         fwd[rule] = r
     return Panel(dates=dates, prices=px, members=mem, fwd=fwd, last_price=last_price, data_end=data_end,
-                 universe_name=getattr(universe, "name", ""), sources=list(getattr(universe, "sources", [])))
+                 universe_name=getattr(universe, "name", ""), sources=list(getattr(universe, "sources", [])),
+                 member_count=member_count)
 
 
 def sample_at_month_ends(daily: Dict[str, pd.Series], dates: pd.DatetimeIndex) -> pd.DataFrame:
@@ -261,7 +274,7 @@ def evaluate(panel: Panel, signal: pd.DataFrame, name: str, rule: str = "exclude
         f = fwd.loc[d]
         s = sig.loc[d]
         ok = f.notna() & s.notna() & panel.members.loc[d]
-        cov[d] = ok.sum() / max(int(panel.members.loc[d].sum()), 1)
+        cov[d] = ok.sum() / max(panel.members_on(d), 1)       # tested names / every member, priced or not
         if ok.sum() < min_names or not np.isfinite(f[ok]).all():
             continue
         fs, ss = f[ok], s[ok]

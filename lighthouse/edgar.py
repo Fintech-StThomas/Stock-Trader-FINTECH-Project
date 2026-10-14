@@ -156,6 +156,41 @@ def submissions(cik: int, refresh: bool = False) -> tuple:
     return prof, filings
 
 
+SAMPLE_FILING_FORMS = ("10-K", "10-Q", "10-K/A", "10-Q/A", "8-K", "8-K/A", "DEF 14A", "S-1", "S-3", "S-4", "424B2",
+                       "SC 13D", "SC 13G", "25", "25-NSE", "15-12B", "NT 10-K", "NT 10-Q")
+
+
+def sample_filings_paths(ticker: str) -> tuple:
+    base = SAMPLE_DIR / "edgar"
+    t = normalize_ticker(ticker)
+    return base / f"{t}_filings.parquet", base / f"{t}_profile.json"
+
+
+def company_filings(ticker: str, source: str = "auto", refresh: bool = False) -> tuple:
+    """(profile, filings) for a ticker: EDGAR submissions (cached), or the sample pack's recorded copy when the source is
+    the sample pack or EDGAR cannot be reached. Raises DataUnavailable when neither has the company."""
+    import json
+    fp, pp = sample_filings_paths(ticker)
+
+    def sample():
+        if fp.exists() and pp.exists():
+            f = pd.read_parquet(fp)
+            for c in ("filed", "report_date"):
+                f[c] = pd.to_datetime(f[c], errors="coerce")
+            f["items"] = f["items"].fillna("").astype(str)
+            return json.loads(pp.read_text()), f
+        raise DataUnavailable(f"{ticker}: no EDGAR filing list in the sample pack")
+    if source == "sample":
+        return sample()
+    cik = cik_for(ticker)
+    if cik is None:
+        return sample()
+    try:
+        return submissions(cik, refresh=refresh)
+    except DataUnavailable:
+        return sample()
+
+
 def earnings_release_dates(filings: pd.DataFrame) -> pd.Series:
     """Dates of the 8-K reports under Item 2.02 ("Results of Operations and Financial Condition"): the earnings
     announcements. Free data has no announcement calendar; these filings are the public record of it."""
@@ -429,4 +464,4 @@ def filing_documents(cik: int, accn: str) -> pd.DataFrame:
 
 __all__ = ["ticker_table", "cik_for", "submissions", "company_facts", "flatten_company_facts", "filing_index",
            "delistings", "parse_fsds_zip", "bulk_quarter", "earnings_release_dates", "normalize_ticker",
-           "fetch_document", "filing_documents", "document_url"]
+           "fetch_document", "filing_documents", "document_url", "company_filings", "SAMPLE_FILING_FORMS"]

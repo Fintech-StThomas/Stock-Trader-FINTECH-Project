@@ -134,16 +134,18 @@ def main(argv=None) -> int:
         tech = sigs["tech_long"]
         f = sigs["fund_pit"].reindex_like(tech)
         sigs["composite_long"] = (0.6 * f + 0.4 * tech).where(f.notna(), tech)
-    try:
-        from lighthouse.research import fundamental_signals as FS     # Phase 4 (when present)
-        sigs.update(FS.monthly(frames, panel, refresh=a.refresh_signals))
-    except ImportError:
-        pass
-    try:
-        from lighthouse.research import panel_signals as PS
-        sigs.update(PS.monthly(frames, panel, refresh=a.refresh_signals))
-    except ImportError:
-        pass
+    from lighthouse.research import fundamental_signals as FS
+    from lighthouse.research import panel_signals as PS
+    from lighthouse.research import positioning as PO
+    fs = FS.monthly(frames, panel, refresh=a.refresh_signals)
+    mcap = fs.pop("market_cap")
+    sigs.update(fs)
+    sigs["size"] = -np.log(mcap.where(mcap > 0))                     # small minus big (Banz 1981)
+    sigs.update(PS.monthly(frames, panel, refresh=a.refresh_signals))
+    sigs.update(PO.monthly(frames, panel, market_cap=mcap, refresh=a.refresh_signals))
+    for mod in (FS, PS, PO):
+        S.DESCRIPTIONS.update(mod.DESCRIPTIONS)
+    S.DESCRIPTIONS["size"] = "small size (minus log market value)"
     if a.signals:
         sigs = {k: v for k, v in sigs.items() if k in a.signals}
     costs = H.cost_panel(frames, panel.dates)
