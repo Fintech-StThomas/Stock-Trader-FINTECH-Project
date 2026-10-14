@@ -121,3 +121,19 @@ def test_industry_file_first_table_is_found_by_its_title():
     assert np.isnan(vw.loc["1926-07-31", "Soda"])                      # -99.99 = missing
     ew = secs["Average Equal Weighted Returns -- Monthly"]
     assert ew.shape[1] == 49 and len(ew) >= 4
+
+
+def test_a_series_that_barely_trades_cannot_cost_more_than_the_cap():
+    """EP's cached series (2014: $0.80, a few hundred shares a day) once gave a sale a negative fill price and the
+    equity curve a negative value: the backtest computed its own uncapped cost."""
+    df = make_prices(600, seed=5)
+    df["Volume"] = 1.0                                                      # ~$100 a day against $10,000 orders
+    p = StrategyParams(cost_model="liquidity", order_value=1e4)
+    bt = run_backtest(df, None, p, InvestorProfile(horizon="long", risk="balanced"), None, use_regime=False,
+                      use_fundamental_gate=False, use_stops=False, sizing="full")
+    assert (bt.equity > 0).all()
+    assert all(t.exit_price is None or t.exit_price > 0 for t in bt.trades)
+    for t in bt.trades:
+        if t.exit_price is not None and t.exit_date is not None:
+            raw = df.loc[t.exit_date, "Open"]
+            assert t.exit_price >= raw * (1 - MAX_COST_BPS / 1e4) - 1e-9

@@ -227,7 +227,7 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     fixed_cost = (p.cost_bps + p.slippage_bps) / 10_000.0
     liquid = p.cost_model == "liquidity"
     if liquid:
-        from .costs import corwin_schultz_spread, dollar_volume, impact_bps
+        from .costs import MAX_COST_BPS, corwin_schultz_spread, dollar_volume, impact_bps
         half = (corwin_schultz_spread(ind["High"], ind["Low"]) * 1e4 / 2.0).fillna(0.0).clip(lower=p.slippage_bps)
         half = half.values[first:last + 1]
         lr = np.log(ind["Close"] / ind["Close"].shift(1))
@@ -239,7 +239,9 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
         if not liquid:
             return fixed_cost
         dollars = p.order_value if p.order_value is not None else abs(weight) * prof.account_value
-        return float((p.cost_bps + half[i] + impact_bps(dollars, adv[i], dvol[i])) / 10_000.0)
+        # capped: a higher figure means a series without volume, not a price anyone pays (and an uncapped cost
+        # above 100% would turn a sale into a negative fill)
+        return float(min(p.cost_bps + half[i] + impact_bps(dollars, adv[i], dvol[i]), MAX_COST_BPS) / 10_000.0)
 
     # uninvested cash earns the risk-free rate (the T-bill series when given, else the fixed rate)
     if p.cash_yield:
