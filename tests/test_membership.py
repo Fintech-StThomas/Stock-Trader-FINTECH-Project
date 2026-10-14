@@ -75,3 +75,24 @@ def test_cohort_bounds_count_untested_members_as_lost():
 def test_static_universe_says_it_is_biased():
     u = mb.static_universe("today's large caps", ["aapl", "brk.b"])
     assert u.members_on("2001-01-02") == ["AAPL", "BRK-B"] and "survivorship" in u.notes[0]
+
+
+def test_market_cap_from_cover_shares_and_as_traded_price():
+    """AAPL on 2 January 2015: about 5.8 billion shares (10-K cover, October 2014) x $109.33 as traded = ~$640bn."""
+    px = pd.read_csv("data/sample/prices/AAPL.csv", index_col=0, parse_dates=True)["Close"]
+    from lighthouse.total_return import load_actions, price_only_close, to_units_of
+    split_adj = price_only_close(px, to_units_of(load_actions("AAPL", source="sample"), px.index[-1]))
+    mc = mb.market_cap_on("2015-01-02", ["AAPL", "NOPE"], {"AAPL": split_adj}, source="sample")
+    assert 5.5e11 < mc["AAPL"] < 7.0e11 and np.isnan(mc["NOPE"])
+    u = mb.market_cap_universe(["AAPL"], ["2015-01-02", "2016-01-04"], {"AAPL": split_adj}, top_n=1, source="sample")
+    assert u.members_on("2015-06-01") == ["AAPL"]
+
+
+def test_delisting_names_match_edgar_filers(monkeypatch):
+    import lighthouse.edgar as edgar
+    fake = pd.DataFrame({"cik": [1, 2], "name": ["LEHMAN BROTHERS HOLDINGS INC", "WASHINGTON MUTUAL, INC."],
+                         "form": ["25-NSE", "15-12B"], "filed": pd.to_datetime(["2008-09-17", "2008-10-01"]),
+                         "accn": ["a", "b"]})
+    monkeypatch.setattr(edgar, "delistings", lambda start_year=2001, end_year=None, refresh=False: fake)
+    d = mb.delisting_dates({"LEH": "Lehman Brothers Holdings Inc.", "WM": "Washington Mutual", "XYZ": "Nobody Corp"})
+    assert d.set_index("ticker").loc["LEH", "form"] == "25-NSE" and set(d["ticker"]) == {"LEH", "WM"}

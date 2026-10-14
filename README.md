@@ -95,12 +95,21 @@ Long-horizon rule, balanced profile, 20 S&P 500 stocks, Dec 1990 – Dec 2022, 1
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
 | Lighthouse signals + regime (fully invested when in) | 10.3% | — | 0.45 | −57% |
-| **Lighthouse balanced (vol-targeted)** | 6.5% | 12.7% | 0.40 | **−32%** |
-| Lighthouse conservative | 4.7% | 8.9% | 0.33 | −23% |
+| **Lighthouse balanced (vol-targeted)** | 6.2% | 12.3% | 0.38 | **−31%** |
+| Lighthouse conservative | 4.5% | 8.6% | 0.31 | −22% |
 
-Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 4 of 20. We say the second
-part out loud: single-stock timing does not out-return relentless compounders, it delivers the risk profile you asked
-for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
+Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 3 of 20. Those 20 stocks are
+today's survivors, which flatters every rule. On **every S&P 500 member at a past date**, followed until today or until
+its prices stop (`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, historical membership):
+
+| Cohort (members with prices / all) | Buy & hold Sharpe | Lighthouse balanced Sharpe | Beats buy & hold (Sharpe) | Equal-weight cohort, a year: buy & hold → Lighthouse |
+|---|---|---|---|---|
+| 2 Jan 1996, to Oct 2026 (258 / 487, 53%) | 0.36 | 0.13 | 29 of 258 | 11.1% → 4.3% (8.8% → 2.2% if every unpriced member went to zero) |
+| 2 Jan 2009, to Oct 2026 (330 / 498, 66%) | 0.48 | 0.23 | 29 of 330 | 17.0% → 4.9% (14.3% → 2.5%) |
+
+We say it out loud: as a way to time single stocks, the rule has shown no edge. It delivers the risk profile you asked
+for (lower volatility and drawdown on nearly every stock), at a large cost in return. Cash earned 0% in these tests;
+`docs/METHODOLOGY.md` §8 has the details, and `docs/ROADMAP_STATUS.md` the research that follows from it.
 
 ## Repository map
 
