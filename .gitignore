@@ -5,6 +5,7 @@ __pycache__/
 data/cache/
 reports/*/
 !reports/examples/
+!reports/research/
 *.egg-info/
 build/
 dist/

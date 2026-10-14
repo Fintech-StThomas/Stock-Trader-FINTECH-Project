@@ -116,3 +116,22 @@ def summarize(df: pd.DataFrame, members: int) -> pd.DataFrame:
 
 
 __all__ = ["CohortInputs", "evaluate_member", "summarize", "DELISTING_RULES"]
+
+
+def replay_inputs(ticker: str, frame: pd.DataFrame, benchmark: pd.DataFrame, profile: InvestorProfile,
+                  params: Optional[StrategyParams] = None, pit: Optional[pd.Series] = None):
+    """What `tradeplan.setup_statistics` reads from an analysis (indicators, scores, regimes, profile, parameters),
+    built from a price frame without loading anything: for setup tests on a cohort."""
+    from types import SimpleNamespace
+    from ..regime import regime_table
+    from ..technicals import compute_indicators, technical_score
+    p = params or StrategyParams.for_horizon(profile.horizon)
+    px, bench = align(frame, benchmark)
+    px = px.copy()
+    px.attrs = {"ticker": ticker}
+    bench = bench.copy()
+    bench.attrs = {}
+    ind = compute_indicators(px, p)
+    return SimpleNamespace(ticker=ticker, indicators=ind, technical_scores=technical_score(ind, profile.horizon, p),
+                           pit_scores=pit.reindex(ind.index) if pit is not None else None,
+                           regimes=regime_table(bench, p), params=p, profile=profile, prices=px)

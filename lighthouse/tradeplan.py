@@ -853,7 +853,8 @@ def _historical_conditions(result, side: str) -> np.ndarray:
     return cond & np.isfinite(tech) & np.isfinite(trend)
 
 
-def setup_statistics(result, side: str = "long", settings: Optional[TradeSettings] = None) -> SetupStats:
+def setup_statistics(result, side: str = "long", settings: Optional[TradeSettings] = None,
+                     exit_style: Optional[str] = None) -> SetupStats:
     """Replay the trade-management rules on every historical setup of this stock, one trade at a time.
 
     Entry: the session after the signal, at the open (the close for close-only data). Stops and targets are set from
@@ -864,6 +865,10 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
     ind = result.indicators
     prof, p = trade_rules(result.profile, result.params, side)
     trend = trend_plan_applies(side, prof, p, s)
+    if exit_style is not None:       # evaluation only: force a plan (a trend exit for short-horizon longs and shorts)
+        if exit_style not in LONG_EXITS:
+            raise ValueError(f"exit_style must be one of {LONG_EXITS}")
+        trend = exit_style == "trend" and p.exit_below_sma is not None
     cond = _historical_conditions(result, side)
     o, h, l, c = _to_long_space(ind, side)
     atr = ind["atr"].to_numpy(dtype=float)
@@ -872,7 +877,7 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
     cost = (p.cost_bps + p.slippage_bps) / 10_000.0
     t_days = s.time_stop_days if trend else s.time_stop_for(prof.horizon)
     if trend:
-        exit_level, tech_now, review = _trend_inputs(result, p)
+        exit_level, tech_now, review = _trend_inputs(result, p, side)
     m1, m2 = s.reward_multiples
     rows = []
     i, n = 0, len(ind)
@@ -933,14 +938,18 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
         trend_exited=float(first.isin(["trend exit", "signal exit"]).mean()))
 
 
-def _trend_inputs(result, p: StrategyParams) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _trend_inputs(result, p: StrategyParams, side: str = "long") -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per session: the trend-exit level (200-day SMA minus the buffer), the technical score the backtest tests (smoothed
-    like the backtest's) and whether the session is a review day."""
+    like the backtest's) and whether the session is a review day. For a short, in the simulator's negated price space:
+    the level is the 200-day SMA plus the buffer and the score is 100 minus the score (a strong score ends a short)."""
     ind = result.indicators
-    exit_level = (ind["sma_slow"] * (1.0 - p.exit_below_sma)).to_numpy(dtype=float)
     tech = result.technical_scores.reindex(ind.index)
     if p.score_smoothing > 1:
         tech = tech.rolling(p.score_smoothing, min_periods=1).mean()
+    if side == "short":
+        exit_level = -(ind["sma_slow"] * (1.0 + p.exit_below_sma)).to_numpy(dtype=float)
+        return exit_level, (100.0 - tech).to_numpy(dtype=float), review_days(ind.index, p.decision_frequency)
+    exit_level = (ind["sma_slow"] * (1.0 - p.exit_below_sma)).to_numpy(dtype=float)
     return exit_level, tech.to_numpy(dtype=float), review_days(ind.index, p.decision_frequency)
 
 

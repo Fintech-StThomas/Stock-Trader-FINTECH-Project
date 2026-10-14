@@ -54,10 +54,11 @@ def sample_actions_path(ticker: str):
     return SAMPLE_DIR / "actions" / f"{ticker.upper().replace('^', '_idx_')}.csv"
 
 
-def load_actions(ticker: str, source: str = "auto", refresh: bool = False) -> pd.DataFrame:
+def load_actions(ticker: str, source: str = "auto", refresh: bool = False,
+                 max_age_hours: Optional[float] = 20.0) -> pd.DataFrame:
     """Dividends (per share) and splits (ratio, e.g. 4.0 for 4-for-1) by ex-date, in today's share units (Yahoo's
-    convention). Order: fresh cache (20 h) -> Yahoo -> stale cache -> the sample pack's recorded copy; empty when
-    nothing is known (the caller then cannot adjust, and says so)."""
+    convention). Order: fresh cache (`max_age_hours`; None = any age, for research on history) -> Yahoo -> stale cache
+    -> the sample pack's recorded copy; empty when nothing is known (the caller then cannot adjust, and says so)."""
     t = ticker.upper().strip()
     sample = sample_actions_path(t)
     if source == "sample" or offline_mode():
@@ -67,7 +68,7 @@ def load_actions(ticker: str, source: str = "auto", refresh: bool = False) -> pd
         return _tidy(pd.read_csv(sample, index_col=0, parse_dates=True)) if sample.exists() else _empty_actions()
     cached = store.read_frame("actions", t)
     path = store.path_for("actions", t)
-    if cached is not None and not refresh and store.age_hours(path) < 20:
+    if cached is not None and not refresh and (max_age_hours is None or store.age_hours(path) < max_age_hours):
         return _tidy(cached)
     try:
         import yfinance as yf
