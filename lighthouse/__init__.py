@@ -18,7 +18,15 @@ _DIR = _os.path.dirname(_os.path.abspath(__file__))
 
 
 def _source_stamp() -> tuple:
-    return tuple(sorted((e.name, e.stat().st_mtime_ns, e.stat().st_size) for e in _os.scandir(_DIR) if e.name.endswith(".py")))
+    """(path, mtime, size) of every .py file in the package and its subpackages (lighthouse/analyst, research)."""
+    out = []
+    for root, dirs, files in _os.walk(_DIR):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for f in files:
+            if f.endswith(".py"):
+                st = _os.stat(_os.path.join(root, f))
+                out.append((_os.path.relpath(_os.path.join(root, f), _DIR), st.st_mtime_ns, st.st_size))
+    return tuple(sorted(out))
 
 
 _IMPORTED_STAMP = _source_stamp()   # the files this process loaded

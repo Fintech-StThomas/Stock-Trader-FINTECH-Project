@@ -1,0 +1,120 @@
+ 1 Agric  Agriculture
+          0100-0199 Agricultural production - crops
+          0200-0299 Agricultural production - livestock
+          0700-0799 Agricultural services
+          0910-0919 Commercial fishing
+          2048-2048 Prepared feeds for animals
+
+ 2 Food   Food Products
+          2000-2009 Food and kindred products
+          2010-2019 Meat products
+          2020-2029 Dairy products
+          2030-2039 Canned & preserved fruits & vegetables
+          2040-2046 Flour and other grain mill products
+          2050-2059 Bakery products
+          2060-2063 Sugar and confectionery products
+          2070-2079 Fats and oils
+          2090-2092 Misc food preparations and kindred products
+          2095-2095 Roasted coffee
+          2098-2099 Misc food preparations
+
+ 3 Soda   Candy & Soda
+          2064-2068 Candy and other confectionery
+          2086-2086 Bottled-canned soft drinks
+          2087-2087 Flavoring syrup
+          2096-2096 Potato chips
+          2097-2097 Manufactured ice
+
+ 4 Beer   Beer & Liquor
+          2080-2080 Beverages
+          2082-2082 Malt beverages
+          2083-2083 Malt
+          2084-2084 Wine
+          2085-2085 Distilled and blended liquors
+
+ 5 Smoke  Tobacco Products
+          2100-2199 Tobacco products
+
+ 6 Toys   Recreation
+          0920-0999 Fishing, hunting & trapping
+          3650-3651 Household audio visual equipment
+          3652-3652 Phonograph records
+          3732-3732 Boat building and repairing
+          3930-3931 Musical instruments
+          3940-3949 Toys
+
+ 7 Fun    Entertainment
+          7800-7829 Services - motion picture production and distribution
+          7830-7833 Services - motion picture theaters
+          7840-7841 Services - video rental
+          7900-7900 Services - amusement and recreation
+          7910-7911 Services - dance studios
+          7920-7929 Services - bands, entertainers
+          7930-7933 Services - bowling centers
+          7940-7949 Services - professional sports
+          7980-7980 Amusement and recreation services (?)
+          7990-7999 Services - Misc entertainment
+
+ 8 Books  Printing and Publishing
+          2700-2709 Printing publishing and allied
+          2710-2719 Newspapers: publishing-printing
+          2720-2729 Periodicals: publishing-printing
+          2730-2739 Books: publishing-printing
+          2740-2749 Misc publishing
+          2770-2771 Greeting card
+          2780-2789 Bookbinding
+          2790-2799 Service industries for the print trade
+
+ 9 Hshld  Consumer Goods
+          2047-2047 Dog and cat food
+          2391-2392 Curtains, home furnishings
+          2510-2519 Household furniture
+          2590-2599 Misc furniture and fixtures
+          2840-2843 Soap & other detergents
+          2844-2844 Perfumes, cosmetics and other toilet preparations
+          3160-3161 Luggage
+          3170-3171 Handbags and purses
+          3172-3172 Personal leather goods, except handbags and purses
+          3190-3199 Leather goods
+          3229-3229 Pressed and blown glass
+          3260-3260 Pottery and related products
+          3262-3263 China and earthenware table articles
+          3269-3269 Pottery products
+          3230-3231 Glass products
+          3630-3639 Household appliances
+          3750-3751 Motorcycles, bicycles and parts  (Harley & Huffy)
+          3800-3800 Misc instruments, photo goods & watches
+          3860-3861 Photographic equipment  (Kodak etc, but also Xerox)
+          3870-3873 Watches, clocks and parts
+          3910-3911 Jewelry, precious metals
+          3914-3914 Silverware
+          3915-3915 Jewelers' findings and materials
+          3960-3962 Costume jewelry and novelties
+          3991-3991 Brooms and brushes
+          3995-3995 Burial caskets
+
+10 Clths  Apparel
+          2300-2390 Apparel and other finished products
+          3020-3021 Rubber and plastics footwear
+          3100-3111 Leather tanning and finishing
+          3130-3131 Boot & shoe cut stock & findings
+          3140-3149 Footwear, except rubber
+          3150-3151 Leather gloves and mittens
+          3963-3965 Fasteners, buttons, needles, pins
+
+11 Hlth   Healthcare
+          8000-8099 Services - health
+
+12 MedEq  Medical Equipment
+          3693-3693 X-ray, electromedical app
+          3840-3849 Surgical, medical, and dental instruments and supplies
+          3850-3851 Ophthalmic goods
+
+13 Drugs  Pharmaceutical Products
+          2830-2830 Drugs
+          2831-2831 Biological products
+          2833-2833 Medicinal chemicals
+          2834-2834 Pharmaceutical preparations
+          2835-2835 In vitro, in vivo diagnostic substances
+          2836-2836 Biological products, except diagnostic substances
+

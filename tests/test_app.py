@@ -123,8 +123,38 @@ def test_trade_and_portfolio_figures_build():
         f.to_json()
 
 
+def test_app_analyst_coverage_journal_research_tabs_offline(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIGHTHOUSE_JOURNAL", str(tmp_path / "journal.sqlite"))
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    assert not at.exception
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.run()
+    text = " ".join(str(m.value) for m in at.info)
+    assert "No journal yet" in text or "No journal at" in text           # nothing saved: no file is created
+    assert not (tmp_path / "journal.sqlite").exists()
+    at.text_input(key="memo_ticker").set_value("MSFT")
+    at.button(key="memo_build").click()
+    at.run()
+    assert not at.exception, at.exception
+    md = " ".join(str(m.value) for m in at.markdown)
+    assert "Investment memo" in md and "What would prove this wrong" in md
+    at.button(key="memo_save").click()
+    at.run()
+    assert not at.exception, at.exception
+    assert (tmp_path / "journal.sqlite").exists()
+    assert any("Thesis 1 saved" in str(x.value) for x in at.success)
+
+
 def _lighthouse_modules() -> dict:
     return {n: m for n, m in sys.modules.items() if n == "lighthouse" or n.startswith("lighthouse.")}
+
+
+def test_source_stamp_covers_the_subpackages():
+    """A push that only changes lighthouse/analyst or lighthouse/research must also count as new code."""
+    import lighthouse
+    names = {name for name, _, _ in lighthouse._source_stamp()}
+    assert {"engine.py", "analyst/memo.py", "research/harness.py"} <= {n.replace("\\", "/") for n in names}
 
 
 def test_app_keeps_lighthouse_while_its_files_are_unchanged():

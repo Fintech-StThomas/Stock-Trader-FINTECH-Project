@@ -159,16 +159,61 @@ def _now_et() -> pd.Timestamp:
     return pd.Timestamp.now(tz=EXCHANGE_TZ)
 
 
+def nyse_holidays(start_year: int = 1990, end_year: Optional[int] = None) -> pd.DatetimeIndex:
+    """Full-day NYSE closures: New Year's Day, Martin Luther King Jr. Day (from 1998), Presidents' Day, Good Friday,
+    Memorial Day, Juneteenth (from 2022), Independence Day, Labor Day, Thanksgiving and Christmas, with the exchange's
+    weekend rules (Saturday -> the Friday before, except New Year's Day; Sunday -> the Monday after). One-off closures
+    (national days of mourning, 9/11, Hurricane Sandy) are not listed. Early closes (13:00) come from the feed's
+    trading-period metadata when it has one."""
+    from pandas.tseries.holiday import (AbstractHolidayCalendar, GoodFriday, Holiday, USLaborDay, USMartinLutherKingJr,
+                                        USMemorialDay, USPresidentsDay, USThanksgivingDay, nearest_workday, sunday_to_monday)
+
+    class _NYSE(AbstractHolidayCalendar):
+        rules = [
+            Holiday("New Year's Day", month=1, day=1, observance=sunday_to_monday),
+            Holiday("Martin Luther King Jr. Day", month=1, day=1, offset=USMartinLutherKingJr.offset, start_date="1998-01-01"),
+            USPresidentsDay, GoodFriday, USMemorialDay,
+            Holiday("Juneteenth", month=6, day=19, start_date="2022-01-01", observance=nearest_workday),
+            Holiday("Independence Day", month=7, day=4, observance=nearest_workday),
+            USLaborDay, USThanksgivingDay,
+            Holiday("Christmas", month=12, day=25, observance=nearest_workday),
+        ]
+    end_year = end_year or (pd.Timestamp.now().year + 2)
+    return _NYSE().holidays(pd.Timestamp(f"{start_year}-01-01"), pd.Timestamp(f"{end_year}-12-31"))
+
+
+_HOLIDAYS: Optional[set] = None
+
+
+def is_trading_day(day) -> bool:
+    """A weekday that is not a full-day NYSE holiday."""
+    global _HOLIDAYS
+    if _HOLIDAYS is None:
+        _HOLIDAYS = {d.date() for d in nyse_holidays()}
+    d = pd.Timestamp(day)
+    return d.weekday() < 5 and d.date() not in _HOLIDAYS
+
+
 def last_session_close(now: Optional[pd.Timestamp] = None) -> pd.Timestamp:
-    """The most recent weekday 16:00 New York time at or before `now`. Exchange holidays are not modelled: on a holiday
-    this is one close too late, which only costs one extra (harmless) download."""
+    """The most recent 16:00 New York time on a trading day (a weekday that is not an NYSE holiday) at or before
+    `now`. Early closes (13:00) are treated as 16:00: the cache then expires up to three hours late on those days."""
     now = _now_et() if now is None else now.tz_convert(EXCHANGE_TZ)
     close = now.normalize() + pd.Timedelta(hours=SESSION_CLOSE[0], minutes=SESSION_CLOSE[1])
     if now < close:
         close -= pd.Timedelta(days=1)
-    while close.weekday() >= 5:
+    while not is_trading_day(close.tz_localize(None).normalize()):
         close -= pd.Timedelta(days=1)
     return close
+
+
+def sessions_behind(last_bar, now: Optional[pd.Timestamp] = None) -> int:
+    """How many finished trading sessions the data is missing: 0 when its last bar is the last finished session."""
+    target = last_session_close(now).tz_localize(None).normalize()
+    d = pd.Timestamp(last_bar).normalize()
+    if d >= target:
+        return 0
+    days = pd.date_range(d + pd.Timedelta(days=1), target, freq="D")
+    return int(sum(1 for x in days if is_trading_day(x)))
 
 
 def _session_window(day: pd.Timestamp, meta: Optional[dict] = None) -> Tuple[pd.Timestamp, pd.Timestamp]:
@@ -342,9 +387,12 @@ def _cache_path(kind: str, ticker: str) -> Path:
 
 
 def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOURS,
-                need_start: Optional[datetime] = None, session_check: bool = True) -> pd.DataFrame:
+                need_start: Optional[datetime] = None, session_check: bool = True,
+                need_current: bool = False) -> pd.DataFrame:
     """Cached prices. With `need_start`, the cache must also cover the requested window: a short download
-    (e.g. a 6-year watchlist run) must not silently stand in for a later 10-year analysis."""
+    (e.g. a 6-year watchlist run) must not silently stand in for a later 10-year analysis. With `need_current`, it
+    must hold the last finished session: a download made just after a close, before the feed published that day's
+    bar, is not trusted for the rest of the day."""
     path = _cache_path("prices", ticker)
     if not path.exists():
         raise DataUnavailable("no cache")
@@ -365,6 +413,14 @@ def _from_cache(ticker: str, max_age_hours: Optional[float] = CACHE_MAX_AGE_HOUR
         if fetched.tz_convert(EXCHANGE_TZ) < last_session_close():
             raise DataUnavailable("cache stale: a trading session has closed since it was downloaded")
     df = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
+    if need_current and len(df):
+        # the last row with a real close: a feed can list today's date before the bar is final (an empty close)
+        closes = pd.to_numeric(df["Close"], errors="coerce") if "Close" in df else pd.Series(dtype=float)
+        valid = closes[closes > 0]
+        last = valid.index[-1] if len(valid) else None
+        if last is None or sessions_behind(last) > 0:
+            raise DataUnavailable(f"cache stale: its last close is {pd.Timestamp(last).date() if last is not None else 'missing'}, "
+                                  "before the last finished session")
     if need_start is not None and len(df):
         requested = None
         try:
@@ -446,10 +502,10 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
     raw, used = None, None
 
     order: List[str]
+    today = _now_et().normalize()
+    reaches_today = (end is None or pd.Timestamp(end).normalize() >= today.tz_localize(None)) and not offline_mode()
     if source == "auto":
         order = ["cache", "sample"] if offline_mode() else ["cache", "yfinance", "stooq", "stale-cache", "sample"]
-        today = _now_et().normalize()
-        reaches_today = end is None or pd.Timestamp(end).normalize() >= today.tz_localize(None)
         if keep_partial and not offline_mode() and reaches_today and is_partial_bar(today):
             order.remove("cache")       # the cache never holds an unfinished session: today's bar needs a download
     else:
@@ -465,7 +521,8 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
                 elif src == "cache":
                     # in "auto" a live download follows, so a cache missing a finished session is skipped; asked for
                     # explicitly, the cache is used as long as it is under 20 hours old
-                    raw = (_from_cache(ticker, need_start=start_dt, session_check=source == "auto")
+                    raw = (_from_cache(ticker, need_start=start_dt, session_check=source == "auto",
+                                       need_current=source == "auto" and reaches_today)
                            if use_cache and not refresh else None)
                 elif src == "stale-cache":
                     raw = _from_cache(ticker, max_age_hours=None) if use_cache else None

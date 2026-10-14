@@ -1,0 +1,44 @@
+This file was created using the 202608 CRSP database.  It
+contains a momentum factor, constructed from six value-weight portfolios formed
+using independent sorts on size and prior return of NYSE, AMEX, and NASDAQ stocks
+Mom    is the average of the returns on two (big and small) high prior return portfolios
+minus the average of the returns on two low prior return portfolios.  The portfolios
+are constructed monthly.  Big means a firm is above the median market cap on the NYSE
+at the end of the previous month; small firms are below the median NYSE market cap.
+Prior return is measured from month -12 to - 2.  Firms in the low prior return
+portfolio are below the 30th NYSE percentile.  Those in the high portfolio are above
+the 70th NYSE percentile.
+
+Missing data are indicated by -99.99 or -999.
+
+,Mom
+196307,   1.01
+196308,   1.00
+196309,   0.12
+196310,   3.13
+196311,  -0.77
+196312,   1.84
+196401,   0.81
+196402,   0.33
+196403,   0.73
+196404,  -0.64
+196405,   2.53
+196406,   0.47
+196407,  -0.37
+196408,  -0.24
+196409,  -0.39
+196410,   0.19
+196411,   1.10
+196412,  -0.70
+196501,  -1.39
+196502,   0.24
+196503,   0.17
+196504,   2.53
+196505,   0.56
+196506,  -3.18
+196507,   4.09
+196508,   2.57
+196509,   3.28
+196510,   3.44
+196511,   4.41
+196512,  -0.10

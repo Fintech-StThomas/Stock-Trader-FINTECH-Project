@@ -3,9 +3,10 @@ Lighthouse - the web app.
 
     streamlit run app.py
 
-Six tabs: analyse one stock, find what to buy (or short) right now with your cash and when to get out
-(for a profit or a loss), build and risk-check a portfolio, rank and compare a watchlist, inspect the data
-behind a verdict, and learn how the method works. Every chart is interactive (hover for the reason behind every
+Ten tabs: analyse one stock, find what to buy (or short) right now with your cash and when to get out
+(for a profit or a loss), build and risk-check a portfolio, rank and compare a watchlist, write an investment memo,
+follow saved theses (coverage), read the forward decision journal, see which signals survived research, inspect the
+data behind a verdict, and learn how the method works. Every chart is interactive (hover for the reason behind every
 mark, zoom, range buttons, PNG download) and every number can be downloaded as CSV or Markdown.
 """
 from __future__ import annotations
@@ -60,7 +61,8 @@ from lighthouse.regime import regime_adjustments  # noqa: E402
 from lighthouse.report import format_metrics, LIGHT_ICON  # noqa: E402
 from lighthouse import portfolio as pf  # noqa: E402
 from lighthouse.parallel import map_tickers  # noqa: E402
-from lighthouse.tradeplan import TradeSettings, build_trade_plan, allocate_ideas, signed_usd, TIME_STOP_DEFAULT  # noqa: E402
+from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_ideas, signed_usd,  # noqa: E402
+                                  TIME_STOP_DEFAULT, StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
@@ -340,6 +342,9 @@ with st.sidebar:
                               help="What would Lighthouse have said on this day? Leave empty for today.")
         f_json = st.text_area("Fundamental overrides (JSON)", value="", key="f_json",
                               help='Type your own numbers when a feed is missing a field, e.g. {"pe_trailing": 22, "roe": 0.18}')
+        allow_stale = st.checkbox("Allow trade tickets from sample or stale data (testing only)", value=False, key="allow_stale",
+                                  help="Tickets are orders and need current prices: by default none is made from the bundled "
+                                       "sample, an old cache copy, a time-machine date or data missing a finished session.")
     run = st.button("Analyse", type="primary", width="stretch", key="analyse", disabled=cash + holdings <= 0)
     if _is_offline():
         st.info("Offline sample pack: " + ", ".join(t for t in sample_pack_tickers() if not t.startswith("^")))
@@ -347,6 +352,7 @@ with st.sidebar:
 
 run = run or st.session_state.pop("auto_run", False)
 NONCE = st.session_state.get("live_nonce", 0)
+ALLOW_STALE = True if allow_stale else None          # None: the LIGHTHOUSE_ALLOW_STALE_DATA environment variable decides
 try:
     SETTINGS = TradeSettings(reward_multiples=(float(min(tp1, tp2)), float(max(tp1, tp2))), partial_exit=partial / 100.0,
                              time_stop_days=int(tstop) or None, max_ideas=int(max_ideas), max_total_risk_pct=float(heat),
@@ -380,8 +386,10 @@ if run:
             status.update(label="Deep evaluation complete", state="complete")
 
 # ----------------------------------------------------------------------------- tabs
-tab_analyse, tab_desk, tab_port, tab_screen, tab_data, tab_about = st.tabs(
-    ["📍 Analyse a stock", "🎯 Trade desk", "🧺 Portfolio builder", "📋 Rank & compare a watchlist", "🗂️ Data behind the verdict", "ℹ️ How it works"])
+(tab_analyse, tab_desk, tab_port, tab_screen, tab_memo, tab_cover, tab_journal, tab_research, tab_data,
+ tab_about) = st.tabs(
+    ["📍 Analyse a stock", "🎯 Trade desk", "🧺 Portfolio builder", "📋 Rank & compare a watchlist", "🧑‍💼 Analyst memo",
+     "📌 Coverage", "📓 Journal", "🔬 Research", "🗂️ Data behind the verdict", "ℹ️ How it works"])
 
 
 # ============================================================================= ANALYSE
@@ -606,7 +614,12 @@ def ticket_section(res) -> None:
     st.markdown("#### Trade ticket: buy or sell short right now")
     side = st.segmented_control("Side", ["long", "short"], default="long", key="ticket_side", label_visibility="collapsed",
                                 format_func=lambda v: "📈 Long (buy)" if v == "long" else "📉 Short (sell short)")
-    render_ticket(res, build_trade_plan(res, side or "long", SETTINGS), key="analyse")
+    try:
+        pl = build_trade_plan(res, side or "long", SETTINGS, allow_stale=ALLOW_STALE)
+    except StaleDataError as exc:
+        st.warning(f"{exc}", icon="⏱️")
+        return
+    render_ticket(res, pl, key="analyse")
 
 
 @st.fragment
@@ -792,8 +805,13 @@ def render_side(side: str, desk: dict) -> None:
     results = desk["results"]
     plans = desk.setdefault("plans", {})            # funding the ideas replays every setup's history: do it once
     pkey = (side, tuple(sorted(asdict(SETTINGS).items())))
+    pkey = pkey + (ALLOW_STALE,)
     if pkey not in plans:
-        plans[pkey] = allocate_ideas(results, side, SETTINGS, include_watch=True, with_stats=True)
+        try:
+            plans[pkey] = allocate_ideas(results, side, SETTINGS, include_watch=True, with_stats=True, allow_stale=ALLOW_STALE)
+        except StaleDataError as exc:
+            st.warning(f"{exc}", icon="⏱️")
+            return
     funded, watch, table = plans[pkey]
     by = {r.ticker: r for r in results}
     prof = results[0].profile
@@ -1146,6 +1164,182 @@ def data_tab() -> None:
 
 with tab_data:
     data_tab()
+
+# ============================================================================= ANALYST MEMO
+def _journal_file():
+    from lighthouse.journal import journal_path
+    return journal_path()
+
+
+@st.fragment
+def memo_tab() -> None:
+    """The investment memo for one stock; building it re-runs only this tab."""
+    from lighthouse.analyst import memo as memo_mod
+    st.markdown("### Investment memo")
+    st.caption("Valuation (bull / base / bear DCF, reverse DCF, the stock's own valuation bands), real peers by SIC code, "
+               "earnings-quality and balance-sheet checks, capital allocation, catalysts, the variant view and what would "
+               "prove the thesis wrong. Every number comes from SEC filings, prices, FRED or the Ken French library.")
+    res = st.session_state.get("result")
+    c1, c2, c3 = st.columns([1, 1, 1])
+    t = c1.text_input("Ticker", value=(res.ticker if res is not None else ticker), key="memo_ticker").upper().strip()
+    when = c2.date_input("As of", value=None, key="memo_asof", help="Leave empty for the last close. Filings after this "
+                         "date are not used.")
+    peers = c3.checkbox("Find peers", value=not _is_offline(), key="memo_peers",
+                        help="Reads the filings of every same-industry S&P 500 company (slower the first time).")
+    if st.button("Build memo", key="memo_build", type="primary"):
+        use = res if res is not None and res.ticker == t and when is None else None
+        with st.spinner(f"Reading {t}'s filings and building the memo ..."):
+            try:
+                st.session_state["memo"] = memo_mod.build(t, as_of=str(when) if when else None, source=source,
+                                                          result=use, peers=peers)
+                st.session_state.pop("memo_error", None)
+            except Exception as exc:  # noqa: BLE001
+                st.session_state.pop("memo", None)
+                st.session_state["memo_error"] = f"{type(exc).__name__}: {exc}"
+    if st.session_state.get("memo_error"):
+        st.warning(f"No memo: {st.session_state['memo_error']}")
+    m = st.session_state.get("memo")
+    if m is None:
+        st.info("Pick a ticker and build its memo. Analysing the stock first adds the rule-based verdict to it.")
+        return
+    text = m.markdown()
+    k1, k2, k3, k4 = st.columns(4)
+    v = m.valuation
+    kpi(k1, "Stance", m.stance.upper(), f"{m.ticker} · {m.as_of.date()}")
+    kpi(k2, "Weighted value", money(v.target, 2) if v else "n/a",
+        f"{v.target / m.financials.price - 1:+.0%} vs ${m.financials.price:,.2f}" if v else "")
+    kpi(k3, "Price implies", f"{v.implied_growth * 100:.1f}% growth" if v and v.implied_growth is not None else "n/a",
+        "a year for five years, today's margin")
+    reds = sum(x.severity == "red" for x in m.quality + m.balance)
+    kpi(k4, "Red flags", str(reds), f"{sum(x.severity == 'amber' for x in m.quality + m.balance)} amber")
+    st.markdown(esc(text))
+    d1, d2 = st.columns(2)
+    d1.download_button("Download the memo (Markdown)", text, file_name=f"memo_{m.ticker}_{m.as_of.date()}.md",
+                       key="memo_dl")
+    if d2.button("Save the thesis to follow it", key="memo_save",
+                 help=f"Appends to the journal ({_journal_file()}); the Coverage tab checks it against new filings."):
+        from lighthouse.analyst.thesis import ThesisBook, open_thesis
+        tid = open_thesis(m, ThesisBook())
+        st.success(f"Thesis {tid} saved. The Coverage tab follows it.")
+
+
+with tab_memo:
+    memo_tab()
+
+
+# ============================================================================= COVERAGE
+@st.fragment
+def coverage_tab() -> None:
+    from lighthouse.analyst.thesis import ThesisBook, check_theses, close_thesis, coverage
+    st.markdown("### Coverage: the theses you follow")
+    if not _journal_file().exists():
+        st.info("No journal yet. Build a memo in the Analyst memo tab and save its thesis to start following it.")
+        return
+    book = ThesisBook()
+    if st.button("Check every open thesis now", key="cov_check",
+                 help="Tests the price against each thesis every time, and the other criteria when a new 10-Q or 10-K "
+                      "has been filed since the last check."):
+        with st.spinner("Reading the latest filings and prices ..."):
+            st.session_state["cov_status"] = check_theses(book, source=source)
+    for s_ in st.session_state.get("cov_status", []):
+        line = f"**{s_.ticker}** (thesis {s_.thesis_id}, {s_.stance}): ${s_.price_then:,.2f} → ${s_.price_now:,.2f}"
+        line += f" · new filing {s_.new_filing}" if s_.new_filing else ""
+        (st.error if s_.broken else st.markdown)(esc(line + "".join(f"\n- broken: {b}" for b in s_.breaches)))
+    cov = coverage(book, source=source)
+    if cov.empty:
+        st.info("No theses saved yet.")
+        return
+    show = cov.copy()
+    for c in ("return", "to_value"):
+        show[c] = show[c].map(lambda x: "" if pd.isna(x) else f"{x:+.1%}")
+    st.dataframe(show, width="stretch")
+    st.caption("Stale = a filing has arrived since the memo, or it is more than 100 days old: rebuild the memo. Journal "
+               "hit rate and Brier skill appear once the stock's journalled calls have been scored.")
+    with st.form("cov_close"):
+        open_ids = book.open_ids()
+        tid = st.selectbox("Close a thesis", open_ids, key="cov_close_id") if open_ids else None
+        why = st.text_input("Why", key="cov_close_why")
+        if st.form_submit_button("Close and write the post-mortem") and tid is not None:
+            for line in close_thesis(int(tid), why, book, source=source):
+                st.markdown(esc("• " + line))
+
+
+with tab_cover:
+    coverage_tab()
+
+
+# ============================================================================= JOURNAL
+@st.fragment
+def journal_tab() -> None:
+    from lighthouse.journal import Journal
+    st.markdown("### Forward decision journal")
+    st.caption("Every verdict and ticket the scheduled run (`python -m lighthouse journal run`, GitHub Actions after the "
+               "close) records, never edited afterwards, and what happened next. Forward results cannot contain "
+               "look-ahead: they are the real test of the rules.")
+    if not _journal_file().exists():
+        st.info(f"No journal at {_journal_file()} yet. Run `python -m lighthouse journal run --universe 'Sample pack "
+                "(offline)'` or let the scheduled workflow fill it.")
+        return
+    j = Journal()
+    d, e = j.decisions(), j.events()
+    k1, k2, k3 = st.columns(3)
+    kpi(k1, "Decisions", f"{len(d):,}", f"{d['as_of'].min()} → {d['as_of'].max()}" if len(d) else "")
+    kpi(k2, "Events", f"{len(e):,}", "openings, exits, alerts, paper orders")
+    kpi(k3, "Open virtual positions", f"{len(j.open_positions()):,}", "")
+    if st.button("Score the journal", key="jr_score", help="Hit rate, error against the targets, calibration and "
+                 "Brier skill against buy-and-hold and SPY (downloads prices)."):
+        from lighthouse.scorecard import build_scorecard, price_closes
+        with st.spinner("Scoring ..."):
+            st.session_state["jr_card"] = build_scorecard(j, price_closes(source)).summary()
+    if st.session_state.get("jr_card"):
+        st.json(st.session_state["jr_card"])
+    st.markdown("**Latest decisions**")
+    st.dataframe(d.drop(columns=["inputs", "data_version"], errors="ignore").tail(200).iloc[::-1], width="stretch")
+    st.markdown("**Latest events**")
+    st.dataframe(e.tail(200).iloc[::-1], width="stretch")
+    st.download_button("Download decisions (CSV)", d.to_csv(index=False), file_name="journal_decisions.csv", key="jr_d")
+    st.download_button("Download events (CSV)", e.to_csv(index=False), file_name="journal_events.csv", key="jr_e")
+
+
+with tab_journal:
+    journal_tab()
+
+
+# ============================================================================= RESEARCH
+@st.fragment
+def research_tab() -> None:
+    root = os.path.join(os.path.dirname(__file__), "reports", "research")
+    st.markdown("### Research: which signals predict returns")
+    st.caption("Every signal is tested the same way on the point-in-time S&P 500 (members as they were, delisted "
+               "companies included): monthly rank IC with Newey-West t-statistics, quintile returns after estimated "
+               "costs, Fama-French alphas, under both delisting rules. Tuned on 2009-2017; 2018 onward is a hold-out "
+               "looked at once. Only survivors may carry weight in the verdict.")
+    tune = os.path.join(root, "signal_results_tuning.csv")
+    if not os.path.exists(tune):
+        st.info("No research results yet: run `python scripts/research_signals.py` (live data).")
+        return
+    t = pd.read_csv(tune)
+    rule = st.radio("Delisting rule", sorted(t["rule"].unique()), horizontal=True, key="rs_rule")
+    view = t[t["rule"] == rule].set_index("signal")
+    cols = [c for c in ("coverage", "ic_mean", "ic_nw_t", "spread_net_ann", "long_only_net_ann", "alpha_ann",
+                        "alpha_nw_t", "top_turnover") if c in view]
+    st.dataframe(view[cols].sort_values("ic_nw_t", ascending=False).style.format("{:.3f}"), width="stretch")
+    ver = os.path.join(root, "signal_verdicts.csv")
+    if os.path.exists(ver):
+        st.markdown("**Hold-out verdicts** (the pre-registered survival rule)")
+        st.dataframe(pd.read_csv(ver), hide_index=True, width="stretch")
+    else:
+        st.caption("The hold-out has not been evaluated yet.")
+    log = os.path.join(root, "experiments.csv")
+    if os.path.exists(log):
+        n = len(pd.read_csv(log))
+        st.caption(f"{n:,} configurations logged in reports/research/experiments.csv (the trial count behind the "
+                   "deflated Sharpe ratios).")
+
+
+with tab_research:
+    research_tab()
+
 
 # ============================================================================= ABOUT
 with tab_about:

@@ -1,0 +1,11 @@
+signal,use,tuning_pass,holdout_pass,survives
+tech_long,long_only,False,False,False
+tech_short,long_only,False,False,False
+beacon_trend,long_only,False,False,False
+beacon_rsi,long_only,False,False,False
+beacon_macd,long_only,False,False,False
+beacon_bands,long_only,False,False,False
+beacon_volume,long_only,False,False,False
+beacon_breakout,long_only,False,False,False
+fund_pit,long_only,False,False,False
+composite_long,long_only,False,False,False

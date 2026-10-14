@@ -1,0 +1,193 @@
+"""
+Event signals for the research harness: the market's reaction to earnings, and the language of the annual report.
+
+ear_3d             the earnings announcement return (Brandt, Kishore, Santa-Clara & Venkatachalam 2008): the stock's
+                   return minus the equal-weighted universe's over the three sessions around its latest earnings release
+                   (the 8-K filed under Item 2.02: the session before, the release session, the session after). Known
+                   at the close of the session after; kept 95 days (until the next release). Higher = buy.
+text_similarity    cosine similarity of the latest 10-K's words with the previous 10-K's (Cohen, Malloy & Nguyen 2020,
+                   "Lazy Prices"). Higher (fewer changes) = buy.
+risk_similarity    the same for Item 1A, Risk Factors. Higher = buy.
+lm_uncertainty     share of Loughran-McDonald uncertainty words in the 10-K. Lower = buy (sign registered before testing).
+lm_litigious       share of litigious words. Lower = buy.
+lm_negative        share of negative words (Loughran & McDonald 2011). Lower = buy.
+fog                Gunning fog index of the 10-K (Li 2008: harder-to-read reports come with lower, less persistent
+                   earnings). Lower = buy.
+A 10-K's text signals are known from the session after its filing date and kept 15 months.
+
+Coverage: companies the SEC's ticker table maps to a CIK today (delisted companies are missing unless their ticker
+still maps), and their filing lists from EDGAR submissions. 10-K documents are read once and not stored: only the numbers
+computed from them are cached (data/cache/research_text).
+"""
+from __future__ import annotations
+
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
+from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
+
+from .. import store
+
+EAR_MAX_AGE_DAYS = 95
+TEXT_MAX_AGE_DAYS = 456
+TEXT_FEATURES = {"text_similarity": ("similarity", 1.0), "risk_similarity": ("risk_similarity", 1.0),
+                 "lm_uncertainty": ("lm_uncertainty", -1.0), "lm_litigious": ("lm_litigious", -1.0),
+                 "lm_negative": ("lm_negative", -1.0), "fog": ("fog", -1.0)}
+DESCRIPTIONS = {
+    "ear_3d": "earnings announcement return, 3 sessions around the 8-K Item 2.02, minus the equal-weight universe",
+    "text_similarity": "10-K word similarity with the previous 10-K (Lazy Prices)",
+    "risk_similarity": "Item 1A risk-factor similarity with the previous 10-K",
+    "lm_uncertainty": "low share of Loughran-McDonald uncertainty words in the 10-K",
+    "lm_litigious": "low share of litigious words in the 10-K",
+    "lm_negative": "low share of negative words in the 10-K",
+    "fog": "low Gunning fog index of the 10-K (easier to read)",
+}
+
+
+# --------------------------------------------------------------------------- #
+# Earnings announcement return
+# --------------------------------------------------------------------------- #
+def announcement_returns(close: pd.Series, market: pd.Series, dates: pd.Series) -> pd.Series:
+    """Per release: (the stock's three-session return - the market's), indexed by the session after the window ends
+    (the first session the number could be traded on)."""
+    idx = close.index
+    r = close.pct_change()
+    m = market.reindex(idx)
+    out = {}
+    for d in pd.to_datetime(pd.Series(dates)).dropna():
+        k = idx.searchsorted(d)                       # the release session: the first session on or after the filing
+        if k < 1 or k + 2 >= len(idx):
+            continue
+        win = slice(k - 1, k + 2)
+        sr = float(np.prod(1.0 + r.iloc[win].to_numpy()) - 1.0)
+        mr = float(np.prod(1.0 + m.iloc[win].to_numpy()) - 1.0)
+        if np.isfinite(sr) and np.isfinite(mr):
+            out[idx[k + 2]] = sr - mr
+    return pd.Series(out, dtype=float).sort_index()
+
+
+def hold_daily(events: pd.Series, index: pd.DatetimeIndex, max_age_days: int) -> pd.Series:
+    """An event value carried forward on `index` from its date until a newer one or `max_age_days`."""
+    if events.empty:
+        return pd.Series(np.nan, index=index)
+    events = events[~events.index.duplicated(keep="last")].sort_index()
+    on = events.reindex(events.index.union(index)).ffill().reindex(index)
+    known = pd.Series(events.index, index=events.index).reindex(events.index.union(index)).ffill().reindex(index)
+    age = (pd.Series(index, index=index) - known).dt.days
+    return on.where(age <= max_age_days)
+
+
+def equal_weight_market(frames: Dict[str, pd.DataFrame]) -> pd.Series:
+    rets = pd.DataFrame({t: f["Close"].pct_change() for t, f in frames.items()})
+    return rets.clip(-0.9, 3.0).mean(axis=1)
+
+
+def earnings_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False, source: str = "auto") -> Dict[str, pd.DataFrame]:
+    from ..edgar import company_filings, earnings_release_dates
+    from ..parallel import map_tickers
+    from .harness import sample_at_month_ends
+    hit = None if refresh else store.read_frame("research_signals", "ear_3d")
+    if hit is not None and hit.index.equals(panel.dates):
+        return {"ear_3d": hit}
+    market = equal_weight_market(frames)
+
+    def one(t):
+        dates = earnings_release_dates(company_filings(t, source=source)[1])
+        ev = announcement_returns(frames[t]["Close"], market, dates)
+        return hold_daily(ev, frames[t].index, EAR_MAX_AGE_DAYS)
+    got, errors = map_tickers(one, list(frames), max_workers=8)
+    store.write_json("research", "ear_3d_errors", errors)
+    m = sample_at_month_ends({t: s for t, s in got.items() if s is not None}, panel.dates)
+    store.write_frame("research_signals", "ear_3d", m)
+    return {"ear_3d": m}
+
+
+# --------------------------------------------------------------------------- #
+# 10-K text
+# --------------------------------------------------------------------------- #
+def text_history(ticker: str, lm, start: str = "2006-01-01", refresh: bool = False, source: str = "auto") -> pd.DataFrame:
+    """Text features of every 10-K the company filed since `start`, oldest first, indexed by filing date (cached)."""
+    from ..edgar import cik_for, company_filings, fetch_document
+    from ..text import features
+    hit = None if refresh else store.read_frame("research_text", ticker)
+    if hit is not None:
+        return hit
+    cik = cik_for(ticker)
+    _, filings = company_filings(ticker, source=source)
+    tenk = filings[filings["form"].isin(["10-K", "10-K405", "10-KT"]) & (filings["filed"] >= start)].sort_values("filed")
+    rows, prev = [], None
+    for _, f in tenk.iterrows():
+        if not f.get("doc"):
+            continue
+        doc = fetch_document(cik, f["accn"], f["doc"], cache=False)
+        feats, counts = features(doc, lm, prev)
+        prev = counts
+        rows.append({"filed": f["filed"], "accn": f["accn"], **feats})
+    out = pd.DataFrame(rows).set_index("filed") if rows else pd.DataFrame(columns=["accn"]).rename_axis("filed")
+    store.write_frame("research_text", ticker, out)
+    return out
+
+
+def _worker_init(sec_rate: float) -> None:
+    from .. import http
+    http.POLICIES["sec.gov"].rate = sec_rate          # this process's share of the SEC's 10 requests a second
+
+
+def _text_one(args) -> tuple:
+    ticker, refresh, source = args
+    from ..text import lm_dictionary
+    try:
+        return ticker, text_history(ticker, lm_dictionary(), refresh=refresh, source=source), None
+    except Exception as exc:  # noqa: BLE001 - one company's odd filing must not stop the panel
+        return ticker, None, f"{type(exc).__name__}: {str(exc)[:160]}"
+
+
+def text_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False, source: str = "auto",
+                 processes: int = 3) -> Dict[str, pd.DataFrame]:
+    """{signal: month-end x ticker} for the text signals. Parsing is CPU-bound: `processes` worker processes share
+    the SEC rate limit (8 requests a second in total)."""
+    from .harness import sample_at_month_ends
+    cached = {n: store.read_frame("research_signals", n) for n in TEXT_FEATURES} if not refresh else {}
+    if not refresh and all(v is not None and v.index.equals(panel.dates) for v in cached.values()):
+        return cached
+    from ..text import lm_dictionary
+    lm_dictionary()                                    # download once, before the workers start
+    hist: Dict[str, pd.DataFrame] = {}
+    errors: Dict[str, str] = {}
+    jobs = [(t, refresh, source) for t in frames]
+    with ProcessPoolExecutor(max_workers=processes, initializer=_worker_init, initargs=(8.0 / processes,)) as ex:
+        for t, h, err in ex.map(_text_one, jobs, chunksize=4):
+            if err:
+                errors[t] = err
+            elif h is not None and len(h):
+                hist[t] = h
+    store.write_json("research", "text_signal_errors", errors)
+    if errors and len(errors) > 0.5 * max(len(frames), 1):
+        raise RuntimeError(f"text features failed for {len(errors)} of {len(frames)} stocks, e.g. "
+                           + "; ".join(f"{k}: {v}" for k, v in list(errors.items())[:3]))
+    out = {}
+    for name, (col, sign) in TEXT_FEATURES.items():
+        daily = {}
+        for t, h in hist.items():
+            if col not in h:
+                continue
+            ev = pd.Series(sign * pd.to_numeric(h[col], errors="coerce").to_numpy(),
+                           index=pd.DatetimeIndex(h.index) + pd.Timedelta(days=1)).dropna()
+            daily[t] = hold_daily(ev, frames[t].index, TEXT_MAX_AGE_DAYS)
+        m = sample_at_month_ends(daily, panel.dates)
+        store.write_frame("research_signals", name, m)
+        out[name] = m
+    return out
+
+
+def monthly(frames, panel, refresh: bool = False, source: str = "auto", text: bool = True) -> Dict[str, pd.DataFrame]:
+    out = earnings_monthly(frames, panel, refresh, source)
+    if text:
+        out.update(text_monthly(frames, panel, refresh, source))
+    return out
+
+
+__all__ = ["announcement_returns", "hold_daily", "equal_weight_market", "earnings_monthly", "text_history",
+           "text_monthly", "monthly", "DESCRIPTIONS", "TEXT_FEATURES"]

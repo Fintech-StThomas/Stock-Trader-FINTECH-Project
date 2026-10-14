@@ -1,0 +1,29 @@
+Description:           Master Index of EDGAR Dissemination Feed by Form Type
+Last Data Received:    June 30, 2015
+Comments:              webmaster@sec.gov
+Anonymous FTP:         ftp://ftp.sec.gov/edgar/
+
+
+
+
+Form Type   Company Name                                                  CIK         Date Filed  File Name
+---------------------------------------------------------------------------------------------------------------------------------------------
+15-12B           ADVANCED PHOTONIX INC                                         869986      2015-06-03  edgar/data/869986/0001437749-15-011727.txt          
+15-12B           ARUBA NETWORKS, INC.                                          1173752     2015-05-29  edgar/data/1173752/0001193125-15-205114.txt         
+15-12B           AVIV REIT, INC.                                               1499686     2015-05-01  edgar/data/1499686/0001571049-15-003490.txt         
+15-12B           AVIV REIT, INC.                                               1499686     2015-05-01  edgar/data/1499686/0001571049-15-003492.txt         
+15-12B           Auspex Pharmaceuticals, Inc.                                  1454189     2015-05-15  edgar/data/1454189/0001193125-15-189127.txt         
+15-12B           BKF CAPITAL GROUP INC                                         9235        2015-05-20  edgar/data/9235/0001144204-15-032584.txt            
+25               AMERICAN FINANCIAL GROUP INC                                  1042046     2015-04-16  edgar/data/1042046/0000892251-15-000053.txt         
+25               AZURE MIDSTREAM PARTNERS, LP                                  1575599     2015-05-28  edgar/data/1575599/0001575599-15-000053.txt         
+25               ForceField Energy Inc.                                        1407268     2015-05-12  edgar/data/1407268/0001354488-15-002274.txt         
+25               KONAMI CORP                                                   1191141     2015-04-13  edgar/data/1191141/0001193125-15-126719.txt         
+25               LORILLARD TOBACCO COMPANY, LLC                                862178      2015-06-25  edgar/data/862178/0001193125-15-234974.txt          
+25               LORILLARD, LLC                                                1424847     2015-06-25  edgar/data/1424847/0001193125-15-234974.txt         
+25-NSE           ADVANCED PHOTONIX INC                                         869986      2015-05-11  edgar/data/869986/0001143313-15-000016.txt          
+25-NSE           ALABAMA POWER CO                                              3153        2015-05-26  edgar/data/3153/0000876661-15-000235.txt            
+25-NSE           ALABAMA POWER CO                                              3153        2015-05-26  edgar/data/3153/0000876661-15-000237.txt            
+25-NSE           AMERICAN EAGLE ENERGY Corp                                    1282613     2015-06-01  edgar/data/1282613/0001143313-15-000022.txt         
+25-NSE           AOL Inc.                                                      1468516     2015-06-23  edgar/data/1468516/0000876661-15-000261.txt         
+25-NSE           ARUBA NETWORKS, INC.                                          1173752     2015-05-19  edgar/data/1173752/0001354457-15-000085.txt         
+3                1347 Property Insurance Holdings, Inc.                        1591890     2015-04-02  edgar/data/1591890/0001544890-15-000006.txt         

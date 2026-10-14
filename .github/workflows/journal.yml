@@ -1,0 +1,94 @@
+# The forward decision journal, run after every US market close (free on public repositories; about 5 minutes a run,
+# ~110 minutes a month, within the 2,000 free minutes of a private one).
+#
+# Each run: analyses the watchlist with live data, appends today's verdicts and tickets to the journal (append-only
+# SQLite), replays the journaled virtual positions with their tickets' rules, records the exits that fired, mirrors the
+# actionable tickets at Alpaca's paper account when keys are set (a dry run otherwise), scores the journal, and keeps
+# it on the `journal-data` branch (the journal is gitignored on every other branch). When a stop, a target or a review
+# exit fires, it opens an issue, so GitHub notifies you.
+#
+# Settings (repository Settings -> Secrets and variables -> Actions):
+#   secret   LIGHTHOUSE_SEC_EMAIL     contact e-mail the SEC requires for EDGAR (filing-dated fundamentals)
+#   secrets  ALPACA_API_KEY_ID, ALPACA_API_SECRET_KEY   free Alpaca paper-trading keys (optional)
+#   variable LIGHTHOUSE_WATCHLIST     a pre-built universe name (default "Mega caps") or space-separated tickers
+#   variable LIGHTHOUSE_CASH          cash per run's tickets (default 10000)
+name: journal
+on:
+  schedule:
+    - cron: "15 22 * * 1-5"          # 22:15 UTC: after the 16:00 New York close in summer (20:00 UTC) and winter (21:00)
+  workflow_dispatch:
+permissions:
+  contents: write                    # push the journal to the journal-data branch
+  issues: write                      # open an issue when an exit fires
+concurrency:
+  group: lighthouse-journal
+  cancel-in-progress: false
+jobs:
+  journal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Restore the journal from the journal-data branch
+        run: |
+          mkdir -p data/journal
+          if git show-ref --verify --quiet refs/remotes/origin/journal-data; then
+            git show origin/journal-data:lighthouse_journal.sqlite > data/journal/lighthouse_journal.sqlite || true
+          fi
+      - name: Record today's decisions, check positions, paper-trade
+        env:
+          LIGHTHOUSE_SEC_EMAIL: ${{ secrets.LIGHTHOUSE_SEC_EMAIL }}
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+          WATCHLIST: ${{ vars.LIGHTHOUSE_WATCHLIST || 'Mega caps' }}
+          CASH: ${{ vars.LIGHTHOUSE_CASH || '10000' }}
+        run: |
+          if python -c "import os; from lighthouse.universe import get_universe; get_universe(os.environ['WATCHLIST'])" 2>/dev/null; then
+            set -- --universe "$WATCHLIST"
+          else
+            set -- $WATCHLIST
+          fi
+          python -m lighthouse journal run "$@" --cash "$CASH" --sides long --paper \
+            --summary "$GITHUB_STEP_SUMMARY" --alerts alerts.txt
+      - name: Score and export
+        run: |
+          python -m lighthouse journal score --out reports/journal | tee -a "$GITHUB_STEP_SUMMARY"
+          python -m lighthouse journal export --out reports/journal
+      - name: Save the journal to the journal-data branch
+        run: |
+          git config user.name "lighthouse-journal[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git show-ref --verify --quiet refs/remotes/origin/journal-data; then
+            git worktree add -B journal-data ../jd origin/journal-data
+          else
+            git worktree add --detach ../jd
+            git -C ../jd switch --orphan journal-data
+          fi
+          cp data/journal/lighthouse_journal.sqlite ../jd/
+          mkdir -p ../jd/reports && cp -r reports/journal/. ../jd/reports/
+          cd ../jd
+          git add -A
+          git diff --cached --quiet || git commit -q -m "journal: run of $(date -u +%F)"
+          git push origin journal-data
+      - name: Open an issue when an exit fired
+        if: hashFiles('alerts.txt') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s alerts.txt ]; then
+            gh issue create --title "Lighthouse: exits fired on $(date -u +%F)" --body-file alerts.txt
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: journal-${{ github.run_id }}
+          path: |
+            data/journal/lighthouse_journal.sqlite
+            reports/journal/
+          retention-days: 30

@@ -97,13 +97,25 @@ Long-horizon rule, balanced profile, 20 S&P 500 stocks, Dec 1990 – Dec 2022, 1
 | | CAGR | Volatility | Sharpe | Max drawdown |
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
-| Lighthouse signals + regime (fully invested when in) | 10.3% | — | 0.45 | −57% |
-| **Lighthouse balanced (vol-targeted)** | 6.5% | 12.7% | 0.40 | **−32%** |
-| Lighthouse conservative | 4.7% | 8.9% | 0.33 | −23% |
+| Lighthouse signals + regime (fully invested when in) | 10.9% | — | 0.47 | −55% |
+| **Lighthouse balanced (vol-targeted)** | 7.3% | 12.2% | 0.47 | **−27%** |
+| Lighthouse conservative | 5.8% | 8.5% | 0.47 | −18% |
 
-Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 4 of 20. We say the second
-part out loud: single-stock timing does not out-return relentless compounders, it delivers the risk profile you asked
-for. See `docs/METHODOLOGY.md` for every choice and the experiments we rejected.
+Lower drawdown and volatility in **20 of 20** stocks; higher Sharpe than buy-and-hold in 9 of 20 (cash earns 2%,
+stops are resting orders, costs scale with liquidity). Those 20 stocks are
+today's survivors, which flatters every rule. On **every S&P 500 member at a past date**, followed until today or until
+its prices stop (`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, historical membership):
+
+| Cohort (members with prices / all) | Buy & hold Sharpe | Lighthouse balanced Sharpe | Beats buy & hold (Sharpe) | Equal-weight cohort, a year: buy & hold → Lighthouse |
+|---|---|---|---|---|
+| 2 Jan 1996, to Oct 2026 (258 / 487, 53%) | 0.36 | 0.24 | 78 of 258 | 11.1% → 5.4% (8.8% → 3.2% if every unpriced member went to zero) |
+| 2 Jan 2009, to Oct 2026 (330 / 498, 66%) | 0.48 | 0.30 | 43 of 330 | 17.0% → 5.5% (14.3% → 3.1%) |
+
+Cash earns the T-bill, stops rest as orders and costs scale with liquidity in these runs. We say it out loud: as a way to
+time single stocks, the rule has shown no edge. It delivers the risk profile you asked for (lower volatility and drawdown
+on nearly every stock), at a large cost in return. Nor do its scores pick stocks: on the point-in-time S&P 500 none of
+them ranked next month's returns, before or after costs (`docs/METHODOLOGY.md` §8b). §8 has the timing details, and
+`docs/ROADMAP_STATUS.md` the research that follows from it.
 
 ## Repository map
 

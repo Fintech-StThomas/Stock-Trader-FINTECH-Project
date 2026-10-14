@@ -13,8 +13,8 @@ were checked in October 2026.
 |---|---|---|
 | Yahoo Finance is unofficial and rate-limited | Requests fail without warning; fields change meaning (e.g. `dividendYield` moved from a fraction to a percent) | A paid, documented price API |
 | Daily bars only, and Yahoo's quote | Signals use finished sessions and "buy now" is priced from Yahoo's latest quote with its timestamp, which can lag by up to 15 minutes on some exchanges and is not your broker's market | A real-time quote from a broker API or a consolidated (SIP) feed |
-| Only ~4–5 years of fundamentals, dated by fiscal period end | The backtest's fundamental gate only acts in recent years, and period end ≠ the date the numbers became public | Point-in-time fundamentals keyed by **filing date** |
-| Survivorship bias | Testing only on companies that still exist (and won) flatters every strategy | A universe that includes delisted stocks and historical index membership |
+| ~~Only ~4–5 years of fundamentals, dated by fiscal period end~~ (done October 2026, free) | The backtest's fundamental gate only acted in recent years, and period end ≠ the date the numbers became public | SEC EDGAR XBRL facts keyed by **filing date** (`lighthouse/edgar.py`, `lighthouse/pit.py`), from 2009 |
+| Survivorship bias (partly addressed, free) | Testing only on companies that still exist (and won) flatters every strategy | Historical S&P 500 membership from free sources (`lighthouse/membership.py`) with coverage reported; prices for delisted stocks still need a paid source (Norgate, Sharadar, CRSP), so results are published as bounds |
 | ~~Fixed 2% risk-free rate~~ (done October 2026) | Sharpe ratios were overstated when T-bills paid ~4%, understated when they paid ~0% | Live analyses now use the 3-month T-bill (FRED `DTB3`) day by day; offline and sample data keep 2%. Backtest cash still earns 0% |
 | No earnings calendar, short interest or borrow cost | Stops can be gapped through on earnings; shorts can be expensive or recalled | Event and securities-lending data |
 

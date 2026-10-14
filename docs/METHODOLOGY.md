@@ -10,6 +10,10 @@ This document exists so that the team can defend every number in the product. It
 | History | 10 years by default (15 in the notebook), plus a 1.2-year warm-up so the 200-day SMA and 52-week high are defined on day one | Covers at least one bear market; indicators need 252 days |
 | Benchmark | S&P 500 index (`^GSPC`) | The market the customer compares against; used for regime detection |
 | Fundamentals | Yahoo snapshot (trailing/forward P/E, PEG, P/B, EV/EBITDA, ROE, margins, D/E, current ratio, FCF, growth) plus annual and quarterly statements | One valuation ratio and one quality/growth measure are required; we use several so a missing field never breaks the score |
+| Fundamentals, point in time | SEC EDGAR XBRL (`companyfacts` API, the quarterly form indexes and the bulk Financial Statement Data Sets; `lighthouse/edgar.py`, `lighthouse/pit.py`). Every value keeps the filing that first reported it and that filing's date; quarters come from 3-month values or year-to-date differences; a value first public in a later filing (a restatement, a comparative column) is not used for the earlier date. The SEC's User-Agent rule (a contact e-mail, from `LIGHTHOUSE_SEC_EMAIL`) and its 10 requests/second limit are enforced in `lighthouse/http.py` | Free and official; dates every number by when investors could read it. XBRL starts in 2009 (large filers), so earlier fundamentals are unknown and the backtest's gate is off there |
+| Corporate actions | Dividends and splits by ex-date (Yahoo `actions`, cached; recorded in the sample pack). `lighthouse/total_return.py` turns a total-return close back into the price-only close (the exact inverse of Yahoo's adjustment, checked to 1e-6) and restates per-share EDGAR numbers in the price series' share units | A P/E needs price and EPS in the same units: AAPL's FY2012 EPS of $44.15 is $1.58 in today's shares |
+| Universe, point in time | Historical S&P 500 membership since 1996 (`lighthouse/membership.py`): fja05680/sp500 on GitHub, brought up to date with Wikipedia's change log and checked against Wikipedia's current list; every universe reports the share of member-days that have prices (coverage) | Testing today's members tests the survivors. Yahoo has no history for most delisted stocks: coverage of the members is 36% in 1996, 60% in 2009, 95% in 2026 |
+| Live-mode rule | Trade tickets are refused from bundled sample data, a stale cache, a past date or data missing a finished NYSE session, unless the investor overrides it explicitly (CLI `--allow-stale-data`, the app's checkbox, `LIGHTHOUSE_ALLOW_STALE_DATA=1`); an overridden ticket says "Not for trading" | A ticket is an order; the market clock now knows NYSE holidays |
 | Cleaning | Sort, de-duplicate dates, drop rows without a positive close, fill missing O/H/L from the close, enforce High ≥ max(O,C) and Low ≤ min(O,C), disable volume if >50% missing, flag >50% one-day moves | Each step is counted and shown to the user (`CleaningReport`) |
 | Offline pack | Real data shipped in open-source packages (Microsoft OHLCV 1986-2017 from `pmdarima`, 19 S&P stocks and the index 1990-2022 from `skfolio`) | The notebook and tests must run end-to-end without internet; provenance in `scripts/build_sample_pack.py` |
 | Caching | Last live download cached in `data/cache/` for at most 20 hours, and (in `auto`) only until the next session close (16:00 New York) after the download; files are written atomically and each ticker is downloaded by one thread at a time | Yahoo rate-limits; the product stays usable; a finished session is never missing from the cache; parallel loads never read a half-written file |
@@ -39,7 +43,14 @@ Each beacon votes in [−1, +1]. Group score = mean of available beacons; fundam
 
 Sector norms (`SECTOR_NORMS`) are approximate long-run medians for the 11 GICS sectors and are explicitly assumptions the user can edit. Growth uses annual statements first (stable) and Yahoo's quarterly year-on-year figures as a fallback.
 
-**Point-in-time history.** For the backtest, each annual statement becomes usable 90 days after its period end (the 10-K filing deadline for large filers is 60 days; 90 is conservative). Quality and growth are fixed for the year; the P/E is recomputed daily from price / lagged EPS. Before the first statement the score is "unknown" and no gate is applied.
+**Point-in-time history.** For the backtest, each annual statement becomes usable on the session after its SEC filing
+date (EDGAR XBRL, from 2009); a fiscal year applies until a later one has been filed. Statements without filing dates
+(Yahoo's, when EDGAR is not used) become usable 90 days after their period end (the 10-K deadline for large filers is
+60 days). Quality and growth are fixed for the year; the P/E is recomputed daily from the price-only close and the
+filed EPS restated in the price series' share units (a filing-dated EPS without split history is not compared with the
+price at all). Before the first statement the score is "unknown" and no gate is applied. Live analyses use EDGAR when
+`LIGHTHOUSE_SEC_EMAIL` is set; the sample pack carries the 20 stocks' recorded filings, so the offline backtests use
+them too (they used to have fundamentals for MSFT only, from 2013).
 
 ## 3. Technical beacons
 
@@ -131,7 +142,16 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 * Enter when trend beacon > 0, technical score ≥ 60 (+10 in a bear market), not Bear/Turbulent, point-in-time fundamental score ≥ 35 if known.
 * Exit when score ≤ 35 (long) / 40 (short), close < 200-SMA × 0.92 (long) / 0.97 (short), or the ATR stop (short, checked daily).
 * Size: volatility target / 60-day realised vol × regime multiplier, re-balanced on review days when the target moves by more than 10 points.
-* Fills at the next day's open (close when no open data), 5 bps commission + 5 bps slippage per side.
+* Fills at the next day's open (close when no open data). Costs per side (`cost_model = "liquidity"`, `lighthouse/costs.py`):
+  5 bps commission + the Corwin-Schultz half spread estimated from the last 21 sessions' highs and lows (floored at
+  5 bps, which is what close-only data such as most of the sample pack gets) + square-root market impact
+  (daily volatility × √(order / average daily dollar volume)), the order being the position's share of the account.
+  `cost_model = "fixed"` restores a flat 10 bps.
+* Stops are resting orders (`resting_stops`): filled during the day at the stop price, or at the open when the stock
+  gaps through it (the setup test already worked this way). Long horizon: the ticket's stop order, the 200-day SMA
+  minus 8% at entry, never moved; short horizon: the ATR trailing stop, raised at each close.
+* Uninvested cash earns the risk-free rate (`cash_yield`): the 3-month T-bill day by day on live data, the fixed 2%
+  offline. Sharpe ratios subtract the same rate, so a rule is no longer charged for cash that earned nothing.
 * Metrics: total return, CAGR, volatility, Sharpe and Sortino (risk-free rate: the 3-month T-bill day by day, FRED `DTB3`, when the prices are current; a fixed 2% for offline and sample data, so the published tables stay reproducible), max drawdown, Calmar, trades, win rate, average win/loss, profit factor, exposure; plus layer attribution, sensitivity grid (entry 50-70 × exit 25-45), walk-forward (tune on 60%, test on 40%) and regime breakdown.
 * No look-ahead: unit-tested by re-running on truncated data and comparing equity curves.
 
@@ -149,9 +169,114 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 ## 8. Results and interpretation
 
-See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 6.5%, vol 12.7%, Sharpe 0.40, max DD −32%; conservative vol 8.8%, max DD −23%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 3/20.
+See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced CAGR 7.3%, vol 12.2%, Sharpe 0.47, max DD −27%; conservative vol 8.5%, max DD −18%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe in 9/20.
 
-Interpretation: on a universe of survivors that compounded at 13% a year, a rule that is sometimes in cash cannot win on return. The product's value is that it delivers *the risk profile the investor asked for* — a balanced investor who said "15% volatility, lose at most 2% per idea" actually gets ~13% volatility and a defined worst case — while keeping most of the up-trend exposure. We state this plainly rather than hiding it behind a cherry-picked ticker.
+What changed the published numbers this session, one step at a time (20 sample stocks, balanced, averages):
+
+| Step | CAGR | Sharpe | Max drawdown | Beat buy-and-hold (Sharpe) |
+|---|---|---|---|---|
+| Published before this session (fundamentals for MSFT only) | 6.5% | 0.401 | −32% | 4 of 20 |
+| Fundamental gate from SEC filings on all 20 stocks | 6.2% | 0.383 | −31% | 3 |
+| + uninvested cash earns the risk-free rate (2% offline) | 7.4% | 0.476 | −27% | 9 |
+| + stops as resting orders (71 stop-order exits) | 7.3% | 0.471 | −27% | 9 |
+| + liquidity-scaled costs (now) | 7.3% | 0.470 | −27% | 9 |
+
+The largest change is the cash: the rule spends much of its time partly or wholly in cash, which used to earn nothing
+while the Sharpe ratio subtracted 2% a year for it. Liquidity costs barely move these numbers because 19 of the 20
+sample series are close-only (no range, so the spread estimate falls to its 5 bps floor); on live data with highs, lows
+and volume they matter more.
+
+Since the fourth October 2026 session the backtest dates every fundamental by its SEC filing, so the point-in-time
+fundamental gate (score ≥ 35 to enter) now acts from 2009 on all 20 stocks instead of MSFT alone. It cost return:
+average Sharpe 0.401 → 0.383 (4 stocks better, 11 worse, 5 unchanged), 4 → 3 stocks ahead of buy-and-hold. The gate
+scores valuation against the hard-coded `SECTOR_NORMS`; whether any fundamental signal helps is a research question for
+the cross-sectional harness (Phase 3 of `docs/ROADMAP_STATUS.md`), not for this gate.
+
+**Survivorship-aware cohorts.** The 20 sample stocks are the survivors of 1990-2022. `--cohort DATE` tests every
+S&P 500 member on DATE, from DATE until today or until its prices stop, with live Yahoo prices, the S&P 500 regime,
+the FRED T-bill for Sharpe ratios and for uninvested cash, SEC filing-dated fundamentals, resting stop orders and
+liquidity-scaled costs (`reports/examples/cross_ticker_sp500_<DATE>.csv` and `_summary.csv`; re-run 14 October 2026):
+
+| Cohort | Members | With prices (coverage) | Buy & hold: CAGR / Sharpe / max DD | Signals + regime Sharpe | Lighthouse balanced: CAGR / vol / Sharpe / max DD | Beat buy & hold (Sharpe / CAGR) | Lower drawdown |
+|---|---|---|---|---|---|---|---|
+| 1996-01-02 → 2026-10 | 487 | 258 (53%) | 7.6% / 0.36 / −72% | 0.25 | 5.1% / 11.4% / 0.24 / −28% | 78 / 55 of 258 | 254 |
+| 2009-01-02 → 2026-10 | 498 | 330 (66%) | 12.0% / 0.48 / −59% | 0.36 | 4.9% / 11.9% / 0.30 / −28% | 43 / 31 of 330 | 314 |
+
+Per-stock averages. As one equal-weight cohort (one sleeve per member, never rebalanced), buy-and-hold earned 11.1% a
+year from 1996 and 17.0% from 2009; the Lighthouse rule 5.4% and 5.5%; the signals alone, fully invested when in, 8.5%
+and 10.8%. Those figures leave out the members Yahoo cannot price. If every one of them was worth nothing (the
+pessimistic bound), the cohort earned 8.8% / 3.2% / 6.3% from 1996 and 14.3% / 3.1% / 8.3% from 2009. Before cash
+earned the T-bill (and with a fixed 10 bps per side and close-checked stops) the balanced rule's Sharpe was 0.13 and
+0.23 and it beat buy-and-hold on 29 stocks in each cohort: the rule holds cash for much of the time, and that cash had
+earned nothing. Every member
+Yahoo could price still trades today: free data has no price history for the delisted, so the delisting rules change
+nothing at the stock level and the whole bias sits in the untested 47% (1996) and 34% (2009). Ticker reuse is a second
+risk: Yahoo's history for a recycled ticker can belong to another company.
+
+Interpretation: on these data the rule has no edge as a stock-timing tool. It lowers volatility and drawdown on nearly
+every stock, but it gives up most of the return, beats buy-and-hold on risk-adjusted terms on 1 stock in 8 (2009) to
+1 in 3 (1996), and the regime filter plus sizing sit in cash (earning the T-bill) for much of a long bull market. The product
+still delivers *the risk profile the investor asked for*; it does not deliver extra return, and it should not be
+presented as if it did. What comes next is cross-stock research (which stocks to own, not when to own one), forward
+testing with a journal that cannot contain look-ahead, and honest costs (`docs/ROADMAP_STATUS.md`).
+
+### 8b. Cross-sectional research on the point-in-time S&P 500 (`lighthouse/research/`)
+
+The timing tests above ask whether the rule beats holding one stock. The research harness asks the question the
+verdict implies: **do stocks with higher scores do better next month than stocks with lower scores?**
+
+Protocol (`lighthouse/research/harness.py`, run by `scripts/research_signals.py`):
+
+* Universe: every S&P 500 member at each month end, as it was (historical membership, §1), 2009-2026. Members
+  without a Yahoo price cannot be tested and count against coverage; a member is tested only in months it traded on
+  at least 15 of the last 21 sessions (a series without volume is stale, or another company's data under a reused
+  ticker: CPWR's cached series had zero volume and a $2 price for the four years it was a member).
+* Statistics: monthly Spearman rank IC with Newey-West t (3 lags); quintile returns; top minus bottom quintile
+  (long-short, with a 0.5% a year borrow fee on the short leg) and top quintile minus the equal-weight universe
+  (long-only); top-quintile turnover; Fama-French five-factor + momentum alphas with Newey-West t, factors aligned to
+  the month being predicted.
+* Costs, per side: 5 bps commission + the Corwin-Schultz half spread (floor 5 bps) + square-root impact of a $10,000
+  order (a $1m portfolio, 100 names a leg), capped at 300 bps. From daily highs and lows the estimator reads part of
+  the day's volatility as spread (about 35 bps full spread for AAPL or MSFT in 2009-2017 against a quoted 1-3 bps), so
+  these costs are conservative for large companies; every result also shows the long-only return at a flat 10 bps a
+  side (a sensitivity, not part of the rule).
+* Both delisting rules (a member's last month counted at its last price, or at -100%), with coverage.
+* Tuning 2009-2017; hold-out 2018 onward, evaluated once per signal and logged (`reports/research/holdout_log.csv`); a
+  second look counts as a new trial. Every evaluation is appended to `reports/research/experiments.csv`; the number of
+  distinct signal configurations tried is the trial count behind the deflated Sharpe ratio (Bailey & López de Prado
+  2014).
+* Survival rule, written before any hold-out was run: under both delisting rules, tuning IC Newey-West t ≥ 2 and a
+  positive net return for the signal's better use (long-only or long-short); hold-out IC > 0, the same use's net return
+  > 0 and its deflated Sharpe ≥ 0.90. Only a survivor may carry weight in `lighthouse/decision.py`.
+
+**Results for the signals the product uses** (October 2026; 643 of 881 ever-members priced; tuning coverage 70% of
+member-months, hold-out 89%; both delisting rules give the same numbers because no priced member stopped trading
+before the data end: Yahoo has no prices for the dead, who are most of the untested share):
+
+| Signal | Tuning IC (NW t) | Gross L/S | Long-only net (10 bps) | Hold-out IC (NW t) | Hold-out long-only net | Deflated Sharpe | Survives |
+|---|---|---|---|---|---|---|---|
+| `tech_long` | -0.026 (-1.4) | -9.4% | -10.2% (-7.3%) | +0.003 (+0.2) | -4.5% | 0.00 | no |
+| `tech_short` | -0.030 (-1.9) | -9.0% | -10.8% (-7.3%) | +0.001 (+0.1) | -5.0% | 0.00 | no |
+| `beacon_trend` | -0.019 (-1.1) | -6.6% | -6.1% (-4.4%) | +0.006 (+0.4) | -0.8% | 0.00 | no |
+| `beacon_rsi` | -0.033 (-2.3) | -9.5% | -11.6% (-7.8%) | -0.006 (-0.4) | -8.3% | 0.00 | no |
+| `beacon_macd` | -0.023 (-1.9) | -5.2% | -10.1% (-5.3%) | +0.013 (+0.9) | -4.7% | 0.00 | no |
+| `beacon_bands` | -0.025 (-2.2) | -7.4% | -10.9% (-6.4%) | -0.004 (-0.3) | -8.3% | 0.00 | no |
+| `beacon_volume` | -0.011 (-1.1) | -1.2% | -6.0% (-1.6%) | -0.001 (-0.1) | -7.1% | 0.00 | no |
+| `beacon_breakout` | -0.022 (-1.0) | -9.5% | -8.8% (-6.5%) | +0.000 (-0.0) | -4.8% | 0.00 | no |
+| `fund_pit` | -0.005 (-0.6) | -3.0% | -3.3% (-2.7%) | +0.011 (+1.0) | +0.4% | 0.01 | no |
+| `composite_long` | -0.020 (-1.4) | -9.3% | -8.0% (-6.2%) | +0.009 (+0.9) | -1.4% | 0.00 | no |
+
+Returns are annualised; "gross L/S" is top minus bottom quintile before costs; the long-only columns are the top
+quintile minus the equal-weight universe after costs (in brackets at 10 bps a side). Ten configurations were tried.
+
+Interpretation: **none of the product's signals ranks large US stocks usefully.** In 2009-2017 every technical beacon
+had a negative IC (stocks the beacons liked did worse the next month: in large caps a month's strength tends to
+reverse), and the gross spreads were negative before any cost, so the verdict does not depend on the cost model. After
+2018 the ICs are near zero. The point-in-time fundamental score is the only one with a positive hold-out (IC +0.011,
+t 1.0; long-only +0.4% a year after costs, t 0.25): too weak to call. The rules still do what §8 says (they cut
+volatility and drawdown); they are not a stock-selection tool, and nothing here justifies more weight on any of them.
+The broader signal library (value, quality, momentum, earnings, positioning, text; Phase 4) is the place to look for
+one that is.
 
 ## 9. Trade tickets: long and short (`lighthouse/tradeplan.py`)
 
@@ -328,6 +453,32 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | Goal portfolios re-picked their stocks from scratch every month | The balanced goal turned over 18.5× a year on the live large caps, paying costs to swap stocks whose ranks moved a little | Holdings are kept while they still qualify (balanced 18.5× → 2.4×; §10); the walk-forward table shows both versions; `scripts/turnover_evaluation.py` |
 | Sharpe and Sortino ratios used a fixed 2% risk-free rate | Overstated in high-rate years (T-bills ~4-5% in 2023-26), understated near zero (2020-21) | The 3-month T-bill (FRED `DTB3`) day by day for live analyses and portfolio walk-forward tests; 2% offline (§1) |
 | The Hull-MA band centre still trailed the price by ~3 sessions and swung 26% past a jump | The chart's centre line and the *price bands* beacon described the price of three days earlier | Holt's trend filter (0.4 / 0.1): ~1 session behind, no lag in a trend, 9% overshoot (§3); `scripts/band_lag_evaluation.py` measures every candidate |
+
+### Fourth October 2026 session (research-grade data)
+
+| Issue | Effect | Fix |
+|---|---|---|
+| Statements became usable a fixed 90 days after their period end | The gate could use a 10-K before it was filed (late filers), or wait a month after it was (most large filers file in ~30-60 days) | Filing dates from SEC EDGAR XBRL; usable the session after filing. The 90-day lag remains only for Yahoo's undated statements |
+| Only MSFT had fundamentals offline (5 annual rows, 2013-2017, typed in by hand and labelled approximate) | The fundamental gate was never tested on 19 of the 20 sample stocks | The sample pack records each stock's SEC XBRL facts (filed 2009-2026) and its dividends and splits (`scripts/build_edgar_sample.py`); the cross-ticker table regenerates with the gate active from 2009 (Sharpe 0.401 → 0.383) |
+| P/E compared a split-adjusted price with as-reported EPS | Wrong by the later split factor (AAPL: 28×) once EPS comes from filings | EPS restated in the price series' share units; price-only close recovered from the total-return close |
+| The test universe was today's survivors only | Every result was flattered, especially "let winners run" exits | Historical S&P 500 membership; `--cohort DATE` publishes the survivorship-aware results with coverage (§8) |
+| Today's ticker map pointed XOM at a new holding company (2026) with two quarters of filings | Exxon's history would have disappeared | `edgar.PREDECESSOR_CIKS` merges a successor issuer's predecessors |
+| A ticket could be produced from sample, stale or past data | An order priced from data that is not current | The live-mode rule (§1) |
+| The market clock ignored exchange holidays | A cache was treated as stale one close too early on holidays | NYSE holiday calendar (`data.nyse_holidays`) |
+| Uninvested backtest cash earned 0% while Sharpe ratios subtracted the risk-free rate | A rule that holds cash was charged for it twice (Sharpe 0.38 → 0.48 on the sample once fixed) | Cash earns the T-bill (live) or 2% (offline) in the strategy backtest and the portfolio walk-forward |
+| The strategy backtest checked stops at the close and sold at the next open; the long horizon had no stop at all | Gaps and intraday falls through a stop were filled at the wrong price; the backtest and the ticket's stop order disagreed | Resting stop orders, filled at the stop or at the open on a gap |
+| A fixed 10 bps per side regardless of liquidity | Small, illiquid or volatile stocks looked cheaper to trade than they are | Corwin-Schultz half spread + square-root impact (`lighthouse/costs.py`) |
+| Shorts carried no borrow cost | The short setup test overstated shorts | A configurable borrow fee (default 0.5% a year, an assumption) in the short setup test, shown on every short ticket |
+
+### Fifth October 2026 session (research harness)
+
+| Issue | Effect | Fix |
+|---|---|---|
+| A cached Yahoo series with no volume (CPWR, 2011-2014: zero volume, ~$2 price) entered the panel | Its square-root impact cost was effectively infinite (up to 4,000,000 bps), and one such stock in a quintile swamped the leg's cost: net returns looked 30-40 points a year worse than they were | Members are tested only in months with volume on ≥ 15 of the last 21 sessions (115 member-months dropped); per-side cost capped at 300 bps |
+| Experiment-log rows written by the hold-out had three more fields than the header | experiments.csv could not be read back, so the hold-out guard would have failed on the next run | Fixed log columns (`harness.LOG_COLUMNS`) with an `extra` JSON column for anything new; the day's 80 rows repaired in place (values unchanged) |
+| The Ken French 49-industry file's first table was found only as "main" | Industry momentum could not load (the research run stopped) | The first table of a library file is also stored under its own title |
+| The strategy backtest computed liquidity costs itself, with no cap | On a series that barely trades (EP's cached 2014 data: $0.80, a few hundred shares a day) a sale filled at a negative price and the equity curve went below zero (5 cohort stocks: CPWR, EP, COMS, DIGI, MCIC) | Per-side cost capped at 300 bps in the backtest and in `costs.CostModel` (`costs.MAX_COST_BPS`); sample-pack results unchanged |
+| The DCF's free cash flow subtracted stock-based pay twice (once in the operating margin, once again) | Equity values understated by roughly the SBC share of cash flow (~15% for MSFT) | FCFF after SBC = EBIT x (1 - t) + D&A - capex - change in working capital; the cash view adds SBC back |
 
 ## 12. Speed
 

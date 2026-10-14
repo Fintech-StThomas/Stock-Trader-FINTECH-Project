@@ -94,8 +94,18 @@ class FundamentalSnapshot:
 
 @dataclass
 class StatementHistory:
+    """Annual and quarterly statements, one row per period end. A `filed` column, when present, is the date each row
+    became public (SEC EDGAR); without it a row is assumed public `StrategyParams.reporting_lag_days` after its period
+    end (Yahoo's statements carry no filing dates)."""
     annual: pd.DataFrame = field(default_factory=pd.DataFrame)
     quarterly: pd.DataFrame = field(default_factory=pd.DataFrame)
+    source: str = ""
+    notes: List[str] = field(default_factory=list)
+
+    @property
+    def has_filing_dates(self) -> bool:
+        return self.annual is not None and not self.annual.empty and "filed" in self.annual and \
+            self.annual["filed"].notna().any()
 
     @property
     def years(self) -> int:
@@ -274,11 +284,18 @@ def fundamental_score(beacons: List[Beacon]) -> Optional[float]:
 # Point-in-time scores for the backtest
 # --------------------------------------------------------------------------- #
 def point_in_time_scores(prices: pd.DataFrame, history: StatementHistory, sector: Optional[str] = None,
-                         params: Optional[StrategyParams] = None) -> pd.Series:
+                         params: Optional[StrategyParams] = None, actions: Optional[pd.DataFrame] = None) -> pd.Series:
     """Daily fundamental score using only statements published before each date.
 
-    Returns NaN before the first usable statement (the backtest treats NaN as
-    "unknown -> no gate"). Valuation is recomputed daily (price / lagged EPS).
+    A statement is usable from the session after its filing date when the history carries filing dates (SEC EDGAR,
+    column `filed`), else `params.reporting_lag_days` after its period end (Yahoo's statements are undated). Each date
+    uses the latest fiscal year that was public then. Returns NaN before the first usable statement (the backtest
+    treats NaN as "unknown -> no gate"). Valuation is recomputed daily (price / EPS).
+
+    P/E needs the price and the EPS in the same units. EDGAR's EPS is as reported on its filing date, so with
+    `actions` (dividends and splits, `total_return.load_actions`) it is restated in the share units of the price
+    series' last date (when the series was adjusted), and the price has its dividend adjustment removed. Without
+    `actions`, filing-dated statements skip the valuation part rather than compare unlike units.
     """
     p = params or StrategyParams()
     idx = prices.index
@@ -292,12 +309,34 @@ def point_in_time_scores(prices: pd.DataFrame, history: StatementHistory, sector
     close = prices["Close"].copy()
     close.attrs = {}      # pandas deep-copies attrs on every operation (see technicals.compute_indicators)
 
+    dated = "filed" in a.columns and a["filed"].notna().any()
+    lag = pd.Timedelta(days=p.reporting_lag_days)
+    if dated:
+        filed = pd.to_datetime(a["filed"])
+        avail = (filed + pd.Timedelta(days=1)).where(filed.notna(), a.index.to_series() + lag)
+    else:
+        avail = a.index.to_series() + lag
+    avail = pd.DatetimeIndex(avail)
+    # a fiscal year applies from its availability until a LATER fiscal year becomes available (suffix minimum, so an
+    # older year that only became public after a newer one never takes over)
+    suffix_min = np.minimum.accumulate(avail[::-1].to_numpy())[::-1]
+    until = list(suffix_min[1:]) + [np.datetime64(idx[-1] + pd.Timedelta(days=1))]
+
+    split_adj, price_for_pe = np.ones(len(a)), close
+    can_value = True
+    if dated:
+        if actions is not None:
+            from .total_return import price_only_close, split_factor_after, to_units_of
+            acts = to_units_of(actions, idx[-1])
+            price_for_pe = price_only_close(close, acts)
+            split_adj = split_factor_after(pd.to_datetime(a["filed"]).fillna(a.index.to_series()), acts, idx[-1])
+        else:
+            can_value = False
+
     for i in range(len(a)):
         row = a.iloc[i]
         prev = a.iloc[i - 1] if i > 0 else None
-        available_from = a.index[i] + pd.Timedelta(days=p.reporting_lag_days)
-        until = (a.index[i + 1] + pd.Timedelta(days=p.reporting_lag_days)) if i + 1 < len(a) else idx[-1] + pd.Timedelta(days=1)
-        mask = (idx >= available_from) & (idx < until)
+        mask = (idx >= avail[i]) & (idx < pd.Timestamp(until[i]))
         if not mask.any():
             continue
 
@@ -319,8 +358,10 @@ def point_in_time_scores(prices: pd.DataFrame, history: StatementHistory, sector
         # dynamic valuation part: P/E from the lagged EPS and each day's price
         eps = row.get("eps")
         groups, weights = [], []
-        if pd.notna(eps):
-            pe_series = close[mask] / eps if eps > 0 else pd.Series(-1.0, index=close[mask].index)
+        if pd.notna(eps) and can_value:
+            eps_units = eps / split_adj[i]
+            px = price_for_pe[mask]
+            pe_series = px / eps_units if eps_units > 0 else pd.Series(-1.0, index=px.index)
             val_series = pe_series.apply(lambda v: score_multiple_vs_norm(v, norms["pe"]))
             groups.append(val_series.astype(float))
             weights.append(FUNDAMENTAL_WEIGHTS["valuation"])
