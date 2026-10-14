@@ -162,3 +162,48 @@ def test_breadth_change_counts_only_managers_filing_both_quarters():
     bc = inst.breadth_change(hold, filers)
     # managers in both quarters: 1, 2, 3. Holders among them: 1 before, 3 after -> +2 / 3
     assert bc.loc[p1, "X"] == pytest.approx(2 / 3)
+
+
+# --------------------------------------------------------------------------- #
+# The optional language-model layer (no model is called: the provider is replaced by a canned reply)
+# --------------------------------------------------------------------------- #
+from lighthouse import llm  # noqa: E402
+
+PASSAGES = ["Our revenue grew 12% in fiscal 2025, driven by cloud services.",
+            "We face intense competition, and a loss of large customers could reduce margins.",
+            "We had $4.5 billion of debt due in 2027."]
+
+
+def test_llm_layer_is_off_by_default(monkeypatch):
+    monkeypatch.delenv(llm.PROVIDER_ENV, raising=False)
+    with pytest.raises(llm.LLMDisabled):
+        llm.ask("What grew?", PASSAGES)
+    monkeypatch.setenv(llm.PROVIDER_ENV, "anthropic")
+    with pytest.raises(llm.LLMDisabled, match="stub"):
+        llm.ask("What grew?", PASSAGES)
+
+
+def test_answers_are_checked_for_citations_and_numbers(monkeypatch):
+    monkeypatch.setenv(llm.PROVIDER_ENV, "ollama")
+    good = "Revenue grew 12% on cloud services [1]. Competition could reduce margins [2]. Debt of $4.5 billion is due [3]."
+    monkeypatch.setitem(llm.PROVIDERS, "ollama", lambda prompt, **kw: (good, "ollama:test"))
+    a = llm.ask("What happened?", PASSAGES, {"price": "$83.87"})
+    assert a.verified and a.cited() == [1, 2, 3] and a.model == "ollama:test"
+    bad = "Revenue grew 15% this year [1]. Margins will collapse next year. Debt is large [7]."
+    monkeypatch.setitem(llm.PROVIDERS, "ollama", lambda prompt, **kw: (bad, "ollama:test"))
+    b = llm.ask("What happened?", PASSAGES)
+    assert not b.verified
+    text = " | ".join(b.problems)
+    assert "number 15" in text and "no citation" in text and "[7]" in text
+
+
+def test_prompt_and_passage_selection_are_deterministic():
+    doc = "\n".join(["Paragraph about weather and offices in many places around the world. " * 2,
+                     "Litigation risk: we are defendants in several lawsuits that could cause losses. " * 2,
+                     "Our debt agreements contain covenants that restrict our operations. " * 2])
+    ps = llm.split_passages(doc)
+    assert len(ps) == 3
+    sel = llm.select_passages(ps, "What litigation and lawsuits does it face?", k=1)
+    assert sel == [ps[1]]
+    p1 = llm.build_prompt("Q?", sel, {"price": "$10"})
+    assert p1 == llm.build_prompt("Q?", sel, {"price": "$10"}) and "[1] Litigation" in p1
