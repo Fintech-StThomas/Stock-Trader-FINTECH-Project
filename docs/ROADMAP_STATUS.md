@@ -67,7 +67,8 @@ phases; the budget is $0 (free data, free libraries, free hosting).
   results also show a flat 10 bps a side. A zero-volume series (CPWR) had made costs explode until the volume screen.
 * **Exit plans, 2009 cohort (329 of 498 priced)**: the trend exit beat R-targets for long-horizon longs (avg +1.62R vs
   +0.48R, better on 268 of 326 stocks: the default stays) and for short-horizon longs (+0.62R vs +0.13R, 280 of 329:
-  the short-horizon default is still targets; see "Decisions for the user" in docs/NEXT_SESSION.md). Shorts lost
+  the user decided to keep targets for the short horizon, because a survivor-only cohort favours letting winners run;
+  docs/NEXT_SESSION.md). Shorts lost
   under both (-0.29R targets, -0.52R trend): a survivor-only, mostly rising cohort is the worst case for shorts.
 
 ## Next

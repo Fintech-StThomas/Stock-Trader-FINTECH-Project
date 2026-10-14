@@ -1,19 +1,22 @@
 # Handoff: where the research-grade Lighthouse work stopped (14 October 2026)
 
-Branch `claude/eager-curie-j412zd` (started from `main` at 8d9601b). Everything below is committed and pushed. The
-previous session stopped, as asked, **after Phase 3**: Phases 1-3 are done; Phases 4-7 have code that is built and
-unit-tested offline but has not been run on live data or written up; Phase 8 is partly done. No pull request exists yet.
+Branch `claude/eager-curie-j412zd` (started from `main` at 8d9601b) was opened as a pull request and, at the user's
+request on 14 October 2026, merged into `main` once CI passed. The next session starts a **new branch from `main`**.
+The previous session stopped, as asked, **after Phase 3**: Phases 1-3 are done; Phases 4-7 have code that is built and
+unit-tested offline but has not been run on live data or written up; Phase 8 is partly done.
 
 ## Kickoff prompt for the next session
 
-> Continue the Lighthouse research-grade plan on branch `claude/eager-curie-j412zd`. Read `docs/NEXT_SESSION.md`,
-> `docs/ROADMAP_STATUS.md` and METHODOLOGY §8b and §11 first. Phases 1-3 are done. Start with Phase 4: run
+> Continue the Lighthouse research-grade plan from `main` (the Phase 1-3 work is merged), on a new branch. Read
+> `docs/NEXT_SESSION.md`, `docs/ROADMAP_STATUS.md` and METHODOLOGY §8b and §11 first. First step: if an empty
+> `tests/__init__.py` exists, delete it (I have agreed to that one deletion) and drop its line from
+> `.git/info/exclude`. Keep short-horizon longs on R targets (do not switch them to the trend exit). Then Phase 4: run
 > `scripts/research_signals.py` (tuning) on the full signal library, then the hold-out once with `--holdout`, write the
 > verdicts into METHODOLOGY §8b and DATA_AND_ML, and give weight in `lighthouse/decision.py` only to signals that pass
 > the pre-registered rule (sector/size-neutral blend). Then Phase 5 (segments, industry metrics, peer norms, MSFT memo
 > end-to-end on live data), Phase 6-7 live checks, and Phase 8 (README, METHODOLOGY, DATA_AND_ML, ROADMAP_STATUS,
-> handoff page). Keep every rule in "Rules that stay in force" below. Ask me before deleting anything, and ask before
-> opening or merging the PR.
+> handoff page). Keep every rule in "Rules that stay in force" below. Ask me before deleting anything else, and ask
+> before opening or merging the PR.
 
 ## Rules that stay in force
 
@@ -21,8 +24,9 @@ unit-tested offline but has not been run on live data or written up; Phase 8 is 
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on `claude/eager-curie-j412zd`
   only; never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12). Locally,
-  run it with `PYTHONPATH=tests` and an empty `LIGHTHOUSE_CACHE_DIR` (see "Known issues").
+* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12), with an
+  empty `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. (`PYTHONPATH=tests` was only needed
+  while the stray `tests/__init__.py` existed.)
 * After any scoring change: `python scripts/cross_ticker_evaluation.py --check`; if numbers change on purpose,
   regenerate and explain them in the docs (METHODOLOGY §8 and §11).
 * $0 budget: free sources and free keys only (FRED, Alpaca paper); paid providers only as stubs. Read terms, respect
@@ -53,6 +57,9 @@ unit-tested offline but has not been run on live data or written up; Phase 8 is 
 
 ## Order of work for the next session
 
+0. **Delete the stray empty `tests/__init__.py` if it exists** (the user consented on 14 October 2026). It was never
+   committed, so a fresh clone does not have it; if it is there (a reused container), delete that one file, remove its
+   line from `.git/info/exclude`, and confirm `python -m pytest` passes without `PYTHONPATH=tests`. Nothing else.
 1. **Phase 4 signal library through the harness.** All signal code exists: `lighthouse/research/fundamental_signals.py`,
    `panel_signals.py`, `positioning.py`, `event_signals.py` (3-day earnings reaction, 10-K text), `institutions.py`
    (13F breadth), `signals.py` (price signals). Run, in this order:
@@ -78,16 +85,15 @@ unit-tested offline but has not been run on live data or written up; Phase 8 is 
    page (https://claude.ai/artifact/QMfLnen5VAJYCom9FLM6Qd: read it, update it, republish to the same URL), then ask
    about the PR.
 
-## Decisions for the user
+## Decisions the user made (14 October 2026)
 
-* **Short-horizon exit default.** On the 2009 cohort the weekly trend exit beat the R-target plan for short-horizon
-  longs (+0.62R vs +0.13R a trade, better on 280 of 329 stocks). The ticket default for short-horizon longs is still
-  R targets. Switching needs a short-horizon trend exit in `tradeplan.py` (the evaluation script has it; tickets do
-  not). The cohort is survivor-only and mostly a bull market, which favours letting winners run; the 1996 cohort is the
-  stricter test (see `reports/research/exit_plans_1996-01-02.csv` if it was produced).
-* **The stray empty `tests/__init__.py`** created by mistake last session breaks `from conftest import ...` when it
-  exists. It is excluded from git through `.git/info/exclude` (only in that container) and has not been deleted: delete
-  it only with the user's consent.
+* **Short-horizon longs keep the R-target exit; do not switch them to the trend exit.** On the 2009 cohort the weekly
+  trend exit beat R targets (+0.62R vs +0.13R a trade, better on 280 of 329 stocks), but that cohort holds only
+  companies that survived to today (66% of the members; the failures have no prices), which favours letting winners
+  run: the result carries survivorship bias. Reopen the question only with data that includes the delisted.
+* **The stray empty `tests/__init__.py`** (created by mistake, breaks `from conftest import ...`): the next session
+  starts by deleting it if it exists (step 0 above). This consent covers that one file only.
+* **The PR for `claude/eager-curie-j412zd`**: opened and merged into `main` once CI passed.
 
 ## Known issues and environment notes
 
