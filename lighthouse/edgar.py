@@ -439,14 +439,16 @@ def document_url(cik: int, accn: str, doc: str) -> str:
     return ARCHIVE_URL.format(cik=int(cik), accn_nodash=str(accn).replace("-", ""), doc=doc)
 
 
-def fetch_document(cik: int, accn: str, doc: str) -> str:
-    """The text of one filed document (HTML or text), cached by accession number."""
+def fetch_document(cik: int, accn: str, doc: str, cache: bool = True) -> str:
+    """The text of one filed document (HTML or text), cached by accession number unless `cache=False` (bulk text
+    research reads thousands of 10-Ks and keeps only the numbers it computes from them)."""
     key = f"{int(cik)}_{str(accn).replace('-', '')}_{doc}"
-    hit = store.read_json("edgar_docs", key)
+    hit = store.read_json("edgar_docs", key) if cache else None
     if hit is not None:
         return hit
-    txt = _get(document_url(cik, accn, doc), timeout=60).text
-    store.write_json("edgar_docs", key, txt)
+    txt = _get(document_url(cik, accn, doc), timeout=90).text
+    if cache:
+        store.write_json("edgar_docs", key, txt)
     return txt
 
 

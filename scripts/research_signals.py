@@ -13,6 +13,10 @@ Everything is reported, failures included (reports/research/signal_results.csv, 
 Run:  LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/research_signals.py              # tuning period only
       LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/research_signals.py --holdout    # then the hold-out, once
 Live data (Yahoo prices cached in data/cache, SEC filings, Ken French factors); the price panel is cached as Parquet.
+The 10-K text signals read every 10-K since 2006 (not stored; --no-text skips them) and need the Loughran-McDonald
+dictionary (downloaded to the cache; free for academic research, see lighthouse/text.py). 13F breadth reads the SEC's
+13F data sets in memory (--no-13f skips it). Every signal computed is cached under data/cache/research_signals, so a
+second run evaluates without downloading.
 """
 from __future__ import annotations
 
@@ -123,6 +127,8 @@ def main(argv=None) -> int:
     ap.add_argument("--signals", nargs="*", default=None)
     ap.add_argument("--refresh-signals", action="store_true")
     ap.add_argument("--allow-repeat", action="store_true", help="re-evaluate a hold-out (counts as another trial)")
+    ap.add_argument("--no-text", action="store_true", help="skip the 10-K text signals (reads every 10-K since 2006)")
+    ap.add_argument("--no-13f", action="store_true", help="skip 13F breadth (reads the SEC's 13F data sets, ~3 GB)")
     a = ap.parse_args(argv)
     uni, frames, missing, panel = load_inputs()
     cov = panel.coverage()
@@ -143,7 +149,12 @@ def main(argv=None) -> int:
     sigs["size"] = -np.log(mcap.where(mcap > 0))                     # small minus big (Banz 1981)
     sigs.update(PS.monthly(frames, panel, refresh=a.refresh_signals))
     sigs.update(PO.monthly(frames, panel, market_cap=mcap, refresh=a.refresh_signals))
-    for mod in (FS, PS, PO):
+    from lighthouse.research import event_signals as EV
+    from lighthouse.research import institutions as IN
+    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text))
+    if not a.no_13f:
+        sigs.update(IN.monthly(frames, panel, refresh=a.refresh_signals))
+    for mod in (FS, PS, PO, EV, IN):
         S.DESCRIPTIONS.update(mod.DESCRIPTIONS)
     S.DESCRIPTIONS["size"] = "small size (minus log market value)"
     if a.signals:

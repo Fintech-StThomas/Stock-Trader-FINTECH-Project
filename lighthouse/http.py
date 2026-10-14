@@ -53,9 +53,11 @@ class HostPolicy:
     accept_encoding: str = "gzip, deflate"
 
 
-# Host suffix -> policy. The SEC's published limit is 10 requests/second; 8 leaves room for clock jitter.
+# Host suffix -> policy. The SEC's published limit is 10 requests/second; 8 leaves room for clock jitter. Several
+# processes downloading at once must split it: LIGHTHOUSE_SEC_RATE lowers this process's share (never above 8).
+SEC_RATE = min(float(os.environ.get("LIGHTHOUSE_SEC_RATE", "8") or 8), 8.0)
 POLICIES: Dict[str, HostPolicy] = {
-    "sec.gov": HostPolicy(rate=8.0, user_agent=sec_user_agent),
+    "sec.gov": HostPolicy(rate=SEC_RATE, user_agent=sec_user_agent),
     "wikipedia.org": HostPolicy(rate=2.0, user_agent=lambda: PROJECT_UA),
     "finra.org": HostPolicy(rate=4.0, user_agent=lambda: PROJECT_UA),
     "dartmouth.edu": HostPolicy(rate=2.0, user_agent=None),
