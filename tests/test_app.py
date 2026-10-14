@@ -1,4 +1,5 @@
 """Smoke tests of the Streamlit app (through Streamlit's AppTest harness, no browser) and of its interactive charts."""
+import sys
 from pathlib import Path
 
 import pytest
@@ -143,3 +144,43 @@ def test_app_analyst_coverage_journal_research_tabs_offline(tmp_path, monkeypatc
     assert not at.exception, at.exception
     assert (tmp_path / "journal.sqlite").exists()
     assert any("Thesis 1 saved" in str(x.value) for x in at.success)
+
+
+def _lighthouse_modules() -> dict:
+    return {n: m for n, m in sys.modules.items() if n == "lighthouse" or n.startswith("lighthouse.")}
+
+
+def test_source_stamp_covers_the_subpackages():
+    """A push that only changes lighthouse/analyst or lighthouse/research must also count as new code."""
+    import lighthouse
+    names = {name for name, _, _ in lighthouse._source_stamp()}
+    assert {"engine.py", "analyst/memo.py", "research/harness.py"} <= {n.replace("\\", "/") for n in names}
+
+
+def test_app_keeps_lighthouse_while_its_files_are_unchanged():
+    import lighthouse
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    assert not at.exception, at.exception
+    assert sys.modules["lighthouse"] is lighthouse          # no reload (and no cache wipe) on an ordinary rerun
+
+
+@pytest.mark.parametrize("old_code", ["files changed", "imported before the check existed"])
+def test_app_reloads_lighthouse_deployed_under_a_running_server(monkeypatch, old_code):
+    """Streamlit Community Cloud pulls a push without restarting Python: the old modules must not outlive their files."""
+    import lighthouse
+    before = _lighthouse_modules()
+    if old_code == "files changed":
+        monkeypatch.setattr(lighthouse, "_IMPORTED_STAMP", ())
+    else:
+        monkeypatch.delattr(lighthouse, "source_changed")
+    try:
+        at = AppTest.from_file(APP, default_timeout=300)
+        at.run()
+        assert not at.exception, at.exception
+        assert sys.modules["lighthouse"] is not lighthouse
+        assert not sys.modules["lighthouse"].source_changed()
+    finally:   # put this process's modules back so later tests keep using one set of classes
+        for n in _lighthouse_modules():
+            del sys.modules[n]
+        sys.modules.update(before)

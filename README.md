@@ -84,6 +84,9 @@ The app runs as-is on [Streamlit Community Cloud](https://share.streamlit.io):
 2. *Create app* → *Deploy a public app from GitHub* → repository `lotainc0/Stock-Trader-FINTECH-Project`, branch `main`, main file `app.py`.
 3. Press *Deploy*. The first build installs `requirements.txt`; after that the app is live at a `*.streamlit.app` URL you can share.
 
+Later pushes to `main` reach the running app without a restart; `app.py` notices that the `lighthouse` package changed on disk
+and loads the new code. If a page still shows an error right after a push, *Manage app* → ⋮ → *Reboot app* starts it fresh.
+
 Live data comes from Yahoo Finance (with Stooq as a fallback); the bundled sample pack keeps the app working when a feed is down.
 
 ## Results in one table

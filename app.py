@@ -14,6 +14,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import sys
 import threading
 import traceback
 from dataclasses import asdict
@@ -22,18 +23,47 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from lighthouse import analyze, screen, InvestorProfile, StrategyParams
-from lighthouse import interactive as ix
-from lighthouse.config import VERDICT_BANDS, RISK_PRESETS, HORIZON_WEIGHTS
-from lighthouse.data import sample_pack_tickers, offline_mode, load_prices, load_risk_free, DataUnavailable
-from lighthouse.decision import size_position
-from lighthouse.regime import regime_adjustments
-from lighthouse.report import format_metrics, LIGHT_ICON
-from lighthouse import portfolio as pf
-from lighthouse.parallel import map_tickers
-from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_ideas, signed_usd, TIME_STOP_DEFAULT,
-                                  StaleDataError)
-from lighthouse.universe import available_universe, get_universe, universe_names
+
+# Streamlit Community Cloud pulls each push into the running server without restarting Python, so the lighthouse modules
+# imported before it are still in sys.modules and can be older than this app.py ("ImportError: cannot import name ...").
+# When the package's files changed on disk, drop the old modules and the results cached with them before importing.
+@st.cache_resource
+def _reload_lock() -> threading.Lock:
+    return threading.Lock()
+
+
+def _lighthouse_is_stale() -> bool:
+    pkg = sys.modules.get("lighthouse")
+    return pkg is not None and (not hasattr(pkg, "source_changed") or pkg.source_changed())
+
+
+def _drop_stale_lighthouse() -> None:
+    if not _lighthouse_is_stale():
+        return
+    with _reload_lock():
+        if not _lighthouse_is_stale():   # another session reloaded it while this one waited
+            return
+        for name in [n for n in list(sys.modules) if n == "lighthouse" or n.startswith("lighthouse.")]:   # list(): one atomic read
+            del sys.modules[name]
+        import lighthouse  # noqa: F401 - under the lock, so a concurrent session never finds half a package
+        st.cache_data.clear()      # last: it also drops the lock, and later sessions must already see fresh code
+        st.cache_resource.clear()
+
+
+_drop_stale_lighthouse()
+
+from lighthouse import analyze, screen, InvestorProfile, StrategyParams  # noqa: E402
+from lighthouse import interactive as ix  # noqa: E402
+from lighthouse.config import VERDICT_BANDS, RISK_PRESETS, HORIZON_WEIGHTS  # noqa: E402
+from lighthouse.data import sample_pack_tickers, offline_mode, load_prices, load_risk_free, DataUnavailable  # noqa: E402
+from lighthouse.decision import size_position  # noqa: E402
+from lighthouse.regime import regime_adjustments  # noqa: E402
+from lighthouse.report import format_metrics, LIGHT_ICON  # noqa: E402
+from lighthouse import portfolio as pf  # noqa: E402
+from lighthouse.parallel import map_tickers  # noqa: E402
+from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_ideas, signed_usd,  # noqa: E402
+                                  TIME_STOP_DEFAULT, StaleDataError)
+from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
                    menu_items={"About": "Lighthouse turns a ticker and a few facts about you into an explainable Buy / Hold / Sell "

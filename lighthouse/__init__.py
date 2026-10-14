@@ -12,9 +12,35 @@ Public API
 >>> from lighthouse.tradeplan import build_trade_plan            # buy / short-now ticket for your cash
 >>> from lighthouse import portfolio                              # basket allocation, goal portfolios, risk
 """
-from .config import InvestorProfile, StrategyParams, VERDICT_BANDS
-from .engine import analyze, AnalysisResult
-from .screener import screen
+import os as _os
+
+_DIR = _os.path.dirname(_os.path.abspath(__file__))
+
+
+def _source_stamp() -> tuple:
+    """(path, mtime, size) of every .py file in the package and its subpackages (lighthouse/analyst, research)."""
+    out = []
+    for root, dirs, files in _os.walk(_DIR):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for f in files:
+            if f.endswith(".py"):
+                st = _os.stat(_os.path.join(root, f))
+                out.append((_os.path.relpath(_os.path.join(root, f), _DIR), st.st_mtime_ns, st.st_size))
+    return tuple(sorted(out))
+
+
+_IMPORTED_STAMP = _source_stamp()   # the files this process loaded
+
+
+def source_changed() -> bool:
+    """True when the package's files on disk are no longer the ones this process imported: new code landed under a
+    running server (Streamlit Community Cloud pulls every push without restarting Python)."""
+    return _source_stamp() != _IMPORTED_STAMP
+
+
+from .config import InvestorProfile, StrategyParams, VERDICT_BANDS  # noqa: E402
+from .engine import analyze, AnalysisResult  # noqa: E402
+from .screener import screen  # noqa: E402
 
 __version__ = "1.2.0"
 __all__ = ["analyze", "AnalysisResult", "screen", "InvestorProfile", "StrategyParams", "VERDICT_BANDS"]
