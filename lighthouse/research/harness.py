@@ -57,10 +57,12 @@ class Panel:
     universe_name: str = ""
     sources: List[str] = field(default_factory=list)
     member_count: Optional[pd.Series] = None    # ALL members at each month end, priced or not (the coverage denominator)
+    tradable: Optional[pd.DataFrame] = None     # bool: traded on at least MIN_TRADED_DAYS of the last 21 sessions
 
     @property
     def investable(self) -> pd.DataFrame:
-        return self.members & self.prices.notna()
+        inv = self.members & self.prices.notna()
+        return inv & self.tradable.reindex_like(inv).fillna(False).astype(bool) if self.tradable is not None else inv
 
     def members_on(self, d) -> int:
         """Every member at month end d, including those without any price (they cannot be tested)."""
@@ -79,9 +81,27 @@ def month_ends(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     return pd.DatetimeIndex(s.groupby(index.to_period("M")).max().values)
 
 
+MIN_TRADED_DAYS = 15          # of the last 21 sessions: a series with no volume is stale or the wrong security
+
+
+def traded_days(frames: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex, window: int = 21) -> pd.DataFrame:
+    """Sessions with positive volume among the last `window`, at each month end (all of them when a feed has no
+    volume column at all, e.g. an index)."""
+    out = {}
+    for t, df in frames.items():
+        if "Volume" not in df or df["Volume"].isna().all():
+            out[t] = pd.Series(float(window), index=dates)
+            continue
+        n = (df["Volume"].fillna(0) > 0).astype(float).rolling(window, min_periods=1).sum()
+        out[t] = n.reindex(n.index.union(dates)).ffill(limit=5).reindex(dates)
+    return pd.DataFrame(out, index=dates)
+
+
 def build_panel(universe, frames: Dict[str, pd.DataFrame], start="2008-01-01", end=None,
                 calendar: Optional[pd.DatetimeIndex] = None) -> Panel:
-    """Month-end prices, membership and forward returns under both delisting rules."""
+    """Month-end prices, membership and forward returns under both delisting rules. A member is tested only in the
+    months it traded on at least MIN_TRADED_DAYS of the last 21 sessions (`Panel.tradable`): free price feeds carry
+    stale series and other companies' data under reused tickers, and both show up as days without volume."""
     closes = {t: df["Close"] for t, df in frames.items() if len(df)}
     cal = calendar if calendar is not None else pd.DatetimeIndex(sorted(set().union(*[c.index for c in closes.values()])))
     cal = cal[(cal >= pd.Timestamp(start)) & ((cal <= pd.Timestamp(end)) if end is not None else True)]
@@ -127,9 +147,10 @@ def build_panel(universe, frames: Dict[str, pd.DataFrame], start="2008-01-01", e
         r = r.where(px.notna() & mem)
         r.iloc[-1] = np.nan                      # no next month after the last month end
         fwd[rule] = r
+    tradable = traded_days({t: frames[t] for t in tickers}, dates) >= MIN_TRADED_DAYS
     return Panel(dates=dates, prices=px, members=mem, fwd=fwd, last_price=last_price, data_end=data_end,
                  universe_name=getattr(universe, "name", ""), sources=list(getattr(universe, "sources", [])),
-                 member_count=member_count)
+                 member_count=member_count, tradable=tradable.reindex(columns=tickers, fill_value=False))
 
 
 def sample_at_month_ends(daily: Dict[str, pd.Series], dates: pd.DatetimeIndex) -> pd.DataFrame:
@@ -217,11 +238,20 @@ def deflated_sharpe(sr: float, n_obs: int, skew: float, kurt: float, n_trials: i
 # --------------------------------------------------------------------------- #
 # Costs per stock and month
 # --------------------------------------------------------------------------- #
+MAX_COST = 0.03               # per side: anything above is a data error (no volume), not a price anyone pays
+
+
 def cost_panel(frames: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex, portfolio_value: float = 1e6,
-               names_per_leg: int = 100, commission_bps: float = 5.0, floor_bps: float = 5.0) -> pd.DataFrame:
+               names_per_leg: int = 100, commission_bps: float = 5.0, floor_bps: float = 5.0,
+               fixed_bps: Optional[float] = None) -> pd.DataFrame:
     """Per-side cost (as a fraction) of trading each stock at each month end: commission + Corwin-Schultz half spread
     (floored) + square-root impact for an order of portfolio_value / names_per_leg (a $1m portfolio of 100 names per
-    leg: $10,000 orders)."""
+    leg: $10,000 orders), capped at MAX_COST. From daily highs and lows the Corwin-Schultz estimator reads part of the
+    day's volatility as spread: about 35 bps for AAPL or MSFT in 2009-2017 against a quoted spread of 1-3 bps, so these
+    costs are conservative for large companies. `fixed_bps` replaces the model with one cost for every stock (the
+    sensitivity check)."""
+    if fixed_bps is not None:
+        return pd.DataFrame(fixed_bps / 1e4, index=dates, columns=list(frames))
     from ..costs import corwin_schultz_spread, dollar_volume, impact_bps
     order = portfolio_value / max(names_per_leg, 1)
     out = {}
@@ -230,7 +260,7 @@ def cost_panel(frames: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex, portfol
         vol = np.log(df["Close"] / df["Close"].shift(1)).rolling(21, min_periods=5).std()
         adv = dollar_volume(df["Close"], df["Volume"] if "Volume" in df else None)
         c = (commission_bps + half + pd.Series(impact_bps(order, adv.to_numpy(), vol.to_numpy()), index=df.index)) / 1e4
-        out[t] = c.reindex(c.index.union(dates)).ffill(limit=5).reindex(dates)
+        out[t] = c.reindex(c.index.union(dates)).ffill(limit=5).reindex(dates).clip(upper=MAX_COST)
     return pd.DataFrame(out, index=dates)
 
 
@@ -274,6 +304,8 @@ def evaluate(panel: Panel, signal: pd.DataFrame, name: str, rule: str = "exclude
         f = fwd.loc[d]
         s = sig.loc[d]
         ok = f.notna() & s.notna() & panel.members.loc[d]
+        if panel.tradable is not None:
+            ok &= panel.tradable.loc[d].reindex(ok.index, fill_value=False)
         cov[d] = ok.sum() / max(panel.members_on(d), 1)       # tested names / every member, priced or not
         if ok.sum() < min_names or not np.isfinite(f[ok]).all():
             continue
@@ -369,7 +401,18 @@ class HoldoutUsed(RuntimeError):
     """The hold-out of this signal and configuration was already evaluated."""
 
 
+LOG_COLUMNS = ["run_at", "holdout", "period", "delisting_rule", "holdout_id", "config_hash", "signal", "rule", "start",
+               "end", "months", "coverage", "ic_mean", "ic_t", "ic_nw_t", "ic_hit", "spread_gross_ann",
+               "spread_gross_sharpe", "spread_net_ann", "spread_net_vol", "spread_net_sharpe", "spread_net_nw_t",
+               "long_only_net_ann", "long_only_net_sharpe", "long_only_net_nw_t", "top_turnover", "monotonic", "skew",
+               "kurt", "alpha_ann", "alpha_nw_t", "r2", "loadings", "long_only_alpha_ann", "long_only_alpha_nw_t",
+               "trials", "deflated_sharpe", "long_only_deflated_sharpe", "extra", "config", "data_version", "code"]
+
+
 class ExperimentLog:
+    """Every evaluation, appended (never edited) to experiments.csv; hold-outs also to holdout_log.csv. The columns are
+    fixed (LOG_COLUMNS): a statistic added later goes into the `extra` JSON column, so old and new rows always line up."""
+
     def __init__(self, folder: Optional[Path] = None) -> None:
         self.folder = Path(folder or RESEARCH_DIR)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -398,10 +441,21 @@ class ExperimentLog:
                **{k: (json.dumps(v) if isinstance(v, dict) else v) for k, v in summary.items()},
                "config": json.dumps(config, sort_keys=True, default=str),
                "data_version": json.dumps(data_version, sort_keys=True, default=str), "code": code_version()}
-        df = pd.DataFrame([row])
-        df.to_csv(self.path, mode="a", index=False, header=not self.path.exists())
-        if holdout:
-            df.to_csv(self.holdout_path, mode="a", index=False, header=not self.holdout_path.exists())
+        extra = {k: v for k, v in row.items() if k not in LOG_COLUMNS}
+        row = {k: row.get(k) for k in LOG_COLUMNS}
+        row["extra"] = json.dumps(extra, sort_keys=True, default=str) if extra else ""
+        df = pd.DataFrame([row], columns=LOG_COLUMNS)
+        for path in ([self.path, self.holdout_path] if holdout else [self.path]):
+            self._check_header(path)
+            df.to_csv(path, mode="a", index=False, header=not path.exists())
+
+    @staticmethod
+    def _check_header(path: Path) -> None:
+        if path.exists():
+            with open(path) as fh:
+                head = fh.readline().strip().split(",")
+            if head != LOG_COLUMNS:
+                raise RuntimeError(f"{path} has other columns than LOG_COLUMNS: appending would misalign its rows")
 
     def check_holdout(self, name: str, config: Dict[str, object], allow_repeat: bool = False) -> int:
         """How many times this exact hold-out was evaluated before; raises HoldoutUsed unless allowed."""

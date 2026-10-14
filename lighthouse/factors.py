@@ -62,7 +62,7 @@ _DATE = re.compile(r"^\s*(\d{4}|\d{6}|\d{8})\s*,")
 
 
 def parse_sections(text: str) -> Dict[str, pd.DataFrame]:
-    """Every table in a library CSV, keyed by the title line above its header (the first table's key is "main").
+    """Every table in a library CSV, keyed by the title line above its header (the first table is also under "main").
     Dates YYYYMM -> month end, YYYYMMDD -> that day, YYYY -> year end; values in percent are returned as fractions."""
     lines = text.splitlines()
     out: Dict[str, pd.DataFrame] = {}
@@ -77,6 +77,8 @@ def parse_sections(text: str) -> Dict[str, pd.DataFrame]:
             k = 2
             while key in out:
                 key, k = f"{title} ({k})", k + 1
+            if key == "main" and title != "main" and title not in out:
+                out[title] = df                          # ... and is also found by its own title when it has one
             out[key] = df
         header, rows = None, []
 

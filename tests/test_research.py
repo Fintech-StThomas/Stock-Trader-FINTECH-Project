@@ -154,3 +154,45 @@ def test_coverage_counts_members_without_any_price():
     assert panel.coverage().iloc[3] == pytest.approx(40 / 50)        # 10 members never had a price
     res = H.evaluate(panel, panel.prices.pct_change(3), "mom3", "exclude", ("2010-01-01", None), min_names=20)
     assert res.summary["coverage"] <= 0.8 + 1e-9
+
+
+def test_series_without_volume_are_not_tested_and_costs_are_capped():
+    """A stale feed or another company's data under a reused ticker shows as days without volume (CPWR in the Yahoo
+    cache: zero volume and a $2 price for four years while it was an S&P 500 member)."""
+    uni, frames = _universe_frames(n=40, months=24)
+    stale = frames["S01"].copy()
+    stale.loc[stale.index[21 * 6]:, "Volume"] = 0.0                     # no trades from month 7 on
+    frames["S01"] = stale
+    panel = H.build_panel(uni, frames, start="2010-01-01")
+    assert panel.tradable.loc[panel.dates[3], "S01"] and not panel.tradable.loc[panel.dates[8], "S01"]
+    assert not panel.investable.loc[panel.dates[8], "S01"]
+    assert panel.coverage().iloc[8] == pytest.approx(39 / 40)
+    sig = panel.prices.pct_change(3)
+    res = H.evaluate(panel, sig, "mom3", "exclude", ("2010-01-01", None), min_names=20)
+    assert res.summary["coverage"] < 1.0
+    costs = H.cost_panel(frames, panel.dates)
+    assert float(costs.max().max()) <= H.MAX_COST
+    flat = H.cost_panel(frames, panel.dates, fixed_bps=10.0)
+    assert np.allclose(flat.to_numpy(), 0.001)
+
+
+def test_experiment_log_columns_stay_aligned(tmp_path):
+    """Tuning rows and hold-out rows (which carry the trial count and deflated Sharpe ratios) share one fixed header;
+    a statistic added later lands in the `extra` column instead of shifting every field after it."""
+    log = H.ExperimentLog(tmp_path)
+    base = {"signal": "x", "rule": "exclude", "ic_mean": 0.01}
+    log.append(base, {"signal": "x"}, {"v": 1}, rule="exclude", period="tuning")
+    log.append({**base, "trials": 3, "deflated_sharpe": 0.5, "long_only_deflated_sharpe": 0.4},
+               {"signal": "x"}, {"v": 1}, holdout=True, rule="exclude", period="holdout", holdout_id="h1")
+    log.append({**base, "brand_new_stat": 7.0}, {"signal": "x"}, {"v": 1}, rule="exclude", period="tuning")
+    r = log.rows()
+    assert list(r.columns) == H.LOG_COLUMNS and len(r) == 3
+    assert r["ic_mean"].tolist() == [0.01, 0.01, 0.01]
+    assert r.loc[1, "deflated_sharpe"] == 0.5 and pd.isna(r.loc[0, "deflated_sharpe"])
+    assert '"brand_new_stat": 7.0' in r.loc[2, "extra"]
+    assert len(log.holdouts()) == 1 and log.trials() == 1
+    with pytest.raises(H.HoldoutUsed):
+        log.check_holdout("x", {"signal": "x"})
+    (tmp_path / "experiments.csv").write_text("other,columns\n1,2\n")
+    with pytest.raises(RuntimeError, match="misalign"):
+        log.append(base, {"signal": "x"}, {"v": 1})

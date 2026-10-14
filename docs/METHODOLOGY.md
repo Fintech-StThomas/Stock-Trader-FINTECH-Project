@@ -217,6 +217,64 @@ still delivers *the risk profile the investor asked for*; it does not deliver ex
 presented as if it did. What comes next is cross-stock research (which stocks to own, not when to own one), forward
 testing with a journal that cannot contain look-ahead, and honest costs (`docs/ROADMAP_STATUS.md`).
 
+### 8b. Cross-sectional research on the point-in-time S&P 500 (`lighthouse/research/`)
+
+The timing tests above ask whether the rule beats holding one stock. The research harness asks the question the
+verdict implies: **do stocks with higher scores do better next month than stocks with lower scores?**
+
+Protocol (`lighthouse/research/harness.py`, run by `scripts/research_signals.py`):
+
+* Universe: every S&P 500 member at each month end, as it was (historical membership, §1), 2009-2026. Members
+  without a Yahoo price cannot be tested and count against coverage; a member is tested only in months it traded on
+  at least 15 of the last 21 sessions (a series without volume is stale, or another company's data under a reused
+  ticker: CPWR's cached series had zero volume and a $2 price for the four years it was a member).
+* Statistics: monthly Spearman rank IC with Newey-West t (3 lags); quintile returns; top minus bottom quintile
+  (long-short, with a 0.5% a year borrow fee on the short leg) and top quintile minus the equal-weight universe
+  (long-only); top-quintile turnover; Fama-French five-factor + momentum alphas with Newey-West t, factors aligned to
+  the month being predicted.
+* Costs, per side: 5 bps commission + the Corwin-Schultz half spread (floor 5 bps) + square-root impact of a $10,000
+  order (a $1m portfolio, 100 names a leg), capped at 300 bps. From daily highs and lows the estimator reads part of
+  the day's volatility as spread (about 35 bps full spread for AAPL or MSFT in 2009-2017 against a quoted 1-3 bps), so
+  these costs are conservative for large companies; every result also shows the long-only return at a flat 10 bps a
+  side (a sensitivity, not part of the rule).
+* Both delisting rules (a member's last month counted at its last price, or at -100%), with coverage.
+* Tuning 2009-2017; hold-out 2018 onward, evaluated once per signal and logged (`reports/research/holdout_log.csv`); a
+  second look counts as a new trial. Every evaluation is appended to `reports/research/experiments.csv`; the number of
+  distinct signal configurations tried is the trial count behind the deflated Sharpe ratio (Bailey & López de Prado
+  2014).
+* Survival rule, written before any hold-out was run: under both delisting rules, tuning IC Newey-West t ≥ 2 and a
+  positive net return for the signal's better use (long-only or long-short); hold-out IC > 0, the same use's net return
+  > 0 and its deflated Sharpe ≥ 0.90. Only a survivor may carry weight in `lighthouse/decision.py`.
+
+**Results for the signals the product uses** (October 2026; 643 of 881 ever-members priced; tuning coverage 70% of
+member-months, hold-out 89%; both delisting rules give the same numbers because no priced member stopped trading
+before the data end: Yahoo has no prices for the dead, who are most of the untested share):
+
+| Signal | Tuning IC (NW t) | Gross L/S | Long-only net (10 bps) | Hold-out IC (NW t) | Hold-out long-only net | Deflated Sharpe | Survives |
+|---|---|---|---|---|---|---|---|
+| `tech_long` | -0.026 (-1.4) | -9.4% | -10.2% (-7.3%) | +0.003 (+0.2) | -4.5% | 0.00 | no |
+| `tech_short` | -0.030 (-1.9) | -9.0% | -10.8% (-7.3%) | +0.001 (+0.1) | -5.0% | 0.00 | no |
+| `beacon_trend` | -0.019 (-1.1) | -6.6% | -6.1% (-4.4%) | +0.006 (+0.4) | -0.8% | 0.00 | no |
+| `beacon_rsi` | -0.033 (-2.3) | -9.5% | -11.6% (-7.8%) | -0.006 (-0.4) | -8.3% | 0.00 | no |
+| `beacon_macd` | -0.023 (-1.9) | -5.2% | -10.1% (-5.3%) | +0.013 (+0.9) | -4.7% | 0.00 | no |
+| `beacon_bands` | -0.025 (-2.2) | -7.4% | -10.9% (-6.4%) | -0.004 (-0.3) | -8.3% | 0.00 | no |
+| `beacon_volume` | -0.011 (-1.1) | -1.2% | -6.0% (-1.6%) | -0.001 (-0.1) | -7.1% | 0.00 | no |
+| `beacon_breakout` | -0.022 (-1.0) | -9.5% | -8.8% (-6.5%) | +0.000 (-0.0) | -4.8% | 0.00 | no |
+| `fund_pit` | -0.005 (-0.6) | -3.0% | -3.3% (-2.7%) | +0.011 (+1.0) | +0.4% | 0.01 | no |
+| `composite_long` | -0.020 (-1.4) | -9.3% | -8.0% (-6.2%) | +0.009 (+0.9) | -1.4% | 0.00 | no |
+
+Returns are annualised; "gross L/S" is top minus bottom quintile before costs; the long-only columns are the top
+quintile minus the equal-weight universe after costs (in brackets at 10 bps a side). Ten configurations were tried.
+
+Interpretation: **none of the product's signals ranks large US stocks usefully.** In 2009-2017 every technical beacon
+had a negative IC (stocks the beacons liked did worse the next month: in large caps a month's strength tends to
+reverse), and the gross spreads were negative before any cost, so the verdict does not depend on the cost model. After
+2018 the ICs are near zero. The point-in-time fundamental score is the only one with a positive hold-out (IC +0.011,
+t 1.0; long-only +0.4% a year after costs, t 0.25): too weak to call. The rules still do what §8 says (they cut
+volatility and drawdown); they are not a stock-selection tool, and nothing here justifies more weight on any of them.
+The broader signal library (value, quality, momentum, earnings, positioning, text; Phase 4) is the place to look for
+one that is.
+
 ## 9. Trade tickets: long and short (`lighthouse/tradeplan.py`)
 
 | Item | Rule | Reasoning |
@@ -408,6 +466,15 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | The strategy backtest checked stops at the close and sold at the next open; the long horizon had no stop at all | Gaps and intraday falls through a stop were filled at the wrong price; the backtest and the ticket's stop order disagreed | Resting stop orders, filled at the stop or at the open on a gap |
 | A fixed 10 bps per side regardless of liquidity | Small, illiquid or volatile stocks looked cheaper to trade than they are | Corwin-Schultz half spread + square-root impact (`lighthouse/costs.py`) |
 | Shorts carried no borrow cost | The short setup test overstated shorts | A configurable borrow fee (default 0.5% a year, an assumption) in the short setup test, shown on every short ticket |
+
+### Fifth October 2026 session (research harness)
+
+| Issue | Effect | Fix |
+|---|---|---|
+| A cached Yahoo series with no volume (CPWR, 2011-2014: zero volume, ~$2 price) entered the panel | Its square-root impact cost was effectively infinite (up to 4,000,000 bps), and one such stock in a quintile swamped the leg's cost: net returns looked 30-40 points a year worse than they were | Members are tested only in months with volume on ≥ 15 of the last 21 sessions (115 member-months dropped); per-side cost capped at 300 bps |
+| Experiment-log rows written by the hold-out had three more fields than the header | experiments.csv could not be read back, so the hold-out guard would have failed on the next run | Fixed log columns (`harness.LOG_COLUMNS`) with an `extra` JSON column for anything new; the day's 80 rows repaired in place (values unchanged) |
+| The Ken French 49-industry file's first table was found only as "main" | Industry momentum could not load (the research run stopped) | The first table of a library file is also stored under its own title |
+| The DCF's free cash flow subtracted stock-based pay twice (once in the operating margin, once again) | Equity values understated by roughly the SBC share of cash flow (~15% for MSFT) | FCFF after SBC = EBIT x (1 - t) + D&A - capex - change in working capital; the cash view adds SBC back |
 
 ## 12. Speed
 

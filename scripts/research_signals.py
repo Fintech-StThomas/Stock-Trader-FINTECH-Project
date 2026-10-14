@@ -41,6 +41,7 @@ from lighthouse.total_return import DELISTING_RULES  # noqa: E402
 
 OUT = ROOT / "reports" / "research"
 START = "2007-01-01"
+FLAT_BPS = 10.0      # cost sensitivity: one cost per side for every stock (large-cap trading cost studies: 5-20 bps)
 
 
 def survival(tune: dict, hold: dict) -> dict:
@@ -114,6 +115,17 @@ def fundamental_signal(frames, panel, refresh=False) -> pd.DataFrame:
     return m
 
 
+def _merge(path: Path, new: pd.DataFrame, keys) -> pd.DataFrame:
+    """Write `new` into the results file, replacing only its own rows (earlier runs' signals stay)."""
+    if path.exists():
+        old = pd.read_csv(path)
+        mine = set(map(tuple, new[keys].astype(str).to_numpy()))
+        old = old[[tuple(r) not in mine for r in old[keys].astype(str).to_numpy()]]
+        new = pd.concat([old, new], ignore_index=True)
+    new.to_csv(path, index=False)
+    return new
+
+
 def data_version(uni, frames, missing, panel) -> dict:
     return {"universe": uni.name, "universe_as_of": str(uni.as_of.date()) if uni.as_of is not None else None,
             "sources": uni.sources, "tickers_priced": len(frames), "tickers_missing": len(missing),
@@ -129,6 +141,8 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-repeat", action="store_true", help="re-evaluate a hold-out (counts as another trial)")
     ap.add_argument("--no-text", action="store_true", help="skip the 10-K text signals (reads every 10-K since 2006)")
     ap.add_argument("--no-13f", action="store_true", help="skip 13F breadth (reads the SEC's 13F data sets, ~3 GB)")
+    ap.add_argument("--product-only", action="store_true", help="only the signals the product already uses (beacons, "
+                    "technical, fundamental and composite scores)")
     a = ap.parse_args(argv)
     uni, frames, missing, panel = load_inputs()
     cov = panel.coverage()
@@ -140,6 +154,18 @@ def main(argv=None) -> int:
         tech = sigs["tech_long"]
         f = sigs["fund_pit"].reindex_like(tech)
         sigs["composite_long"] = (0.6 * f + 0.4 * tech).where(f.notna(), tech)
+    if a.product_only:
+        # the signals Lighthouse already uses (beacons, technical, fundamental and composite scores): no new data
+        keep = set(S.PRODUCT_SIGNALS) | {"fund_pit", "composite_long"}
+        sigs = {k: v for k, v in sigs.items() if k in keep}
+    else:
+        sigs.update(library_signals(frames, panel, a))
+    return evaluate_all(a, uni, frames, missing, panel, sigs)
+
+
+def library_signals(frames, panel, a) -> dict:
+    """The signal library (fundamental, panel, positioning, event, text and 13F signals)."""
+    sigs = {}
     from lighthouse.research import fundamental_signals as FS
     from lighthouse.research import panel_signals as PS
     from lighthouse.research import positioning as PO
@@ -157,9 +183,18 @@ def main(argv=None) -> int:
     for mod in (FS, PS, PO, EV, IN):
         S.DESCRIPTIONS.update(mod.DESCRIPTIONS)
     S.DESCRIPTIONS["size"] = "small size (minus log market value)"
+    return sigs
+
+
+def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     if a.signals:
         sigs = {k: v for k, v in sigs.items() if k in a.signals}
     costs = H.cost_panel(frames, panel.dates)
+    flat = H.cost_panel(frames, panel.dates, fixed_bps=FLAT_BPS)          # sensitivity only: not in the survival rule
+    deaths = int((panel.fwd["pessimistic"] == -1.0).sum().sum())
+    print(f"{deaths} priced members stopped trading before the data end (the pessimistic rule's -100% months); "
+          f"{int((~panel.tradable & panel.members & panel.prices.notna()).sum().sum())} member-months dropped for "
+          f"trading on fewer than {H.MIN_TRADED_DAYS} of 21 sessions")
     factors = ff.load_factors("monthly")
     log = H.ExperimentLog(OUT)
     dv = data_version(uni, frames, missing, panel)
@@ -172,12 +207,15 @@ def main(argv=None) -> int:
             res = H.evaluate(panel, sig, name, rule, H.TUNING, costs, factors)
             log.append(res.summary, cfg, dv, rule=rule, period="tuning")
             tune_by[name][rule] = res.summary
-            rows.append({**res.summary, "period": "tuning"})
+            alt = H.evaluate(panel, sig, name, rule, H.TUNING, flat, None).summary
+            rows.append({**res.summary, "period": "tuning", f"spread_net_ann_{FLAT_BPS:g}bps": alt["spread_net_ann"],
+                         f"long_only_net_ann_{FLAT_BPS:g}bps": alt["long_only_net_ann"]})
     tab = pd.DataFrame(rows)
-    cols = ["signal", "rule", "months", "coverage", "ic_mean", "ic_nw_t", "spread_net_ann", "spread_net_sharpe",
-            "long_only_net_ann", "long_only_net_nw_t", "alpha_ann", "alpha_nw_t", "top_turnover", "monotonic"]
+    cols = ["signal", "rule", "months", "coverage", "ic_mean", "ic_nw_t", "spread_gross_ann", "spread_net_ann",
+            f"spread_net_ann_{FLAT_BPS:g}bps", "long_only_net_ann", f"long_only_net_ann_{FLAT_BPS:g}bps",
+            "long_only_net_nw_t", "alpha_ann", "alpha_nw_t", "top_turnover", "monotonic"]
     OUT.mkdir(parents=True, exist_ok=True)
-    tab.to_csv(OUT / "signal_results_tuning.csv", index=False)
+    tab = _merge(OUT / "signal_results_tuning.csv", tab, ["signal", "rule"])
     with pd.option_context("display.width", 250, "display.max_columns", 30):
         print(tab[cols].round(3).to_string(index=False))
     if not a.holdout:
@@ -207,10 +245,11 @@ def main(argv=None) -> int:
         hrows += [{**hold[r], "period": "holdout"} for r in DELISTING_RULES]
     if hrows:
         ht = pd.DataFrame(hrows)
-        ht.to_csv(OUT / "signal_results_holdout.csv", index=False)
-        pd.DataFrame(verdicts).to_csv(OUT / "signal_verdicts.csv", index=False)
+        _merge(OUT / "signal_results_holdout.csv", ht, ["signal", "rule"])
+        _merge(OUT / "signal_verdicts.csv", pd.DataFrame(verdicts), ["signal"])
         with pd.option_context("display.width", 250, "display.max_columns", 30):
-            print("\nHOLD-OUT\n" + ht[cols + ["deflated_sharpe", "long_only_deflated_sharpe"]].round(3).to_string(index=False))
+            hc = [c for c in cols if c in ht.columns] + ["deflated_sharpe", "long_only_deflated_sharpe"]
+            print("\nHOLD-OUT\n" + ht[hc].round(3).to_string(index=False))
             print("\n" + pd.DataFrame(verdicts).to_string(index=False))
         print(f"\n{n_trials} configurations tried; Sharpe std across trials {sr_std:.3f} (monthly)")
     return 0

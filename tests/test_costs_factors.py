@@ -104,3 +104,14 @@ def test_french_files_parse():
     sic = ff.parse_sic_codes((FIX / "siccodes49_excerpt.txt").read_text())
     names = {n for _, _, n in sic}
     assert {"Agric", "Food"} <= names and all(lo <= hi for lo, hi, _ in sic)
+
+
+def test_industry_file_first_table_is_found_by_its_title():
+    """The 49-industry file opens with the value-weighted monthly table (recorded excerpt, data to August 2026)."""
+    secs = ff.parse_sections((FIX / "ind49_monthly_excerpt.csv").read_text())
+    vw = secs["Average Value Weighted Returns -- Monthly"]
+    assert vw is secs["main"] and vw.shape[1] == 49
+    assert vw.loc["1926-07-31", "Agric"] == pytest.approx(0.0236)
+    assert np.isnan(vw.loc["1926-07-31", "Soda"])                      # -99.99 = missing
+    ew = secs["Average Equal Weighted Returns -- Monthly"]
+    assert ew.shape[1] == 49 and len(ew) >= 4
