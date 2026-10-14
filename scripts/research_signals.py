@@ -143,6 +143,9 @@ def main(argv=None) -> int:
     ap.add_argument("--no-13f", action="store_true", help="skip 13F breadth (reads the SEC's 13F data sets, ~3 GB)")
     ap.add_argument("--product-only", action="store_true", help="only the signals the product already uses (beacons, "
                     "technical, fundamental and composite scores)")
+    ap.add_argument("--blend", nargs="+", default=None, metavar="SIGNAL",
+                    help="evaluate only the sector/size-neutral equal-weight blend of these signals (the survivors; "
+                    "lighthouse/research/blend.py); it is one more trial")
     a = ap.parse_args(argv)
     uni, frames, missing, panel = load_inputs()
     cov = panel.coverage()
@@ -160,7 +163,33 @@ def main(argv=None) -> int:
         sigs = {k: v for k, v in sigs.items() if k in keep}
     else:
         sigs.update(library_signals(frames, panel, a))
+    if a.blend:
+        sigs = {blend_name(a.blend): neutral_blend(sigs, a.blend, panel)}
+        a.signals = None
     return evaluate_all(a, uni, frames, missing, panel, sigs)
+
+
+def blend_name(components) -> str:
+    return "blend_neutral_" + "+".join(sorted(components))
+
+
+def neutral_blend(sigs: dict, components, panel) -> pd.DataFrame:
+    """The sector/size-neutral equal-weight blend of `components` (lighthouse/research/blend.py), over each month's
+    tested universe (members that traded)."""
+    from lighthouse.research import blend as B
+    unknown = [c for c in components if c not in sigs]
+    if unknown:
+        raise SystemExit(f"--blend: unknown signals {unknown}")
+    sics = store.read_json("research", "sic_codes", None) or {}
+    industries = B.industries_from_sic(sics, panel.prices.columns)
+    mcap = np.exp(-sigs["size"]) if "size" in sigs else None
+    if not any(industries.values()) or mcap is None:
+        raise SystemExit("--blend needs the SIC codes and market values of the library run (run it without "
+                         "--product-only first)")
+    mask = panel.investable
+    S.DESCRIPTIONS[blend_name(components)] = ("sector (FF49) and size neutral equal-weight blend of "
+                                              + ", ".join(sorted(components)))
+    return B.blend({c: sigs[c] for c in sorted(components)}, industries, mcap, mask)
 
 
 def library_signals(frames, panel, a) -> dict:
