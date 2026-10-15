@@ -35,7 +35,7 @@ import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -283,13 +283,9 @@ def data_version(result) -> Dict[str, object]:
     tail = px["Close"].tail(300).to_numpy(dtype=float)
     h = hashlib.sha1(np.round(tail, 6).tobytes()).hexdigest()[:16]
     attrs = getattr(px, "attrs", {}) or {}
-    st = getattr(result, "pit_statements", None)
-    last_filed = None
-    if st is not None and st.annual is not None and not st.annual.empty and "filed" in st.annual:
-        last_filed = str(pd.to_datetime(st.annual["filed"]).max().date())
     rf = getattr(result, "risk_free", None)
     return {"price_source": attrs.get("source"), "last_bar": str(px.index[-1].date()), "rows": int(len(px)),
-            "closes_sha1": h, "fundamentals_source": result.fundamentals.source, "last_filing_used": last_filed,
+            "closes_sha1": h,
             "risk_free_last": None if rf is None or not len(rf) else str(rf.index[-1].date()),
             "quote": result.quote.to_dict() if getattr(result, "quote", None) is not None else None}
 
@@ -304,7 +300,7 @@ def decision_row(result, plan, run_id: str = "", note: str = "") -> Dict[str, ob
     return {
         "recorded_at": _now(), "as_of": d.as_of, "ticker": d.ticker, "horizon": plan.horizon, "risk": prof.risk,
         "side": plan.side, "verdict": d.verdict, "status": plan.status, "composite": d.composite_score,
-        "fundamental": d.fundamental_score, "technical": d.technical_score, "regime": plan.regime, "price": plan.price,
+        "technical": d.technical_score, "regime": plan.regime, "price": plan.price,
         "priced_from": plan.priced_from, "entry_limit": plan.entry_limit, "stop": plan.stop, "target1": t1, "target2": t2,
         "trend_exit": plan.trend_exit_level, "signal_exit": plan.signal_exit_score, "exit_style": plan.exit_style,
         "time_stop": plan.time_stop_days, "shares": plan.shares, "notional": plan.notional, "risk_usd": plan.dollars_at_risk,

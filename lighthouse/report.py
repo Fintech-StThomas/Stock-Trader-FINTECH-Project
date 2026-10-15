@@ -66,9 +66,10 @@ def beacon_frame_df(beacons) -> pd.DataFrame:
 
 
 def build_report(result, include_backtest: bool = True) -> str:
-    d, f, prof = result.decision, result.fundamentals, result.profile
+    d, prof = result.decision, result.profile
     L: List[str] = []
-    L.append(f"# Lighthouse report: {f.name or d.ticker} ({d.ticker})")
+    name = getattr(result, "name", "") or d.ticker
+    L.append(f"# Lighthouse report: {name} ({d.ticker})" if name != d.ticker else f"# Lighthouse report: {d.ticker}")
     q = getattr(result, "quote", None)
     priced = f"price {q.describe()}" if q is not None else f"price ${d.price:,.2f} (close)"
     L.append(f"*Signals as of {d.as_of} · {priced} · investor: {prof.describe()}*\n")
@@ -77,25 +78,13 @@ def build_report(result, include_backtest: bool = True) -> str:
 
     # score composition
     L.append("### How the score is built")
-    if d.fundamental_score is not None:
-        L.append(f"- Fundamental score **{d.fundamental_score:.0f}** × weight {prof.fundamental_weight:.0%} = {d.fundamental_score * prof.fundamental_weight:.1f}")
-        L.append(f"- Technical score **{d.technical_score:.0f}** × weight {prof.technical_weight:.0%} = {d.technical_score * prof.technical_weight:.1f}")
-    else:
-        L.append(f"- Technical score **{d.technical_score:.0f}** (fundamentals unavailable, weight 100%)")
+    L.append(f"- Technical score **{d.technical_score:.0f}** ({prof.horizon}-term weights of the six beacons below)")
     if d.regime is not None:
         L.append(f"- Market-weather adjustment: **{('−' + format(d.regime_penalty, '.0f')) if d.regime_penalty else '0'}** ({d.regime.label})")
-    L.append(f"- **Composite = {d.composite_score:.1f}** → {d.verdict} "
-             f"(bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)\n")
-
-    # fundamentals
-    L.append(f"### Fundamental beacons ({'score ' + format(d.fundamental_score, '.0f') if d.fundamental_score is not None else 'unavailable'})")
-    meta = [x for x in [f.sector, f.industry] if x]
-    if meta:
-        L.append(f"*{' · '.join(meta)} · data: {f.source} ({f.as_of})*\n")
-    if d.fundamental_beacons:
-        L.append(beacon_table(d.fundamental_beacons) + "\n")
-    else:
-        L.append("_No fundamental data was available for this ticker._\n")
+    L.append(f"- **Lighthouse score = {d.composite_score:.1f}** → {d.verdict} "
+             f"(bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)")
+    L.append("- The verdict is the trading rule's, from prices: the business itself (valuation, quality, the DCF, peers, "
+             "red flags) is the analyst memo's view (`python -m lighthouse memo` or the app's Analyse tab).\n")
 
     # technicals
     L.append(f"### Technical beacons (score {d.technical_score:.0f})")
@@ -138,14 +127,18 @@ def build_report(result, include_backtest: bool = True) -> str:
     bt = result.backtest
     if include_backtest and bt is not None:
         L.append(f"### How this rule behaved in the past ({bt.start.date()} → {bt.end.date()})")
-        pit = getattr(result, "pit_statements", None)
-        dated = ("statements dated by their SEC filing date" if pit is not None and pit.has_filing_dates else
-                 f"statements lagged {result.params.reporting_lag_days} days")
         L.append(f"Long-only, reviewed {result.params.decision_frequency} at the close, filled at the {bt.options.get('fills')}; "
                  f"costs: {bt.options.get('costs', 'fixed bps per side')}; stops: {bt.options.get('stops', 'n/a')}; cash "
-                 f"{bt.options.get('cash', 'earns 0%')}; {dated}. Returns are for the capital allocated to this stock. "
+                 f"{bt.options.get('cash', 'earns 0%')}. Returns are for the capital allocated to this stock. "
                  f"Sharpe and Sortino use {bt.options.get('risk_free', 'a fixed risk-free rate')}.\n")
-        L.append(_md_table(format_metrics(bt.summary())) + "\n")
+        summ = bt.summary()
+        L.append(_md_table(format_metrics(summ)) + "\n")
+        if "Same exposure, never traded" in summ.index:
+            mine, same = summ.loc["Lighthouse strategy"], summ.loc["Same exposure, never traded"]
+            L.append(f"*Same exposure, never traded*: the stock and cash in a fixed mix at the rule's average exposure "
+                     f"({bt.exposure.mean():.0%}), the honest yardstick for a rule that is often in cash. Here the rule's "
+                     f"Sharpe is {mine['sharpe']:.2f} against {same['sharpe']:.2f} and its worst drawdown "
+                     f"{mine['max_drawdown'] * 100:.0f}% against {same['max_drawdown'] * 100:.0f}%.\n")
         layers = result.extras.get("layers")
         if layers is not None:
             L.append("**What each layer contributes**\n")
@@ -176,9 +169,8 @@ def build_report(result, include_backtest: bool = True) -> str:
     L.append("")
     L.append("### Limitations you should know")
     L += [
-        "- Sector norms are long-run approximations, not live peer data; a cheap stock in an expensive sector can still be expensive.",
-        "- The fundamental beacons use the latest reported figures; the backtest's fundamental gate uses SEC filings as "
-        "first reported, from the day after each was filed (when EDGAR is reachable).",
+        "- The rule uses prices only; on the point-in-time S&P 500 no technical beacon ranked stocks usefully "
+        "(docs/METHODOLOGY.md section 8b): it is a risk-control rule, not a stock picker.",
         "- The backtest is long-only; costs are estimated from the stock's own spread and volume, stops rest as orders (an "
         "overnight gap fills at the open), and it ignores taxes. Run `python -m lighthouse memo` for the analyst view.",
         "- Past behaviour of a rule is evidence about its *design*, not a promise about its future returns.",

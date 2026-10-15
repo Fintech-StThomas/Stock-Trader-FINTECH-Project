@@ -1,4 +1,4 @@
-"""Trade tickets (long and short), their exit plans, the shared trade simulator, the historical setup test, idea
+"""Trade tickets (long only), their exit plans, the shared trade simulator, the historical setup test, idea
 allocation and the open-position replay."""
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import pytest
 from lighthouse import analyze, InvestorProfile
 from lighthouse.data import sample_pack_tickers
 from lighthouse.tradeplan import (TradeSettings, build_trade_plan, setup_statistics, allocate_ideas, monitor_position,
-                                  review_days, _simulate, _simulate_trend, _split_shares, SHORT_MAX_SCORE)
+                                  review_days, _simulate, _simulate_trend, _split_shares)
 
 
 @pytest.fixture(scope="module")
@@ -38,28 +38,6 @@ def test_long_ticket_matches_the_position_plan(msft_short_horizon):
     assert sum(t.shares for t in pl.targets) == pl.shares
     steps = " ".join(pl.management_steps())
     assert "stop order" in steps and "breakeven" in steps and "Time stop" in steps
-
-
-def test_short_ticket_mirrors_the_long_one(sample_results):
-    shorts = [build_trade_plan(r, "short", with_stats=False) for r in sample_results]
-    act = [p for p in shorts if p.status == "actionable"]
-    assert act, "the 2022 bear market in the sample pack should offer at least one short"
-    for pl in act:
-        assert pl.composite_score <= SHORT_MAX_SCORE
-        assert pl.stop > pl.price > pl.entry_limit
-        assert all(t.price < pl.price for t in pl.targets)
-        assert pl.notional <= pl.cash_available + 1e-9 and pl.dollars_at_risk <= 0.01 * pl.account_value + 1e-6
-        if pl.shares:
-            assert pl.margin["reg_t_initial"] == pytest.approx(0.5 * pl.notional)
-            assert pl.margin["finra_maintenance"] == pytest.approx(max(0.3 * pl.notional, 5.0 * pl.shares)) if pl.price >= 5 else True
-        assert any("margin account" in w for w in pl.warnings)
-
-
-def test_short_is_blocked_in_a_calm_bull_market(msft_short_horizon):
-    pl = build_trade_plan(msft_short_horizon, "short", with_stats=False)
-    assert msft_short_horizon.decision.regime.label == "Bull / Calm"
-    assert pl.status == "avoid" and pl.shares == 0
-    assert pl.management_steps()[0].startswith("No position")
 
 
 def test_split_shares():
@@ -113,15 +91,6 @@ def test_simulator_stop_gap_target_and_time_stop():
     assert sim["remaining"] == 1.0                                             # data ends before the time stop: still open
 
 
-def test_simulator_handles_shorts_by_negation():
-    # short at 100, stop 105, target 90: price falls to 89
-    o, h, l, c, atr = _bars([[100, 101, 99, 100], [98, 99, 89, 90]])
-    sim = _simulate(-o, -l, -h, -c, atr, 0, -100, -105, -90, None, 0.5, 2.0, 40, True, True)
-    assert sim["exits"][0][2] == "target 1" and abs(sim["exits"][0][1]) == 90
-    gain_r = sum(f * (px - (-100)) for f, px, _, _ in sim["exits"]) / 5.0
-    assert gain_r == pytest.approx(2.0)
-
-
 # --------------------------------------------------------------------------- historical setup test
 def test_setup_statistics_partition_and_no_lookahead(msft_short_horizon):
     st = setup_statistics(msft_short_horizon, "long")
@@ -143,16 +112,17 @@ def test_setup_statistics_partition_and_no_lookahead(msft_short_horizon):
 # --------------------------------------------------------------------------- ideas
 def test_allocate_ideas_respects_cash_heat_and_count(sample_results):
     s = TradeSettings(max_ideas=3, max_total_risk_pct=2.0)
-    for side in ("long", "short"):
-        funded, watch, table = allocate_ideas(sample_results, side, s)
-        prof = sample_results[0].profile
-        assert len(funded) <= 3
-        assert sum(p.notional for p in funded) <= prof.cash + 1e-6
-        assert sum(p.dollars_at_risk for p in funded) <= 0.02 * prof.account_value + 1e-6
-        assert all(p.status == "actionable" and p.shares > 0 for p in funded)
-        assert all(p.status == "watch" for p in watch)
-        if funded:
-            assert set(table["ticker"]) >= {p.ticker for p in funded}
+    funded, watch, table = allocate_ideas(sample_results, "long", s)
+    prof = sample_results[0].profile
+    assert len(funded) <= 3
+    assert sum(p.notional for p in funded) <= prof.cash + 1e-6
+    assert sum(p.dollars_at_risk for p in funded) <= 0.02 * prof.account_value + 1e-6
+    assert all(p.status == "actionable" and p.shares > 0 for p in funded)
+    assert all(p.status == "watch" for p in watch)
+    if funded:
+        assert set(table["ticker"]) >= {p.ticker for p in funded}
+    with pytest.raises(ValueError, match="short tickets were removed"):
+        allocate_ideas(sample_results, "short", s)
 
 
 # --------------------------------------------------------------------------- exit plan
@@ -172,10 +142,10 @@ def test_exit_plan_gives_every_way_out_with_the_whole_positions_result(msft_shor
     first = st.trades["outcome"].str.split(" + ", regex=False).str[0]
     assert stop.history.startswith(f"{int((first == 'stop').sum())} of {st.n_trades} past setups")
     one = TradeSettings(partial_exit=0.3)
-    avoid = build_trade_plan(r, "short", one, with_stats=False)          # no short in this up-trend: no shares
-    assert avoid.shares == 0
-    t1_short = next(x for x in avoid.exit_plan() if x.name.startswith("Target 1"))
-    assert t1_short.pnl is None and t1_short.r == pytest.approx(0.3 * 2)  # per unit, with the configured partial
+    tiny = build_trade_plan(r, "long", one, cash=1.0, with_stats=False)   # $1 buys no share: a plan per unit
+    assert tiny.shares == 0
+    t1_unit = next(x for x in tiny.exit_plan() if x.name.startswith("Target 1"))
+    assert t1_unit.pnl is None and t1_unit.r == pytest.approx(0.3 * 2)    # per unit, with the configured partial
 
 
 # --------------------------------------------------------------------------- monitor
@@ -194,9 +164,6 @@ def test_monitor_reports_stop_and_targets(msft_short_horizon):
     ms = monitor_position(r, "long", 69.0, 30, "2017-05-01")       # the 2017-05-15 low (66.83) hit the plan stop
     assert ms.status == "STOP HIT" and "2017-05-15" in ms.action
     assert ms.r_multiple == pytest.approx(-1.0) and ms.pnl == pytest.approx(30 * (ms.initial_stop - 69.0))
-    ms = monitor_position(r, "short", 74.0, 10, "2017-09-01")
-    assert ms.status == "STOP HIT" and ms.r_multiple < 0
-    assert any("turned against this short" in a for a in ms.alerts)
     ms = monitor_position(r, "long", 83.0, 10, "2017-11-09", stop=82.5)   # 2017-11-10 high 84.10 reaches the 2R target 84.00
     assert ms.status == "TARGET 1 HIT" and ms.current_stop >= 83.0          # stop moved to breakeven or better
     assert ms.shares_open == 5 and ms.realised_pnl == pytest.approx(5 * 1.0)  # 5 sold at 84.00
@@ -218,7 +185,9 @@ def test_monitor_validates_inputs(msft_short_horizon):
     with pytest.raises(ValueError):
         monitor_position(r, "long", 80.0, 10, "2017-09-01", stop=85.0)       # stop above a long's entry
     with pytest.raises(ValueError):
-        monitor_position(r, "short", 80.0, 10, "2017-09-01", targets=[85.0])  # short target above entry
+        monitor_position(r, "long", 80.0, 10, "2017-09-01", targets=[75.0])   # target below the entry
+    with pytest.raises(ValueError, match="short tickets were removed"):
+        monitor_position(r, "short", 80.0, 10, "2017-09-01")
     with pytest.raises(ValueError):
         monitor_position(r, "long", 80.0, 10, "2030-01-01")                  # entry after the data
     with pytest.raises(ValueError):
@@ -235,7 +204,7 @@ def test_exit_plan_and_replay_with_no_partial_sale(msft_short_horizon):
     assert t1.pnl == 0.0 and t1.r == 0.0 and "Sell nothing" in t1.action
     ms = monitor_position(r, "long", 83.0, 10, "2017-11-09", stop=82.5, settings=s0)
     assert ms.status == "TARGET 1 HIT" and ms.shares_open == 10 and "keep all 10 shares" in ms.action
-    none = build_trade_plan(r, "short", TradeSettings(partial_exit=0.3), with_stats=False)
+    none = build_trade_plan(r, "long", TradeSettings(partial_exit=0.3), cash=1.0, with_stats=False)
     t1s = next(x for x in none.exit_plan() if x.name.startswith("Target 1"))
     assert "30% of the position" in t1s.action                     # not "half"
 
@@ -270,10 +239,9 @@ def test_long_horizon_buy_follows_the_trend_plan(msft_long_horizon):
     assert st.stopped_out + st.timed_out + st.trend_exited == pytest.approx(1.0)
     assert set(st.trades["outcome"]) <= {"stop", "trend exit", "signal exit"}
     assert all("average" in x.history for x in pl.exit_plan()[1:] if not x.history.startswith("never"))
-    # the R-target plan stays available, and shorts and the short horizon never use the trend plan
+    # the R-target plan stays available
     old = build_trade_plan(r, "long", TradeSettings(long_exit="targets"), with_stats=False)
     assert not old.is_trend_plan and len(old.targets) == 2 and old.time_stop_days == 252
-    assert not build_trade_plan(r, "short", with_stats=False).is_trend_plan
     with pytest.raises(ValueError):
         TradeSettings(long_exit="moon")
 

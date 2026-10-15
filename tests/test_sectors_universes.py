@@ -28,13 +28,12 @@ def tmp_cache(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_sector_falls_back_to_the_fundamentals_snapshot(tmp_cache):
+def test_sector_comes_from_the_curated_list_then_the_sector_cache(tmp_cache):
     (tmp_cache / "fundamentals").mkdir(parents=True)
-    (tmp_cache / "fundamentals" / "ZZA.json").write_text(json.dumps({"snapshot": {"ticker": "ZZA", "sector": "Energy"}}))
     (tmp_cache / "fundamentals" / "_sectors.json").write_text(
         json.dumps({"ZZB": {"sector": "Utilities", "as_of": datetime.now().isoformat()}}))
-    got = sectors_for(["AAPL", "zza", "ZZB", "ZZC"], source="sample")
-    assert got == {"AAPL": "Technology", "ZZA": "Energy", "ZZB": "Utilities", "ZZC": UNKNOWN_SECTOR}
+    got = sectors_for(["AAPL", "zza", "ZZB"], source="sample")
+    assert got == {"AAPL": "Technology", "ZZA": UNKNOWN_SECTOR, "ZZB": "Utilities"}
 
 
 def test_live_sector_lookup_is_cached(tmp_cache, monkeypatch):

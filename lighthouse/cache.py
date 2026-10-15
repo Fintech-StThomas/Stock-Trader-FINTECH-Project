@@ -24,9 +24,9 @@ T = TypeVar("T")
 RULE_ONLY_FIELDS = frozenset({
     "rebalance_threshold", "entry_score", "exit_score", "trend_gate", "exit_below_sma", "atr_stop",
     "decision_frequency", "score_smoothing", "trend_exit", "max_entry_distance", "bear_entry_penalty",
-    "bear_size_multiplier", "block_entries_in_bear_turbulent", "fundamental_gate_min", "reporting_lag_days",
+    "bear_size_multiplier", "block_entries_in_bear_turbulent",
     "bear_score_penalty", "turbulent_score_penalty", "cost_bps", "slippage_bps", "risk_free_rate",
-    "cost_model", "order_value", "resting_stops", "cash_yield", "short_borrow_fee",
+    "cost_model", "order_value", "resting_stops", "cash_yield",
 })
 
 _MAX_ENTRIES = 96

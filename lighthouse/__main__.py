@@ -1,10 +1,11 @@
 """Command-line interface.
 
   python -m lighthouse analyze MSFT --horizon long --risk balanced --max-loss 2 --cash 5000 --holdings 20000 --out reports
+                                                    # the rule's verdict and ticket, then the analyst memo (SEC filings)
   python -m lighthouse screen AAPL MSFT NVDA JPM --risk conservative
   python -m lighthouse backtest MSFT --years 15 --evaluate
-  python -m lighthouse trade MSFT AAPL JNJ --side long --cash 5000 --holdings 20000      # buy-now tickets for your cash
-  python -m lighthouse monitor MSFT --side long --entry 73.9 --shares 30 --date 2017-09-01 --source sample
+  python -m lighthouse trade MSFT AAPL JNJ --cash 5000 --holdings 20000                  # buy-now tickets for your cash
+  python -m lighthouse monitor MSFT --entry 73.9 --shares 30 --date 2017-09-01 --source sample
   python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000 --target-vol 0.12
   python -m lighthouse portfolio --goal balanced --cash 10000                           # Lighthouse picks the stocks
   python -m lighthouse trade --universe semiconductors --cash 5000                      # a pre-built universe
@@ -115,7 +116,7 @@ def _journal(a) -> int:
     open_now = j.open_positions()
     tickers = list(dict.fromkeys([t.upper() for t in a.tickers] + list(open_now["ticker"] if len(open_now) else [])))
     by, errors = analyze_many(tickers, prof, _params(a), years=a.years, source=a.source, run_backtest_=False)
-    rep = record_run([by[t] for t in a.tickers if t.upper() in by], a.sides, j, s,
+    rep = record_run([by[t] for t in a.tickers if t.upper() in by], ("long",), j, s,
                      allow_stale=True if a.allow_stale_data else None)
     rep.errors.update(errors)
     checks = check_positions(by, j, s, rep.run_id)
@@ -161,6 +162,19 @@ def _paper(j, by, checks, s, a) -> list:
             o = broker.submit(review_exit_order(c["ticker"], c["side"], c["shares"], c["decision_id"], c["status"]))
             lines.append(f"order: review exit {o.get('side')} {o.get('qty')} {o.get('symbol')} at the open")
     return lines
+
+
+def _memo_for(res, a) -> str:
+    """The analyst memo for an analysed stock, as Markdown; a one-line note when it cannot be built (no SEC filings,
+    no SEC contact e-mail, EDGAR unreachable)."""
+    from .analyst import memo as memo_mod
+    from .data import DataUnavailable
+    from .http import ConfigurationError
+    try:
+        return memo_mod.build(res.ticker, as_of=getattr(a, "as_of", None), source=a.source, result=res,
+                              peers=bool(getattr(a, "peers", False))).markdown()
+    except (DataUnavailable, ConfigurationError) as exc:
+        return f"_Analyst memo unavailable: {exc}_"
 
 
 def _memo(a) -> int:
@@ -245,7 +259,8 @@ def main(argv=None) -> int:
     a1.add_argument("ticker"); a1.add_argument("--out", help="folder for report + charts")
     a1.add_argument("--evaluate", action="store_true", help="also run layer attribution, sensitivity and walk-forward tests")
     a1.add_argument("--as-of", help="YYYY-MM-DD: what would Lighthouse have said on that day?")
-    a1.add_argument("--fundamentals-json", help="JSON fixture/override file for fundamentals")
+    a1.add_argument("--no-memo", action="store_true", help="leave out the analyst memo (it reads the SEC filings)")
+    a1.add_argument("--peers", action="store_true", help="add the memo's peer comparison (reads every same-industry filer)")
 
     def universe_opt(sp):
         sp.add_argument("--universe", help="add a pre-built universe's tickers (see: python -m lighthouse universes)")
@@ -257,7 +272,6 @@ def main(argv=None) -> int:
     a3.add_argument("ticker"); a3.add_argument("--evaluate", action="store_true")
 
     def trade_opts(sp):
-        sp.add_argument("--side", choices=["long", "short"], default="long")
         sp.add_argument("--targets", type=float, nargs=2, default=[2.0, 3.0], metavar=("R1", "R2"), help="take-profit levels in R")
         sp.add_argument("--partial", type=float, default=0.5, help="share of the position sold at target 1")
         sp.add_argument("--time-stop", type=int, default=None,
@@ -278,7 +292,7 @@ def main(argv=None) -> int:
     a6 = sub.add_parser("portfolio", help="allocate a basket, or build one for a goal, with a risk report"); common(a6)
     universe_opt(a6)
     a6.add_argument("tickers", nargs="*")
-    a6.add_argument("--method", default="risk_parity", help="equal_weight | inverse_vol | risk_parity | min_variance | max_sharpe | hrp")
+    a6.add_argument("--method", default="risk_parity", help="equal_weight | risk_parity | min_variance")
     a6.add_argument("--goal", help="preservation | balanced | growth | diversified (Lighthouse picks the stocks)")
     a6.add_argument("--max-weight", type=float, default=None); a6.add_argument("--max-sector", type=float, default=None)
     a6.add_argument("--target-vol", type=float, default=None, help="annual, e.g. 0.12; holds cash above it")
@@ -295,7 +309,6 @@ def main(argv=None) -> int:
     a7.add_argument("--due", action="store_true", help="watch: print true when the last finished session is the "
                     "month's last NYSE session (a snapshot is due), false otherwise; records nothing")
     a7.add_argument("tickers", nargs="*")
-    a7.add_argument("--sides", nargs="+", default=["long"], choices=["long", "short"])
     a7.add_argument("--journal", help="journal file (default data/journal/lighthouse_journal.sqlite or LIGHTHOUSE_JOURNAL)")
     a7.add_argument("--paper", action="store_true", help="mirror the tickets at Alpaca's paper account (keys from the "
                     "environment; a dry run without them)")
@@ -311,7 +324,7 @@ def main(argv=None) -> int:
     a8.add_argument("--out", help="folder for the Markdown file")
     a8.add_argument("--no-peers", action="store_true", help="skip the peer search (it reads every same-industry filer)")
     a8.add_argument("--peer-norms", action="store_true", help="add the fundamental beacons on the memo's numbers, "
-                    "scored against the peer medians instead of the sector norms (the verdict keeps the sector norms)")
+                    "scored against the peer medians instead of the sector norms")
     a8.add_argument("--no-signals", action="store_true", help="leave out the rule-based verdict")
     a8.add_argument("--open-thesis", action="store_true", help="save the thesis and its kill criteria to the journal")
     a8.add_argument("--journal", help="journal file (default data/journal/lighthouse_journal.sqlite or LIGHTHOUSE_JOURNAL)")
@@ -349,15 +362,22 @@ def main(argv=None) -> int:
         print("give tickers, or --universe NAME", file=sys.stderr); return 1
 
     if a.cmd in {"analyze", "backtest"}:
-        res = analyze(a.ticker, _profile(a), _params(a), years=a.years, source=a.source,
-                      as_of=getattr(a, "as_of", None), fundamentals_fixture=getattr(a, "fundamentals_json", None))
+        res = analyze(a.ticker, _profile(a), _params(a), years=a.years, source=a.source, as_of=getattr(a, "as_of", None))
         if a.evaluate:
             print("running layer attribution, sensitivity grid and walk-forward test ...", file=sys.stderr)
             res.evaluate()
         if a.cmd == "analyze":
             print(res.report())
+            memo_text = None if a.no_memo else _memo_for(res, a)
+            if memo_text:
+                print("\n" + memo_text)
             if a.out:
                 for pth in res.save(a.out):
+                    print(f"wrote {pth}", file=sys.stderr)
+                if memo_text:
+                    from pathlib import Path
+                    pth = Path(a.out) / f"{res.ticker}_memo.md"
+                    pth.write_text(memo_text)
                     print(f"wrote {pth}", file=sys.stderr)
         else:
             if res.backtest is None:
@@ -379,7 +399,7 @@ def main(argv=None) -> int:
         if a.cmd == "monitor":
             # keep today's bar: a stop hit during today's session must show, and an entry made today must replay
             res = analyze(a.ticker, prof, _params(a), years=a.years, source=a.source, run_backtest_=False, keep_partial=True)
-            ms = monitor_position(res, a.side, a.entry, a.shares, a.date, stop=a.stop, settings=s)
+            ms = monitor_position(res, "long", a.entry, a.shares, a.date, stop=a.stop, settings=s)
             print(f"{ms.ticker} {ms.side} · {ms.status}\n{ms.action}")
             for day, n, px, why in ms.exits:
                 print(f"  {day}: {why}, {n} shares at ${px:,.2f}")
@@ -396,7 +416,7 @@ def main(argv=None) -> int:
         results = list(by.values())
         from .tradeplan import StaleDataError
         try:
-            funded, watch, table = allocate_ideas(results, a.side, s, with_stats=True,
+            funded, watch, table = allocate_ideas(results, "long", s, with_stats=True,
                                                   allow_stale=True if a.allow_stale_data else None)
         except StaleDataError as exc:
             print(exc, file=sys.stderr)
@@ -417,7 +437,7 @@ def main(argv=None) -> int:
             for w in pl.warnings[:2]:
                 print("! " + w)
         if not funded:
-            print(f"no actionable {a.side} setup in {', '.join(a.tickers)}")
+            print(f"no actionable setup in {', '.join(a.tickers)}")
         if len(table):
             print("\n" + table[["ticker", "status", "score", "shares", "cost", "stop", "target1", "target2", "trend_exit",
                                  "risk_usd"]].to_string(index=False))
@@ -450,7 +470,7 @@ def main(argv=None) -> int:
 
     if a.cmd == "screen":
         df = screen(a.tickers, _profile(a), _params(a), years=a.years, source=a.source)
-        show = df[["ticker", "name", "verdict", "score", "fundamental", "technical", "regime", "position_pct", "price", "error"]]
+        show = df[["ticker", "name", "verdict", "score", "technical", "regime", "position_pct", "price", "error"]]
         print(show.to_string())
         if a.csv:
             df.to_csv(a.csv)

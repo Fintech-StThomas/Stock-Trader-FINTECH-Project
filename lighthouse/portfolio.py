@@ -6,18 +6,17 @@ Estimation
 ----------
 * Covariance : Ledoit & Wolf (2004) shrinkage of the sample covariance toward a scaled identity. The sample matrix is
                noisy when stocks are many relative to the history; shrinkage makes it stable and invertible.
-* Returns    : historical means are the noisiest input in finance, so the Max-Sharpe method uses the Bayes-Stein
-               estimator (Jorion 1986), which shrinks each stock's mean toward the minimum-variance portfolio's mean.
-               All other methods use only the covariance.
+* Returns    : not used. Historical means are the noisiest input in finance; no method here needs them.
 
 Allocation methods (all long-only, fully invested before any volatility-target cash buffer)
 -----------------------------------------------------------------------------------------
-equal_weight   1/N. Hard to beat out-of-sample (DeMiguel, Garlappi & Uppal 2009); the honest baseline.
-inverse_vol    weight ∝ 1 / volatility. Ignores correlations.
+equal_weight   1/N. Hard to beat out-of-sample (DeMiguel, Garlappi & Uppal 2009); the honest baseline, and the best
+               Sharpe ratio on the app's default basket.
 risk_parity    equal risk contribution (Maillard, Roncalli & Teïletche 2010), solved with Spinu's (2013) convex form.
-min_variance   the lowest-volatility mix (uses correlations; tends to concentrate in defensive names).
-max_sharpe     the highest expected return per unit of risk, with Bayes-Stein returns; the most estimation-sensitive.
-hrp            hierarchical risk parity (López de Prado 2016): cluster by correlation, then split risk top-down.
+min_variance   the lowest-volatility mix (uses correlations; tends to concentrate in defensive names); the smallest
+               drawdown on the default basket.
+Inverse volatility, maximum Sharpe (Bayes-Stein returns) and hierarchical risk parity were removed in October 2026: on
+the default basket none beat 1/N, and maximum Sharpe did worst with the most turnover (docs/METHODOLOGY.md section 10).
 
 Weight caps (per stock, per sector) are applied inside the optimisers, or by projecting a heuristic's weights onto the
 caps (closest feasible weights). A volatility target holds cash when the expected volatility is above the target.
@@ -42,11 +41,8 @@ from .universe import UNKNOWN_SECTOR, sectors_for
 TRADING_DAYS = 252
 METHODS: Dict[str, str] = {
     "equal_weight": "Equal weight (1/N)",
-    "inverse_vol": "Inverse volatility",
     "risk_parity": "Risk parity (equal risk contribution)",
     "min_variance": "Minimum variance",
-    "max_sharpe": "Maximum Sharpe (Bayes-Stein returns)",
-    "hrp": "Hierarchical risk parity",
 }
 # Market stress windows (S&P 500 closing peak -> trough) used for the stress test when the data covers them.
 STRESS_WINDOWS: List[Tuple[str, str, str]] = [
@@ -173,38 +169,19 @@ def ledoit_wolf(returns: np.ndarray) -> Tuple[np.ndarray, float]:
     return shrink * target + (1.0 - shrink) * s, shrink
 
 
-def bayes_stein_means(returns: np.ndarray, cov: np.ndarray) -> Tuple[np.ndarray, float]:
-    """Jorion (1986) Bayes-Stein means: shrink sample means toward the minimum-variance portfolio's mean.
-    Intensity phi = (N + 2) / ((N + 2) + T (mu - mu0)' S^-1 (mu - mu0)). Returns (means, phi)."""
-    x = np.asarray(returns, dtype=float)
-    t, n = x.shape
-    mu = x.mean(axis=0)
-    inv = np.linalg.pinv(cov)
-    ones = np.ones(n)
-    mu0 = float(ones @ inv @ mu / (ones @ inv @ ones))
-    diff = mu - mu0
-    q = float(t * diff @ inv @ diff)
-    phi = float(min(1.0, (n + 2) / ((n + 2) + q))) if q > 0 else 1.0
-    return (1.0 - phi) * mu + phi * mu0, phi
-
-
 @dataclass
 class Estimates:
     cov: np.ndarray            # annualised covariance (Ledoit-Wolf)
     vol: np.ndarray            # annualised volatility per stock
-    mu_hist: np.ndarray        # annualised historical mean return (arithmetic)
-    mu_bs: np.ndarray          # annualised Bayes-Stein mean return
+    mu_hist: np.ndarray        # annualised historical mean return (arithmetic): reported, never optimised on
     shrinkage: float
-    bs_intensity: float
 
 
 def estimate(window: pd.DataFrame) -> Estimates:
     x = window.to_numpy(dtype=float)
     cov_d, shrink = ledoit_wolf(x)
-    mu_bs_d, phi = bayes_stein_means(x, cov_d)
     cov = cov_d * TRADING_DAYS
-    return Estimates(cov=cov, vol=np.sqrt(np.diag(cov)), mu_hist=x.mean(axis=0) * TRADING_DAYS, mu_bs=mu_bs_d * TRADING_DAYS,
-                     shrinkage=shrink, bs_intensity=phi)
+    return Estimates(cov=cov, vol=np.sqrt(np.diag(cov)), mu_hist=x.mean(axis=0) * TRADING_DAYS, shrinkage=shrink)
 
 
 # --------------------------------------------------------------------------- #
@@ -264,37 +241,6 @@ def _min_variance(cov: np.ndarray, cons, sectors) -> np.ndarray:
     return _solve(lambda w: float(w @ cov @ w), lambda w: 2.0 * cov @ w, np.full(n, 1.0 / n), cons, sectors)
 
 
-def _max_sharpe(mu: np.ndarray, cov: np.ndarray, rf: float, cons, sectors) -> Tuple[np.ndarray, str]:
-    """Tangency portfolio via the convex reformulation: min y'Σy s.t. (mu - rf)'y = 1, y >= 0, caps scaled by sum(y)."""
-    from scipy.optimize import minimize
-    n = len(mu)
-    ex = mu - rf
-    if not (ex > 0).any():
-        return _min_variance(cov, cons, sectors), "No stock has an expected return above the risk-free rate, so the maximum-Sharpe " \
-                                                  "portfolio is undefined; minimum variance is used instead."
-    c = [{"type": "eq", "fun": lambda y: ex @ y - 1.0, "jac": lambda y: ex},
-         {"type": "ineq", "fun": lambda y: cons.max_weight * np.sum(y) - y, "jac": lambda y: cons.max_weight * np.ones((n, n)) - np.eye(n)}]
-    if cons.min_weight > 0:
-        c.append({"type": "ineq", "fun": lambda y: y - cons.min_weight * np.sum(y), "jac": lambda y: np.eye(n) - cons.min_weight * np.ones((n, n))})
-    if cons.max_sector_weight is not None and sectors is not None and len(_sector_matrix(sectors, n)[0]):
-        _, m = _sector_matrix(sectors, n)
-        c.append({"type": "ineq", "fun": lambda y, m=m: cons.max_sector_weight * np.sum(y) - m @ y,
-                  "jac": lambda y, m=m: cons.max_sector_weight * np.ones((len(m), n)) - m})
-    w0 = np.full(n, 1.0 / n)
-    if ex @ w0 <= 0:
-        w0 = (ex > 0).astype(float) / float((ex > 0).sum())
-    y0 = w0 / float(ex @ w0)
-    res = minimize(lambda y: float(y @ cov @ y), y0, jac=lambda y: 2.0 * cov @ y, method="SLSQP", bounds=[(0.0, None)] * n,
-                   constraints=c, options={"maxiter": 1000, "ftol": 1e-14})
-    y = np.clip(res.x, 0.0, None)
-    if y.sum() <= 0:
-        raise RuntimeError(f"max-Sharpe optimisation failed ({res.message})")
-    w = y / y.sum()
-    if not _feasible(w, cons, sectors, tol=1e-4):
-        w = project_to_constraints(w, cons, sectors)
-    return w, ""
-
-
 def _risk_parity(cov: np.ndarray, cons, sectors) -> Tuple[np.ndarray, str]:
     from scipy.optimize import minimize
     n = len(cov)
@@ -316,42 +262,6 @@ def _risk_parity(cov: np.ndarray, cons, sectors) -> Tuple[np.ndarray, str]:
     return w, "The weight caps bind, so risk contributions are equalised as far as the caps allow."
 
 
-def _hrp(cov: np.ndarray) -> np.ndarray:
-    """López de Prado (2016): single-linkage clustering on the correlation distance sqrt((1 - rho) / 2), quasi-diagonal
-    ordering, then recursive bisection with inverse-variance weights inside each cluster."""
-    from scipy.cluster.hierarchy import leaves_list, linkage
-    from scipy.spatial.distance import squareform
-    n = len(cov)
-    if n == 1:
-        return np.ones(1)
-    sd = np.sqrt(np.diag(cov))
-    corr = np.clip(cov / np.outer(sd, sd), -1.0, 1.0)
-    dist = np.sqrt(np.clip((1.0 - corr) / 2.0, 0.0, 1.0))
-    np.fill_diagonal(dist, 0.0)
-    order = list(leaves_list(linkage(squareform(dist, checks=False), method="single")))
-    w = np.ones(n)
-
-    def cluster_var(idx):
-        c = cov[np.ix_(idx, idx)]
-        ivp = 1.0 / np.diag(c)
-        ivp /= ivp.sum()
-        return float(ivp @ c @ ivp)
-
-    stack = [order]
-    while stack:
-        items = stack.pop()
-        if len(items) < 2:
-            continue
-        half = len(items) // 2
-        left, right = items[:half], items[half:]
-        v_l, v_r = cluster_var(left), cluster_var(right)
-        alpha = 1.0 - v_l / (v_l + v_r)
-        w[left] *= alpha
-        w[right] *= 1.0 - alpha
-        stack += [left, right]
-    return w / w.sum()
-
-
 def optimize(window: pd.DataFrame, method: str, constraints: Optional[PortfolioConstraints] = None,
              sectors: Optional[Sequence[str]] = None, risk_free_rate: float = 0.02,
              est: Optional[Estimates] = None) -> Tuple[pd.Series, List[str]]:
@@ -366,21 +276,11 @@ def optimize(window: pd.DataFrame, method: str, constraints: Optional[PortfolioC
     n = len(tickers)
     if method == "equal_weight":
         w = project_to_constraints(np.full(n, 1.0 / n), cons, sectors)
-    elif method == "inverse_vol":
-        w = project_to_constraints((1.0 / est.vol) / np.sum(1.0 / est.vol), cons, sectors)
     elif method == "min_variance":
         w = _min_variance(est.cov, cons, sectors)
-    elif method == "max_sharpe":
-        w, note = _max_sharpe(est.mu_bs, est.cov, risk_free_rate, cons, sectors)
-        notes += [note] if note else []
-    elif method == "risk_parity":
+    else:
         w, note = _risk_parity(est.cov, cons, sectors)
         notes += [note] if note else []
-    else:
-        raw = _hrp(est.cov)
-        w = project_to_constraints(raw, cons, sectors)
-        if not np.allclose(w, raw, atol=1e-6):
-            notes.append("HRP weights were adjusted to respect the caps.")
     w = np.where(w < 1e-6, 0.0, w)
     return pd.Series(w / w.sum(), index=tickers, name="weight"), notes
 
@@ -425,7 +325,6 @@ def risk_report(weights: pd.Series, returns: pd.DataFrame, benchmark_returns: Op
     out: Dict[str, object] = {
         "expected_vol": vol_exp,
         "hist_return": float(rp.mean() * TRADING_DAYS),
-        "bs_return": float(w @ est.mu_bs),
         "hist_vol": m["volatility"],
         "sharpe": m["sharpe"],
         "sortino": m["sortino"],
@@ -642,13 +541,12 @@ GOALS: Dict[str, Goal] = {
                      "The stocks with the strongest Lighthouse technical scores, with risk spread evenly so no single stock "
                      "or sector dominates.", n_stocks=10, max_weight=0.20, max_sector_weight=0.40, min_technical=45.0,
                      keep_rank=float("inf")),
-    "growth": Goal("growth", "Growth", "max_sharpe", "momentum",
-                   "The strongest 12-month momentum among stocks in an up-trend, weighted for the best expected return per "
-                   "unit of risk. Higher volatility; the most estimation-sensitive method.",
+    "growth": Goal("growth", "Growth", "equal_weight", "momentum",
+                   "The strongest 12-month momentum among stocks in an up-trend, in equal weights (no estimate of their "
+                   "returns, the input that misleads optimisers most). Higher volatility.",
                    n_stocks=8, max_weight=0.25, max_sector_weight=0.50, require_uptrend=True, keep_rank=float("inf")),
-    "diversified": Goal("diversified", "Maximum diversification", "hrp", "technical",
-                        "Many stocks across sectors, weighted by hierarchical risk parity so correlated clusters share one "
-                        "risk budget.", n_stocks=15, max_weight=0.15, max_sector_weight=0.30, min_technical=45.0,
+    "diversified": Goal("diversified", "Maximum diversification", "risk_parity", "technical",
+                        "Many stocks across sectors (15, at most 15% each and 30% per sector), with risk spread evenly.", n_stocks=15, max_weight=0.15, max_sector_weight=0.30, min_technical=45.0,
                         keep_rank=float("inf")),
 }
 

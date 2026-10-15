@@ -248,9 +248,8 @@ def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: boo
     t = ticker.upper().strip()
     notes: List[str] = []
     prices = result.prices if result is not None else load_prices(t, years=11, end=as_of, source=source)
-    actions = result.actions if result is not None and result.actions is not None else load_actions(t, source=source)
-    statements = result.pit_statements if result is not None and result.pit_statements is not None else \
-        load_statements(t, source=source)
+    actions = load_actions(t, source=source)
+    statements = load_statements(t, source=source)
     if statements.quarterly is None or statements.quarterly.empty:
         raise DataUnavailable(f"{t}: no SEC filings to build a memo from ({'; '.join(statements.notes) or 'not a US filer'})")
     f = financials_as_of(t, statements, prices, actions, as_of)

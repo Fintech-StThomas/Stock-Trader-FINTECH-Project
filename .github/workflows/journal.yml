@@ -58,7 +58,7 @@ jobs:
           else
             set -- $WATCHLIST
           fi
-          python -m lighthouse journal run "$@" --cash "$CASH" --sides long --paper \
+          python -m lighthouse journal run "$@" --cash "$CASH" --paper \
             --summary "$GITHUB_STEP_SUMMARY" --alerts alerts.txt
       - name: Score and export
         run: |

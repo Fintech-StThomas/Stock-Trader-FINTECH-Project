@@ -9,7 +9,6 @@ import pytest
 
 from lighthouse import edgar, http, pit
 from lighthouse.data import DataUnavailable
-from lighthouse.fundamentals import StatementHistory, point_in_time_scores
 from lighthouse.total_return import load_actions
 
 FIX = Path(__file__).parent / "fixtures" / "edgar"
@@ -146,23 +145,6 @@ def test_http_retries_on_throttling(monkeypatch):
     with pytest.raises(DataUnavailable):
         http.fetch("https://data.sec.gov/y")
     assert len(calls) == 1                                    # a 404 is not retried
-
-
-def test_pit_scores_use_filing_dates_and_are_causal():
-    from lighthouse import analyze, InvestorProfile
-    r = analyze("AAPL", InvestorProfile(), source="sample", years=40, run_backtest_=False)
-    a = r.pit_statements.annual
-    pit_s = r.pit_scores
-    first_filed = pd.to_datetime(a["filed"]).min()
-    assert pit_s[pit_s.index <= first_filed].isna().all()            # nothing before the first filing is known
-    assert pit_s[pit_s.index > first_filed + pd.Timedelta(days=5)].notna().any()
-    # removing every statement filed after D leaves every score up to D unchanged
-    for cut in ("2014-03-31", "2019-06-28"):
-        trunc = StatementHistory(annual=a[pd.to_datetime(a["filed"]) <= cut], source="test")
-        s2 = point_in_time_scores(r.prices, trunc, "Technology", r.params, actions=r.actions)
-        s1 = point_in_time_scores(r.prices, r.pit_statements, "Technology", r.params, actions=r.actions)
-        m = s1.index <= pd.Timestamp(cut)
-        pd.testing.assert_series_equal(s1[m], s2[m])
 
 
 def test_pe_uses_eps_in_the_price_series_units():

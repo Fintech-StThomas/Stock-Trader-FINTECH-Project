@@ -27,7 +27,6 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .fundamentals import FundamentalSnapshot, StatementHistory
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_DIR = PACKAGE_DIR.parent
@@ -76,6 +75,17 @@ class CleaningReport:
                  f"volume {'available' if self.volume_available else 'NOT available'}"]
         lines += [f"  note: {n}" for n in self.notes]
         return "\n".join(lines)
+
+
+def _f(x) -> Optional[float]:
+    """A finite float, or None."""
+    try:
+        if x is None:
+            return None
+        v = float(x)
+        return v if np.isfinite(v) else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -357,7 +367,8 @@ def _from_yfinance(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
     return hist
 
 
-_META_KEYS = ("regularMarketPrice", "regularMarketTime", "exchangeTimezoneName", "currentTradingPeriod")
+_META_KEYS = ("regularMarketPrice", "regularMarketTime", "exchangeTimezoneName", "currentTradingPeriod", "longName",
+              "shortName")
 
 
 def _slim_meta(meta) -> dict:
@@ -592,6 +603,7 @@ def load_prices(ticker: str, years: Optional[float] = 10, start=None, end=None,
     df.attrs["attempts"] = attempts
     df.attrs["partial_bar"] = partial
     df.attrs["quote"] = quote
+    df.attrs["name"] = str((feed_meta or {}).get("longName") or (feed_meta or {}).get("shortName") or "") if used == "yfinance" else ""
     return df
 
 
@@ -674,208 +686,13 @@ def align(prices: pd.DataFrame, benchmark: pd.DataFrame) -> Tuple[pd.DataFrame, 
 
 
 # --------------------------------------------------------------------------- #
-# Fundamentals
+# Sectors (Yahoo's profile; fundamentals themselves come from SEC EDGAR: lighthouse.pit, lighthouse.analyst)
 # --------------------------------------------------------------------------- #
-_LINE_ITEMS = {
-    "revenue": ["Total Revenue", "Operating Revenue", "Revenue"],
-    "net_income": ["Net Income", "Net Income Common Stockholders", "Net Income Continuous Operations"],
-    "eps": ["Diluted EPS", "Basic EPS"],
-    "operating_income": ["Operating Income", "EBIT", "Total Operating Income As Reported"],
-    "ebitda": ["EBITDA", "Normalized EBITDA"],
-    "equity": ["Stockholders Equity", "Common Stock Equity", "Total Equity Gross Minority Interest"],
-    "total_debt": ["Total Debt", "Long Term Debt And Capital Lease Obligation", "Long Term Debt"],
-    "cash": ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments", "Cash Financial"],
-    "current_assets": ["Current Assets", "Total Current Assets"],
-    "current_liabilities": ["Current Liabilities", "Total Current Liabilities"],
-    "fcf": ["Free Cash Flow"],
-    "operating_cash_flow": ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities"],
-    "capex": ["Capital Expenditure"],
-    "shares": ["Diluted Average Shares", "Basic Average Shares", "Ordinary Shares Number", "Share Issued"],
-}
-
-
-def _pick(frame: Optional[pd.DataFrame], names: List[str]) -> Optional[pd.Series]:
-    if frame is None or frame is False or len(frame) == 0:
-        return None
-    for n in names:
-        if n in frame.index:
-            s = pd.to_numeric(frame.loc[n], errors="coerce")
-            if isinstance(s, pd.DataFrame):
-                s = s.iloc[0]
-            return s
-    return None
-
-
-def _statements_to_frame(inc, bs, cf) -> pd.DataFrame:
-    cols = {}
-    for key, names in _LINE_ITEMS.items():
-        for frame in (inc, bs, cf):
-            s = _pick(frame, names)
-            if s is not None:
-                cols[key] = s
-                break
-    if not cols:
-        return pd.DataFrame()
-    df = pd.DataFrame(cols)
-    df.index = pd.to_datetime(df.index)
-    if getattr(df.index, "tz", None) is not None:
-        df.index = df.index.tz_localize(None)
-    df = df.sort_index()
-    df.index.name = "period_end"
-    if "fcf" not in df and {"operating_cash_flow", "capex"} <= set(df.columns):
-        df["fcf"] = df["operating_cash_flow"] + df["capex"]   # capex is reported negative
-    return df.dropna(how="all")
-
-
-def _f(x) -> Optional[float]:
-    try:
-        if x is None:
-            return None
-        v = float(x)
-        return v if np.isfinite(v) else None
-    except (TypeError, ValueError):
-        return None
-
-
-def _snapshot_from_yfinance(ticker: str, info: dict, hist: StatementHistory, price: Optional[float]) -> FundamentalSnapshot:
-    g = lambda k: _f(info.get(k))  # noqa: E731
-    a = hist.annual
-    q = hist.quarterly
-    last = a.iloc[-1] if len(a) else pd.Series(dtype=float)
-    prev = a.iloc[-2] if len(a) > 1 else pd.Series(dtype=float)
-
-    price = g("currentPrice") or g("regularMarketPrice") or price
-    market_cap = g("marketCap")
-    shares = g("sharesOutstanding") or _f(last.get("shares"))
-    if market_cap is None and price and shares:
-        market_cap = price * shares
-
-    # trailing EPS: prefer the sum of the last four quarters, then the last annual figure
-    eps_ttm = None
-    if len(q) >= 4 and "eps" in q:
-        eps_ttm = _f(q["eps"].tail(4).sum()) if q["eps"].tail(4).notna().all() else None
-    eps_ttm = g("trailingEps") or eps_ttm or _f(last.get("eps"))
-
-    equity, debt, cash = _f(last.get("equity")), _f(last.get("total_debt")), _f(last.get("cash"))
-    ebitda, revenue, ni = _f(last.get("ebitda")), _f(last.get("revenue")), _f(last.get("net_income"))
-    fcf = g("freeCashflow") or _f(last.get("fcf"))
-
-    pe = g("trailingPE") or ((price / eps_ttm) if price and eps_ttm and eps_ttm > 0 else None)
-    if pe is None and price and eps_ttm is not None and eps_ttm <= 0:
-        pe = -1.0   # sentinel: unprofitable
-    pb = g("priceToBook") or ((market_cap / equity) if market_cap and equity and equity > 0 else None)
-    ev = g("enterpriseValue") or ((market_cap + (debt or 0) - (cash or 0)) if market_cap else None)
-    ev_ebitda = g("enterpriseToEbitda") or ((ev / ebitda) if ev and ebitda and ebitda > 0 else None)
-
-    # growth: annual statement growth is the primary (stable) measure; Yahoo's quarterly YoY is the fallback
-    rev_g = None
-    if _f(last.get("revenue")) and _f(prev.get("revenue")):
-        rev_g = last["revenue"] / prev["revenue"] - 1.0
-    rev_g = _f(rev_g) if rev_g is not None else g("revenueGrowth")
-    eps_g = None
-    if _f(last.get("eps")) and _f(prev.get("eps")) and prev["eps"] > 0:
-        eps_g = last["eps"] / prev["eps"] - 1.0
-    eps_g = _f(eps_g) if eps_g is not None else g("earningsGrowth")
-
-    peg = g("pegRatio") or g("trailingPegRatio")
-    if peg is None and pe and pe > 0 and eps_g and eps_g > 0:
-        peg = pe / (eps_g * 100.0)
-
-    roe = g("returnOnEquity")
-    if roe is None and ni is not None and equity and equity > 0:
-        roe = ni / equity
-    op_margin = g("operatingMargins")
-    if op_margin is None and _f(last.get("operating_income")) and revenue:
-        op_margin = last["operating_income"] / revenue
-    profit_margin = g("profitMargins") or ((ni / revenue) if ni is not None and revenue else None)
-    de = g("debtToEquity")
-    de = de / 100.0 if de is not None else ((debt / equity) if debt is not None and equity and equity > 0 else None)
-    cr = g("currentRatio")
-    if cr is None and _f(last.get("current_assets")) and _f(last.get("current_liabilities")):
-        cr = last["current_assets"] / last["current_liabilities"]
-    # dividend yield: Yahoo's `dividendYield` switched from a fraction to a percent (0.0073 -> 0.73), so it is
-    # ambiguous for small yields. Prefer the unambiguous annual dividend per share / price, then the trailing fraction.
-    div = None
-    rate = g("dividendRate")
-    if rate is not None and price:
-        div = rate / price
-    if div is None:
-        div = g("trailingAnnualDividendYield")
-    if div is None:
-        div = g("dividendYield")
-        if div is not None and div > 0.3:   # only a percent reading can exceed 30%; anything smaller stays ambiguous
-            div = div / 100.0
-
-    return FundamentalSnapshot(
-        ticker=ticker, name=info.get("shortName") or info.get("longName") or ticker,
-        sector=info.get("sector"), industry=info.get("industry"), currency=info.get("currency") or "USD",
-        price=price, market_cap=market_cap, pe_trailing=pe, pe_forward=g("forwardPE"), peg=peg, pb=pb,
-        ev_ebitda=ev_ebitda, roe=roe, operating_margin=op_margin, profit_margin=profit_margin,
-        debt_to_equity=de, current_ratio=cr, fcf=fcf,
-        fcf_yield=(fcf / market_cap) if fcf is not None and market_cap else None,
-        revenue_growth=rev_g, eps_growth=eps_g, dividend_yield=div, beta=g("beta"),
-        analyst_target=g("targetMeanPrice"), analyst_count=g("numberOfAnalystOpinions"),
-        as_of=datetime.now().strftime("%Y-%m-%d"), source="yfinance",
-    )
-
-
-def _fundamentals_from_yfinance(ticker: str, last_price: Optional[float]) -> Tuple[FundamentalSnapshot, StatementHistory]:
-    import yfinance as yf
-    t = yf.Ticker(ticker)
-    try:
-        info = dict(t.info or {})
-    except Exception:  # noqa: BLE001
-        info = {}
-    def grab(attr):
-        try:
-            v = getattr(t, attr)
-            return v if isinstance(v, pd.DataFrame) and len(v) else None
-        except Exception:  # noqa: BLE001
-            return None
-    annual = _statements_to_frame(grab("income_stmt"), grab("balance_sheet"), grab("cashflow"))
-    quarterly = _statements_to_frame(grab("quarterly_income_stmt"), grab("quarterly_balance_sheet"), grab("quarterly_cashflow"))
-    hist = StatementHistory(annual=annual, quarterly=quarterly)
-    if not info and annual.empty:
-        raise DataUnavailable(f"yfinance returned no fundamentals for {ticker}")
-    snap = _snapshot_from_yfinance(ticker, info, hist, last_price)
-    return snap, hist
-
-
-def _fundamentals_to_json(snap: FundamentalSnapshot, hist: StatementHistory) -> dict:
-    def frame_rows(df: pd.DataFrame) -> list:
-        if df is None or df.empty:
-            return []
-        out = df.copy()
-        out.insert(0, "period_end", [d.strftime("%Y-%m-%d") for d in out.index])
-        return json.loads(out.to_json(orient="records"))
-    return {"snapshot": snap.to_dict(), "annual": frame_rows(hist.annual), "quarterly": frame_rows(hist.quarterly)}
-
-
-def _fundamentals_from_json(path: Path, ticker: str) -> Tuple[FundamentalSnapshot, StatementHistory]:
-    payload = json.loads(Path(path).read_text())
-    snap = FundamentalSnapshot.from_dict({**payload.get("snapshot", {}), "ticker": ticker})
-    def rows_to_frame(rows: list) -> pd.DataFrame:
-        if not rows:
-            return pd.DataFrame()
-        df = pd.DataFrame(rows)
-        df["period_end"] = pd.to_datetime(df["period_end"])
-        return df.set_index("period_end").sort_index().apply(pd.to_numeric, errors="coerce")
-    return snap, StatementHistory(annual=rows_to_frame(payload.get("annual", [])),
-                                  quarterly=rows_to_frame(payload.get("quarterly", [])))
-
-
 SECTOR_CACHE_DAYS = 30
 
 
 def _sector_cache_file() -> Path:
     return CACHE_DIR / "fundamentals" / "_sectors.json"
-
-
-def _sector_from_snapshot_file(path: Path) -> Optional[str]:
-    try:
-        return json.loads(path.read_text()).get("snapshot", {}).get("sector") or None
-    except (OSError, ValueError, AttributeError):
-        return None
 
 
 _NO_SECTOR_TYPES = {"ETF", "MUTUALFUND", "INDEX", "CURRENCY", "CRYPTOCURRENCY", "FUTURE"}
@@ -891,23 +708,12 @@ def _sector_from_yfinance(ticker: str) -> Tuple[Optional[str], bool]:
 
 
 def load_sectors(tickers: List[str], source: str = "auto", max_workers: int = 8) -> Dict[str, Optional[str]]:
-    """The sector each ticker's fundamentals snapshot reports (Yahoo's `info["sector"]`), or None when there is none
-    (ETFs, unknown symbols, no connection).
-
-    Looks in the fundamentals cache and the sample fixtures first (a sector rarely changes, so any age is fine), then a
-    small sector cache, then asks Yahoo for the missing ones in parallel (only `info`, not the statements) and caches
-    the answers for SECTOR_CACHE_DAYS days.
+    """The sector Yahoo's profile reports for each ticker (`info["sector"]`), or None when there is none (ETFs, unknown
+    symbols, no connection). A small sector cache first, then Yahoo for the missing ones in parallel; the answers are
+    cached for SECTOR_CACHE_DAYS days.
     """
-    out: Dict[str, Optional[str]] = {}
-    for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip()):
-        sec = None
-        for p in (_cache_path("fundamentals", t), SAMPLE_DIR / "fundamentals" / f"{t}.json"):
-            if p.exists():
-                sec = _sector_from_snapshot_file(p)
-                if sec:
-                    break
-        out[t] = sec
-    missing = [t for t, s in out.items() if s is None]
+    out: Dict[str, Optional[str]] = {t: None for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip())}
+    missing = list(out)
     if not missing:
         return out
     cache_file = _sector_cache_file()
@@ -952,71 +758,3 @@ def load_sectors(tickers: List[str], source: str = "auto", max_workers: int = 8)
     except OSError:
         pass
     return out
-
-
-def load_fundamentals(ticker: str, source: str = "auto", last_price: Optional[float] = None,
-                      overrides: Optional[Dict[str, float]] = None,
-                      fixture_path: Optional[str] = None) -> Tuple[FundamentalSnapshot, StatementHistory]:
-    """Load the fundamental snapshot and statement history for `ticker`.
-
-    `overrides` lets a non-programmer type in their own numbers (e.g. from a broker
-    page) when a feed is missing a field; `fixture_path` loads a JSON file in the
-    same format Lighthouse writes to its cache.
-    """
-    ticker = ticker.upper().strip()
-    attempts: List[str] = []
-    snap: Optional[FundamentalSnapshot] = None
-    hist = StatementHistory()
-
-    if fixture_path:
-        order = ["fixture"]
-    elif source == "auto":
-        order = ["cache", "sample"] if offline_mode() else ["cache", "yfinance", "stale-cache", "sample"]
-    else:
-        order = [source]
-
-    for src in order:
-        try:
-            if src == "fixture":
-                snap, hist = _fundamentals_from_json(Path(fixture_path), ticker)
-            elif src == "yfinance":
-                snap, hist = _fundamentals_from_yfinance(ticker, last_price)
-                try:
-                    p = _cache_path("fundamentals", ticker)
-                    p.parent.mkdir(parents=True, exist_ok=True)
-                    p.write_text(json.dumps(_fundamentals_to_json(snap, hist), indent=1, default=str))
-                except OSError:
-                    pass
-            elif src in {"cache", "stale-cache"}:
-                p = _cache_path("fundamentals", ticker)
-                if not p.exists():
-                    raise DataUnavailable("no cache")
-                age_h = (datetime.now() - datetime.fromtimestamp(p.stat().st_mtime)).total_seconds() / 3600
-                if src == "cache" and age_h > CACHE_MAX_AGE_HOURS:
-                    raise DataUnavailable("cache stale")
-                snap, hist = _fundamentals_from_json(p, ticker)
-                snap.source = f"{snap.source} (cached {age_h / 24:.0f}d ago)"
-            elif src == "sample":
-                p = SAMPLE_DIR / "fundamentals" / f"{ticker}.json"
-                if not p.exists():
-                    raise DataUnavailable("no offline fixture")
-                snap, hist = _fundamentals_from_json(p, ticker)
-            else:
-                raise ValueError(f"unknown source {src!r}")
-            break
-        except Exception as exc:  # noqa: BLE001
-            attempts.append(f"{src}: {type(exc).__name__}: {str(exc)[:120]}")
-            snap = None
-
-    if snap is None:
-        snap = FundamentalSnapshot(ticker=ticker, name=ticker, source="unavailable",
-                                   as_of=datetime.now().strftime("%Y-%m-%d"))
-        snap.notes.append("No fundamental data could be loaded (" + " | ".join(attempts) + ")")
-    if overrides:
-        for k, v in overrides.items():
-            if hasattr(snap, k):
-                setattr(snap, k, _f(v))
-        snap.notes.append("Investor-supplied values override the feed for: " + ", ".join(overrides))
-    if snap.price is None and last_price is not None:
-        snap.price = last_price
-    return snap, hist

@@ -686,9 +686,8 @@ def test_watch_signals_never_reach_decisions(tmp_path, monkeypatch):
     monkeypatch.setenv("LIGHTHOUSE_JOURNAL", str(j.path))
     r1 = analyze("MSFT", source="sample", years=6, run_backtest_=False)
     p1 = build_trade_plan(r1, "long", allow_stale=True)
-    assert (r1.decision.verdict, r1.decision.composite_score, r1.decision.fundamental_score,
-            r1.decision.technical_score) == (r0.decision.verdict, r0.decision.composite_score,
-                                             r0.decision.fundamental_score, r0.decision.technical_score)
+    assert (r1.decision.verdict, r1.decision.composite_score, r1.decision.technical_score) == \
+        (r0.decision.verdict, r0.decision.composite_score, r0.decision.technical_score)
     assert (p1.status, p1.stop, p1.shares, p1.entry_limit) == (p0.status, p0.stop, p0.shares, p0.entry_limit)
 
 

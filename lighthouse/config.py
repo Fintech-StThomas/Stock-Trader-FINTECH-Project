@@ -25,14 +25,10 @@ RISK_PRESETS: Dict[str, Dict[str, float]] = {
     "aggressive":   {"max_position_pct": 35.0, "target_vol": 0.25, "stop_atr_multiple": 2.0},
 }
 
-# Horizon presets: how the composite score blends fundamentals and technicals.
-# Long-term investors are buying the business (fundamentals dominate); short-
-# term investors are trading price behaviour (technicals dominate).
-HORIZON_WEIGHTS: Dict[str, Tuple[float, float]] = {
-    #          (fundamental, technical)
-    "long":  (0.60, 0.40),
-    "short": (0.30, 0.70),
-}
+# Horizons: the long one reviews monthly with a trend exit, the short one weekly with ATR stops and R targets. The
+# verdict is the rule's technical score in both; fundamentals are the analyst memo's (lighthouse.analyst), not a
+# weight in the rule: a fundamental gate cost return in every test (docs/METHODOLOGY.md section 8).
+HORIZONS: Tuple[str, ...] = ("long", "short")
 
 # Stops: a long-term investor needs room for normal pull-backs, so the ATR stop multiple
 # from the risk preset is scaled up for the long horizon.
@@ -73,8 +69,8 @@ class InvestorProfile:
     def __post_init__(self) -> None:
         self.horizon = str(self.horizon).lower().strip()
         self.risk = str(self.risk).lower().strip()
-        if self.horizon not in HORIZON_WEIGHTS:
-            raise ValueError(f"horizon must be one of {list(HORIZON_WEIGHTS)}, got {self.horizon!r}")
+        if self.horizon not in HORIZONS:
+            raise ValueError(f"horizon must be one of {list(HORIZONS)}, got {self.horizon!r}")
         if self.risk not in RISK_PRESETS:
             raise ValueError(f"risk must be one of {list(RISK_PRESETS)}, got {self.risk!r}")
         if not (0 < self.max_loss_pct <= 100):
@@ -111,14 +107,6 @@ class InvestorProfile:
     @property
     def max_loss_value(self) -> float:
         return self.account_value * self.max_loss_pct / 100.0
-
-    @property
-    def fundamental_weight(self) -> float:
-        return HORIZON_WEIGHTS[self.horizon][0]
-
-    @property
-    def technical_weight(self) -> float:
-        return HORIZON_WEIGHTS[self.horizon][1]
 
     @property
     def technical_weights(self) -> Dict[str, float]:
@@ -195,8 +183,6 @@ class StrategyParams:
     bear_entry_penalty: float = 10.0        # extra points required to enter in a bear market
     bear_size_multiplier: float = 0.5       # position scaling in a bear market
     block_entries_in_bear_turbulent: bool = True
-    fundamental_gate_min: float = 35.0      # point-in-time fundamental score below this blocks new entries
-    reporting_lag_days: int = 90            # financial statements become usable this long after period end
     # --- regime ------------------------------------------------------------------
     regime_sma: int = 200
     regime_vol_window: int = 21
@@ -211,7 +197,6 @@ class StrategyParams:
     order_value: Optional[float] = None   # $ size of an order for the impact estimate (None: the position's own size)
     resting_stops: bool = True     # stops are orders: filled during the day at the stop, or at the open on a gap
     cash_yield: bool = True        # uninvested cash earns the risk-free rate (the T-bill live; risk_free_rate offline)
-    short_borrow_fee: float = 0.005  # annual borrow fee on shorts (an assumption: free data has no borrow rates)
     risk_free_rate: float = 0.02   # annual, for Sharpe/Sortino (and cash) when no T-bill series is available
     trading_days: int = 252
 

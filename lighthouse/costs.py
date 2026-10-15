@@ -13,9 +13,9 @@ Per side, in basis points of the traded value:
   cap           the total is capped at MAX_COST_BPS (300) per side: a higher figure comes from a series without volume
                 (stale data, or another company's history under a reused ticker), not from a price anyone would pay
 
-Shorts also pay a borrow fee: StrategyParams.short_borrow_fee, an annual rate charged on the short's value for every
-day it is held. Free data has no borrow rates; the default (0.5% a year, a typical general-collateral rate for large
-caps) is an assumption, shown as one; hard-to-borrow stocks cost several percent to over 100% a year.
+The product trades long only. The research harness's long-short spreads (a statistic of a signal, not a trade the
+product makes) charge their short leg a borrow fee of 0.5% a year, a typical general-collateral rate for large caps:
+free data has no borrow rates, so it is an assumption, shown as one.
 """
 from __future__ import annotations
 

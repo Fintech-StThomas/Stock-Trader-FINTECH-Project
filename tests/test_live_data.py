@@ -79,7 +79,6 @@ def live_feed(tmp_path, monkeypatch):
         return df
     monkeypatch.setattr(data, "_from_yfinance", fake_yf)
     monkeypatch.setattr(data, "_from_stooq", lambda *a: pytest.fail("stooq should not be needed"))
-    monkeypatch.setattr(data, "_fundamentals_from_yfinance", lambda *a: (_ for _ in ()).throw(data.DataUnavailable("no feed")))
     import lighthouse.engine as engine
     monkeypatch.setattr(engine, "load_quote", lambda *a, **k: pytest.fail("the download already carried a quote"))
     return {"clock": clock, "calls": calls, "cache": tmp_path}

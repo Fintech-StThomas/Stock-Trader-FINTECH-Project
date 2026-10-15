@@ -88,16 +88,6 @@ def test_portfolio_cash_buffer_earns_the_rate():
     assert flat.equity.iloc[-1] == pytest.approx(1.0)
 
 
-def test_borrow_fee_lowers_the_short_record():
-    from lighthouse import analyze
-    from lighthouse.tradeplan import setup_statistics
-    r = analyze("XOM", InvestorProfile(horizon="short"), source="sample", years=10, run_backtest_=False)
-    cheap = setup_statistics(r, "short")
-    r.params = r.params.copy(short_borrow_fee=0.20)
-    dear = setup_statistics(r, "short")
-    assert dear.n_trades == cheap.n_trades and dear.avg_r < cheap.avg_r
-
-
 def test_french_files_parse():
     secs = ff.parse_sections((FIX / "ff5_monthly_excerpt.csv").read_text())
     main = secs["main"]
@@ -129,8 +119,8 @@ def test_a_series_that_barely_trades_cannot_cost_more_than_the_cap():
     df = make_prices(600, seed=5)
     df["Volume"] = 1.0                                                      # ~$100 a day against $10,000 orders
     p = StrategyParams(cost_model="liquidity", order_value=1e4)
-    bt = run_backtest(df, None, p, InvestorProfile(horizon="long", risk="balanced"), None, use_regime=False,
-                      use_fundamental_gate=False, use_stops=False, sizing="full")
+    bt = run_backtest(df, None, p, InvestorProfile(horizon="long", risk="balanced"), use_regime=False,
+                      use_stops=False, sizing="full")
     assert (bt.equity > 0).all()
     assert all(t.exit_price is None or t.exit_price > 0 for t in bt.trades)
     for t in bt.trades:

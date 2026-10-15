@@ -64,10 +64,12 @@ def test_cohort_bounds_count_untested_members_as_lost():
                        "years": 10.0, "bh_cagr": [0.10, 0.0] * 2, "lighthouse_cagr": [0.05, 0.0] * 2,
                        "signals_cagr": [0.07, 0.0] * 2, "bh_sharpe": 0.5, "bh_mdd": -0.5, "signals_sharpe": 0.4,
                        "lighthouse_vol": 0.1, "lighthouse_sharpe": 0.3, "lighthouse_mdd": -0.2, "conservative_sharpe": 0.2,
-                       "trades": 5})
+                       "same_cagr": [0.04, 0.0] * 2, "same_sharpe": [0.35, 0.25] * 2, "same_mdd": -0.25, "trades": 5})
     s = summarize(df, members=4)
     w = (1.1 ** 10 + 1.0) / 2
     assert s.loc["exclude", "cohort_bh_cagr"] == pytest.approx(w ** 0.1 - 1)
+    assert s.loc["exclude", "cohort_same_cagr"] == pytest.approx(((1.04 ** 10 + 1.0) / 2) ** 0.1 - 1)
+    assert s.loc["exclude", "beat_same_sharpe"] == 1 and s.loc["exclude", "lower_mdd_than_same"] == 2
     assert s.loc["pessimistic", "cohort_bh_cagr"] == pytest.approx((w / 2) ** 0.1 - 1)    # 2 of 4 members worth nothing
     assert s.loc["pessimistic", "coverage"] == 0.5
 
