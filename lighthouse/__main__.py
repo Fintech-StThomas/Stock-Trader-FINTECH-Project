@@ -187,22 +187,6 @@ def _memo(a) -> int:
         pth = out / f"memo_{m.ticker}_{m.as_of.date()}.md"
         pth.write_text(text)
         print(f"wrote {pth}", file=sys.stderr)
-    if a.red_team:
-        from . import llm
-        from .edgar import cik_for, company_filings, fetch_document, registrant_cik
-        from .text import html_to_text
-        try:
-            _, filings = company_filings(m.ticker, source=a.source)
-            k = filings[(filings["form"] == "10-K") & (filings["filed"] <= m.as_of)].iloc[-1]
-            doc = html_to_text(fetch_document(registrant_cik(k, cik_for(m.ticker)), k["accn"], k["doc"]))
-            ans = llm.red_team(m, doc)
-            print(f"\n## Red team ({ans.model}, 10-K filed {k['filed'].date()})\n\n{ans.text}\n")
-            print("Checks: " + ("every sentence cited, every number sourced." if ans.verified else
-                                "; ".join(ans.problems)))
-        except llm.LLMDisabled as exc:
-            print(f"red team skipped: {exc}", file=sys.stderr)
-        except (DataUnavailable, IndexError) as exc:
-            print(f"red team skipped: no 10-K text ({exc})", file=sys.stderr)
     if a.open_thesis:
         tid = open_thesis(m, ThesisBook(path=a.journal))
         print(f"thesis {tid} saved; `python -m lighthouse thesis check` follows it", file=sys.stderr)
@@ -330,8 +314,6 @@ def main(argv=None) -> int:
                     "scored against the peer medians instead of the sector norms (the verdict keeps the sector norms)")
     a8.add_argument("--no-signals", action="store_true", help="leave out the rule-based verdict")
     a8.add_argument("--open-thesis", action="store_true", help="save the thesis and its kill criteria to the journal")
-    a8.add_argument("--red-team", action="store_true", help="ask a local language model (LIGHTHOUSE_LLM=ollama) for the "
-                    "case against the memo, from the latest 10-K; checked for citations and sourced numbers")
     a8.add_argument("--journal", help="journal file (default data/journal/lighthouse_journal.sqlite or LIGHTHOUSE_JOURNAL)")
 
     a9 = sub.add_parser("thesis", help="follow saved theses: check them against new filings, list coverage, close")

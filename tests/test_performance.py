@@ -1,10 +1,10 @@
-"""The speed-ups must not change any number: the indicator memo, parallel ticker loading and one-shot chart shapes."""
+"""The speed-ups must not change any number: the indicator cache, parallel ticker loading and one-shot chart shapes."""
 import threading
 
 import numpy as np
 import pytest
 
-from lighthouse import memo
+from lighthouse import cache
 from lighthouse.config import StrategyParams
 from lighthouse.parallel import map_tickers
 from lighthouse.regime import regime_table
@@ -12,7 +12,7 @@ from lighthouse.technicals import beacon_scores, compute_indicators, technical_s
 
 
 def test_memo_returns_equal_independent_copies(prices):
-    memo.clear()
+    cache.clear()
     a = compute_indicators(prices)
     b = compute_indicators(prices)
     assert a is not b and a.equals(b)
@@ -21,27 +21,27 @@ def test_memo_returns_equal_independent_copies(prices):
 
 
 def test_memo_keys_on_content_and_on_parameters_that_matter(prices):
-    memo.clear()
+    cache.clear()
     base = compute_indicators(prices)
     other = prices.copy()
     other.loc[other.index[-1], "Close"] *= 1.01      # same shape and dates, different data
     assert not np.isclose(compute_indicators(other)["Close"].iloc[-1], base["Close"].iloc[-1])
     swapped = prices.copy()
     swapped.iloc[[-1, -2], swapped.columns.get_loc("Close")] = prices["Close"].iloc[[-2, -1]].to_numpy()   # same sums
-    assert memo.frame_fingerprint(swapped) != memo.frame_fingerprint(prices)
+    assert cache.frame_fingerprint(swapped) != cache.frame_fingerprint(prices)
     faster = compute_indicators(prices, StrategyParams(band_alpha=0.5))
     assert not np.allclose(faster["band_mid"].dropna().tail(50), base["band_mid"].dropna().tail(50))
     wider = compute_indicators(prices, StrategyParams(band_window=30))
     assert not np.allclose(wider["band_upper"].dropna().tail(50), base["band_upper"].dropna().tail(50))
     # trading thresholds never change an indicator, so a sensitivity grid reuses one computation
-    k1 = memo.params_key(StrategyParams(entry_score=55, exit_score=30, cost_bps=20))
-    assert k1 == memo.params_key(StrategyParams())
-    assert memo.params_key(StrategyParams(rsi_window=10)) != memo.params_key(StrategyParams())
+    k1 = cache.params_key(StrategyParams(entry_score=55, exit_score=30, cost_bps=20))
+    assert k1 == cache.params_key(StrategyParams())
+    assert cache.params_key(StrategyParams(rsi_window=10)) != cache.params_key(StrategyParams())
 
 
 def test_memoised_scores_match_a_fresh_computation(prices, benchmark):
     p = StrategyParams()
-    memo.clear()
+    cache.clear()
     cold = (technical_score(compute_indicators(prices, p), "long", p), beacon_scores(compute_indicators(prices, p), p),
             regime_table(benchmark, p))
     warm = (technical_score(compute_indicators(prices, p), "long", p), beacon_scores(compute_indicators(prices, p), p),

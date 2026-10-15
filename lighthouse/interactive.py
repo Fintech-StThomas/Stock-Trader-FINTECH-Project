@@ -1,12 +1,9 @@
 """
-Interactive charts (Plotly) for the Streamlit app.
+The charts (Plotly), for the app, the notebook and the saved report (`AnalysisResult.save` writes them to one HTML
+file).
 
-Same visual system as `charts.py` (strategy = blue, buy & hold = orange, S&P 500 = aqua;
-beacon lights = green / amber / red) but every figure can be hovered, zoomed and
-downloaded, and every mark carries its explanation in the tooltip.
-
-The matplotlib charts in `charts.py` remain the ones used by the CLI, the Markdown
-report and the notebook; this module is only imported by the app.
+One visual system (`palette`: strategy = blue, buy & hold = orange, S&P 500 = aqua; beacon lights = green / amber /
+red); every figure can be hovered, zoomed and downloaded, and every mark carries its explanation in the tooltip.
 """
 from __future__ import annotations
 
@@ -433,7 +430,7 @@ def compare_prices(series: Dict[str, pd.Series], height: int = 420) -> go.Figure
 
 
 def all_figures(result) -> Dict[str, go.Figure]:
-    """Every figure the app shows for one analysis (used by the tests)."""
+    """Every figure of one analysis (the saved report's charts file; the tests)."""
     figs = {"gauge": score_gauge(result.decision), "waterfall": score_waterfall(result.decision, result.profile),
             "breakdown": score_breakdown(result.decision), "dashboard": dashboard(result)}
     if result.backtest is not None:

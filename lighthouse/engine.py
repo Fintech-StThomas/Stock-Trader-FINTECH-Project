@@ -76,7 +76,7 @@ class AnalysisResult:
         return self.extras
 
     def save(self, out_dir: str, charts: bool = True) -> List[str]:
-        """Write the report, tables and charts to a folder. Returns the paths written."""
+        """Write the report, tables and charts (one interactive HTML file) to a folder. Returns the paths written."""
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         written = []
@@ -87,8 +87,14 @@ class AnalysisResult:
             self.backtest.trades_frame().to_csv(out / f"{self.ticker}_trades.csv", index=False)
             written += [str(out / f"{self.ticker}_backtest_summary.csv"), str(out / f"{self.ticker}_trades.csv")]
         if charts:
-            from . import charts as ch
-            written += ch.save_all(self, out)
+            from .interactive import all_figures
+            figs = all_figures(self)
+            parts = [f.to_html(full_html=False, include_plotlyjs="cdn" if i == 0 else False)
+                     for i, f in enumerate(figs.values())]
+            path = out / f"{self.ticker}_charts.html"
+            path.write_text("<!doctype html><html><head><meta charset='utf-8'><title>"
+                            f"{self.ticker} charts</title></head><body>" + "\n".join(parts) + "</body></html>")
+            written.append(str(path))
         return written
 
 

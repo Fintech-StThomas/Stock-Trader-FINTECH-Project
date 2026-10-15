@@ -15,4 +15,3 @@ jobs:
       - run: python -m pytest -q
         env:
           LIGHTHOUSE_OFFLINE: "1"
-          MPLBACKEND: Agg

@@ -1,6 +1,6 @@
 """
-The colour system shared by the static (matplotlib) and interactive (Plotly) charts. Kept in its own module so the
-web app can draw Plotly charts without importing matplotlib (about a third of a second at start-up).
+The colour system of the charts (lighthouse.interactive), in its own module so tables and reports can use the same
+colours without importing Plotly.
 
   strategy = blue, buy & hold = orange, S&P 500 = aqua (fixed categorical order)
   status   = green / amber / red for beacons, never reused for series

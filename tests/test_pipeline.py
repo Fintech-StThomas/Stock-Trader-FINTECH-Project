@@ -49,7 +49,7 @@ def test_end_to_end_analysis_and_report(tmp_path):
         assert needle in md
     r.evaluate(layers=True, sensitivity=False, walk_forward_test=False)
     files = r.save(tmp_path, charts=True)
-    assert any(f.endswith("_report.md") for f in files) and any(f.endswith(".png") for f in files)
+    assert any(f.endswith("_report.md") for f in files) and any(f.endswith("_charts.html") for f in files)
 
 
 def test_short_horizon_profile_changes_rule():

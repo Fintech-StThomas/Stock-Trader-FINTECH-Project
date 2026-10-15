@@ -92,13 +92,3 @@ def test_dashboard_draws_the_band_centre_and_the_regime_shading():
     assert rects, "2022 was a bear market: the regime shading must be drawn"
     bt = ix.backtest(r.backtest, r.regimes)
     assert any(s.type == "rect" for s in bt.layout.shapes)
-
-
-def test_static_dashboard_draws_the_band_centre():
-    from lighthouse.charts import plot_dashboard
-    import matplotlib.pyplot as plt
-    r = analyze("AAPL", source="sample", years=6)
-    fig = plot_dashboard(r, last_days=252)
-    labels = [ln.get_label() for ln in fig.axes[0].get_lines()]
-    plt.close(fig)
-    assert any(lb == "Band centre (trend filter)" for lb in labels)
