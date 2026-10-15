@@ -261,7 +261,8 @@ def build_memo(memo) -> str:
                  f"margin, or a **{_p(v.implied_margin)}** operating margin at the base case's growth.")
         L.append(f"- Discount rate (WACC) {_p(v.rate.wacc, 2)}: risk-free {_p(v.rate.risk_free, 2)}, beta {v.rate.beta:.2f}, "
                  f"equity premium {_p(v.rate.equity_premium)}, cost of debt {_p(v.rate.cost_of_debt, 2)}; terminal growth "
-                 f"{_p(v.terminal_growth)}. Free cash flow is after stock-based pay.")
+                 f"{_p(v.terminal_growth)}, reinvesting growth / RONIC of operating profit after tax (RONIC "
+                 f"{_p(v.cases['base'].ronic)}: today's ROIC, at least the WACC). Free cash flow is after stock-based pay.")
         if not v.bands.empty:
             b = v.bands.copy()
             labels = {"earnings_yield": "earnings yield", "fcf_yield": "FCF yield", "ebitda_ev": "EBITDA / EV"}

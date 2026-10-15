@@ -8,8 +8,13 @@ Discount rate  WACC = E/V x (risk-free + beta x equity premium) + D/V x cost of 
                0.67 x beta + 0.33). Equity premium: the Ken French market factor's average excess return since July
                1963, arithmetic (7.2% a year in data to August 2026).
 DCF            free cash flow to the firm after stock-based pay (a real cost, paid in shares: it is not added back),
-               for the projection years, plus a Gordon terminal value at a long-run growth rate; enterprise value - net debt = equity;
-               per share at the cover-page share count.
+               for the projection years, plus a terminal value by the value-driver formula (Koller, Goedhart & Wessels,
+               "Valuation"): NOPAT in the year after the projection x (1 - g / RONIC) / (WACC - g). Growth g needs net
+               investment g / RONIC of NOPAT, whatever capex was in the projection years; RONIC, the return on new
+               capital, is today's ROIC, never below the WACC (new capital at least earns its cost). A Gordon value on
+               the last year's free cash flow would carry that year's capex forever: a company in a build-out (MSFT,
+               2026: capex 35% of revenue against D&A of 10%) was worth a fraction of its operating profit at any growth.
+               Enterprise value - net debt = equity; per share at the cover-page share count.
 Scenarios      base = the company's own trend (lighthouse.analyst.model); bull / bear shift growth and margin up and
                down (defaults: +/- 4 points of growth, +/- 3 points of margin); weights 25 / 50 / 25 for the target.
 Reverse DCF    the constant revenue growth (margins held at today's) at which the DCF equals today's price: the
@@ -101,22 +106,40 @@ class DCFResult:
     terminal_share: float            # share of enterprise value from the terminal value
     projection: pd.DataFrame
     assumptions: Assumptions
+    ronic: float = float("nan")      # return on new capital behind the terminal value's reinvestment
 
 
-def dcf(a: Assumptions, f: Financials, rate: float, terminal_growth: float = 0.025) -> DCFResult:
-    """Enterprise value = discounted FCFF after stock-based pay + discounted Gordon terminal value."""
+def terminal_ronic(f: Financials, rate: float) -> float:
+    """The return on new invested capital after the projection: today's ROIC, floored at the discount rate."""
+    roic = f.ratios().get("roic", np.nan)
+    return float(max(roic, rate)) if roic is not None and np.isfinite(roic) else float(rate)
+
+
+def terminal_value(a: Assumptions, p: pd.DataFrame, rate: float, terminal_growth: float, ronic: float) -> float:
+    """Value at the end of the projection: NOPAT_{n+1} x (1 - g / RONIC) / (rate - g). A loss in the last year has
+    nothing to reinvest: it is capitalised as it is."""
+    nopat = float(p["operating_income"].iloc[-1]) * (1.0 + terminal_growth) * (1.0 - a.tax_rate)
+    reinvest = terminal_growth / ronic if nopat > 0 and ronic > 0 else 0.0
+    return nopat * (1.0 - reinvest) / (rate - terminal_growth)
+
+
+def dcf(a: Assumptions, f: Financials, rate: float, terminal_growth: float = 0.025,
+        ronic: Optional[float] = None) -> DCFResult:
+    """Enterprise value = discounted FCFF after stock-based pay + the discounted value-driver terminal value (module
+    docstring); `ronic` defaults to `terminal_ronic`."""
     if rate <= terminal_growth:
         raise ValueError("the discount rate must exceed the terminal growth rate")
     p = project(a)
     fc = p["fcff_after_sbc"].to_numpy()
     disc = (1.0 + rate) ** -np.arange(1, len(fc) + 1)
-    tv = fc[-1] * (1.0 + terminal_growth) / (rate - terminal_growth)
+    rn = terminal_ronic(f, rate) if ronic is None else float(ronic)
+    tv = terminal_value(a, p, rate, terminal_growth, rn)
     pv = float((fc * disc).sum())
     pv_tv = float(tv * disc[-1])
     ev = pv + pv_tv
     eq = ev - f.net_debt
     ps = eq / f.shares if f.shares and np.isfinite(f.shares) else float("nan")
-    return DCFResult(a.label, float(ps), float(eq), float(ev), float(pv_tv / ev) if ev else float("nan"), p, a)
+    return DCFResult(a.label, float(ps), float(eq), float(ev), float(pv_tv / ev) if ev else float("nan"), p, a, rn)
 
 
 @dataclass
@@ -213,5 +236,5 @@ def value(f: Financials, prices: pd.Series, rate: Optional[DiscountRate] = None,
                      bands=valuation_bands(bands or {}))
 
 
-__all__ = ["DiscountRate", "estimate_beta", "discount_rate", "DCFResult", "dcf", "Valuation", "reverse_dcf",
-           "valuation_bands", "value"]
+__all__ = ["DiscountRate", "estimate_beta", "discount_rate", "DCFResult", "dcf", "terminal_value", "terminal_ronic",
+           "Valuation", "reverse_dcf", "valuation_bands", "value"]

@@ -53,6 +53,38 @@ def test_dcf_falls_with_the_discount_rate_and_rises_with_growth():
         dcf(a, f, 0.02, terminal_growth=0.025)
 
 
+def test_terminal_value_reinvests_for_growth_not_last_years_capex():
+    f = company()
+    a = Assumptions.from_financials(f, years=5)
+    rate, g = 0.08, 0.025
+    r = dcf(a, f, rate, g)
+    p = r.projection
+    roic = f.ratios()["roic"]
+    assert r.ronic == pytest.approx(max(roic, rate))
+    # by hand: NOPAT of year 6 = EBIT of year 5 x (1 + g) x (1 - tax); reinvestment g / RONIC of it
+    nopat6 = p["operating_income"].iloc[-1] * (1 + g) * (1 - a.tax_rate)
+    tv = nopat6 * (1 - g / r.ronic) / (rate - g)
+    disc = (1 + rate) ** -np.arange(1, 6)
+    ev = float((p["fcff_after_sbc"].to_numpy() * disc).sum()) + tv * disc[-1]
+    assert r.enterprise_value == pytest.approx(ev)
+    assert r.per_share == pytest.approx((ev - f.net_debt) / f.shares)
+    # a build-out (capex 35% of revenue in the projection years) costs those years' cash, not the terminal value
+    heavy = dcf(Assumptions(**{**a.to_dict(), "capex_pct": 0.35}), f, rate, g)
+    pv_tv = lambda x: x.terminal_share * x.enterprise_value                     # noqa: E731
+    assert pv_tv(heavy) == pytest.approx(pv_tv(r)) and heavy.enterprise_value < r.enterprise_value
+    # new capital earns at least its cost: a low-ROIC company's growth adds nothing, and never destroys value
+    weak = company(margin=0.02)
+    assert dcf(Assumptions.from_financials(weak, years=5), weak, rate, g).ronic == pytest.approx(rate)
+    # an explicit RONIC: the higher it is, the less of the profit growth consumes
+    assert dcf(a, f, rate, g, ronic=0.30).per_share > dcf(a, f, rate, g, ronic=0.10).per_share
+    # a loss in the last year is capitalised as it is (nothing to reinvest)
+    loss = Assumptions(**{**a.to_dict(), "operating_margin": [-0.05] * 5})
+    pl = project(loss)
+    want = pl["operating_income"].iloc[-1] * (1 + g) * (1 - loss.tax_rate) / (rate - g)
+    got = dcf(loss, f, rate, g)
+    assert got.terminal_share * got.enterprise_value == pytest.approx(want * disc[-1])
+
+
 def test_reverse_dcf_reproduces_the_price():
     f = company(price=120.0)
     base = Assumptions.from_financials(f, years=5)
