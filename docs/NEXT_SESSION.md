@@ -1,8 +1,8 @@
 # Handoff: where the research-grade Lighthouse work stopped (15 October 2026)
 
 Branch `claude/focused-bohr-klq8zc` (started from `main` at 2ec89f2, after the Phase 1-3 work was merged as pull
-request #5) carries Phases 4-8. The user asked for its pull request to be opened (15 October 2026); ask again before
-merging it once CI passes. The eight-phase plan in `docs/ROADMAP_STATUS.md` is done; what follows is optional next
+request #5) carries Phases 4-8. Its pull request is #6, opened at the user's request on 15 October 2026; ask again
+before merging it once CI passes. The eight-phase plan in `docs/ROADMAP_STATUS.md` is done; what follows is optional next
 work.
 
 ## What this session found (details: METHODOLOGY §8b and §11, DATA_AND_ML §5-6, ROADMAP_STATUS)
@@ -26,7 +26,7 @@ work.
 ## Kickoff prompt for the next session
 
 > Continue Lighthouse in lotainc0/Stock-Trader-FINTECH-Project. Read `docs/NEXT_SESSION.md`, `docs/ROADMAP_STATUS.md`
-> and METHODOLOGY §8b and §11 first. If the pull request for `claude/focused-bohr-klq8zc` was merged, start a new branch
+> and METHODOLOGY §8b and §11 first. If pull request #6 (`claude/focused-bohr-klq8zc`) was merged, start a new branch
 > from `main`. The research plan is done and no signal survived; do not add weight to any signal in `decision.py`
 > without a new pre-registered test. Pick from "Open items" below in the order I ask. Keep every rule in "Rules that
 > stay in force". Ask me before deleting anything, and before opening or merging a PR.
@@ -80,7 +80,7 @@ work.
   cohort; reopen only with data that includes the delisted).
 * 14 October 2026: PR #5 (Phases 1-3) opened and merged.
 * 15 October 2026: the SEC contact e-mail for that session's runs; up to 2-3 helper agents allowed for parallel work;
-  the executive summary and pitch brought up to date with the current results (done); the pull request for
+  the executive summary and pitch brought up to date with the current results (done); pull request #6 for
   `claude/focused-bohr-klq8zc` opened (merge only when the user says so).
 
 ## Running the research again (a fresh container re-downloads everything)
