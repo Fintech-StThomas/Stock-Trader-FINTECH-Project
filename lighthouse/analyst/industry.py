@@ -9,10 +9,13 @@ Why       A bank's debt is its raw material and its "revenue" is net of the inte
 Metrics   bank (SIC 6021-6036)    net interest income; NII / average total assets (a proxy for the net interest
                                   margin: XBRL has no earning-assets total); efficiency ratio = non-interest expense /
                                   (NII + non-interest income); loans / deposits; tangible book value per share =
-                                  (equity - preferred - goodwill - other intangibles) / cover-page shares; P/TBV
-          REIT (6798)             FFO = net income + depreciation & amortisation - gains on property sales; P/FFO;
-                                  FFO payout = common dividends paid / FFO; real-estate impairments beside it (NAREIT's
-                                  FFO also adds them back, this one does not)
+                                  (equity - preferred - goodwill - other intangibles) / cover-page shares; P/TBV (a
+                                  bank that has never tagged preferred stock, under any preferred concept, counts it
+                                  as 0 and says so; one that tagged it at other dates but not this one gets none)
+          REIT (6798)             FFO as NAREIT defines it = net income + depreciation & amortisation - gains on
+                                  property sales + real-estate impairments (none added when the period tags none,
+                                  which the metric says); P/FFO; FFO payout = common dividends paid / FFO; the
+                                  impairments shown beside it
           software (7370-7374)    remaining performance obligations (RPO); RPO / revenue; RPO and deferred-revenue
                                   growth year on year
           insurer (6311-6399)     net premiums earned; loss ratio = losses, benefits and claims / premiums earned;
@@ -136,6 +139,10 @@ class _Book:
 
     def concepts_of(self, key: str) -> Sequence[str]:
         return (pit.INDUSTRY.get(key) or pit.ITEMS[key]).concepts
+
+    def never_tagged(self, key: str) -> bool:
+        """True when no filing before the date carries any of the item's concepts, at any period."""
+        return not len(self.facts) or not self.facts["concept"].isin(self.concepts_of(key)).any()
 
     def latest_end(self) -> Optional[pd.Timestamp]:
         """The latest period the company has reported: its last quarter (or year) of net income or balance sheet."""
@@ -296,6 +303,9 @@ def _tangible_book(book: _Book, ends, market_cap: Optional[float]) -> List[Indus
     notes: List[str] = []
     for e in dict.fromkeys(x for x in ends if x is not None):
         eq, pref = book.balance("equity", e), book.balance("preferred_equity", e)
+        pref_note = ""
+        if pref is None and eq is not None and book.never_tagged("preferred_equity"):
+            pref, pref_note = (0.0, eq[1]), "no preferred stock tagged in any filing: counted as 0"
         gwi = book.balance("goodwill_and_intangibles", e)
         gw = book.balance("goodwill", e)
         intang = book.balance("intangibles", e)
@@ -322,10 +332,10 @@ def _tangible_book(book: _Book, ends, market_cap: Optional[float]) -> List[Indus
                     _metric("price_to_tbv", "Price / tangible book", "multiple", "market value / tangible book",
                             note="no tangible book value")]
         per = _metric("tbv_per_share", label, "per_share", formula + f" ({sh_note})", tbv / sh[0], f"at {_label_end(e)}",
-                      max(filed, sh[1]))
+                      max(filed, sh[1]), pref_note)
         ptbv = _metric("price_to_tbv", "Price / tangible book", "multiple", "market value / tangible book",
                        _ratio(market_cap, tbv), f"tangible book at {_label_end(e)}", filed,
-                       "" if market_cap else "no market value")
+                       "; ".join(x for x in (pref_note, "" if market_cap else "no market value") if x))
         return [per, ptbv]
     note = "; ".join(notes) or "no period reported"
     return [_metric("tbv_per_share", label, "per_share", formula, note=note),
@@ -335,8 +345,14 @@ def _tangible_book(book: _Book, ends, market_cap: Optional[float]) -> List[Indus
 
 def _reit(book: _Book, ends, market_cap: Optional[float]) -> List[IndustryMetric]:
     v, filed, period, end, note = _flows(book, ["net_income", "d_and_a", "real_estate_gains"], ends)
-    formula = "net income + depreciation & amortisation - gains on property sales"
-    ffo = v["net_income"] + v["d_and_a"] - v["real_estate_gains"] if v is not None else None
+    formula = "net income + depreciation & amortisation - gains on property sales + real-estate impairments (NAREIT)"
+    ffo, imp = None, None
+    if v is not None:
+        imp = book.twelve_months("real_estate_impairment", end)
+        ffo = v["net_income"] + v["d_and_a"] - v["real_estate_gains"] + (imp[0] if imp is not None else 0.0)
+        filed = max(filed, imp[1]) if imp is not None else filed
+        if imp is None:
+            note = "no real-estate impairment tagged for the period: none added back"
     p_note = note if ffo is None else "no market value" if not market_cap else "FFO not positive" if ffo <= 0 else ""
     out = [_metric("ffo", "Funds from operations (FFO)", "money", formula, ffo, period, filed, note),
            _metric("p_ffo", "Price / FFO", "multiple", "market value / FFO",
@@ -346,8 +362,7 @@ def _reit(book: _Book, ends, market_cap: Optional[float]) -> List[IndustryMetric
         out.append(_metric("ffo_payout", "FFO payout (common dividends)", "ratio", "common dividends paid / FFO",
                            _ratio(d[0], ffo) if d is not None else None, period, max(filed, d[1]) if d else None,
                            "" if d is not None else _missing(book, ["common_dividends"], f"the 12 months to {_label_end(end)}")))
-        imp = book.twelve_months("real_estate_impairment", end)
-        out.append(_metric("re_impairments", "Real-estate impairments (not added back)", "money", "ImpairmentOfRealEstate",
+        out.append(_metric("re_impairments", "Real-estate impairments (added back in FFO)", "money", "ImpairmentOfRealEstate",
                            imp[0] if imp is not None else None, period, imp[1] if imp else None,
                            "" if imp is not None else "not tagged for the period (none reported under the standard "
                                                       "concept)"))

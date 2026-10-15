@@ -170,7 +170,8 @@ Free data drops the dead: Yahoo has no prices for most delisted S&P 500 members,
 result is a bound, not an estimate (coverage is published with each). Fundamentals start with XBRL in 2009; sector norms
 are assumptions (peer medians are opt-in in the memo); trading costs come from daily ranges, which overstate large-cap
 spreads; borrow fees are an assumption; the backtests ignore taxes; stops are orders, not guaranteed prices. The DCF is
-only as good as its inputs (a five-year fade to the long-run growth rate and a historical equity premium). Paper trading
+only as good as its inputs (a five-year fade to the long-run growth rate, a historical equity premium: the geometric
+mean since 1963, 6.2%, with the arithmetic 7.2% as a sensitivity). Paper trading
 is tested against Alpaca's documented formats, not a live account. `docs/DATA_AND_ML.md` lists what free data can and
 cannot prove, the sources that would close these gaps and how machine learning could be added safely. Lighthouse is
 decision support, not investment advice.

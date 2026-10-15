@@ -9,7 +9,7 @@ from lighthouse.analyst import checks, memo as memo_mod, thesis
 from lighthouse.analyst.financials import Financials, financials_as_of
 from lighthouse.analyst.model import Assumptions, project
 from lighthouse.analyst.peers import choose_peers, compare, peer_norms
-from lighthouse.analyst.valuation import DiscountRate, dcf, reverse_dcf, value, valuation_bands
+from lighthouse.analyst.valuation import DiscountRate, dcf, discount_rate, reverse_dcf, value, valuation_bands
 from lighthouse.data import load_prices
 from lighthouse.total_return import load_actions
 
@@ -105,6 +105,42 @@ def test_valuation_cases_order_and_target_is_the_weighted_mean():
     assert v.target == pytest.approx(0.25 * v.cases["bear"].per_share + 0.5 * v.cases["base"].per_share
                                      + 0.25 * v.cases["bull"].per_share)
     assert v.table().loc["base", "weight"] == 0.5
+    # the bear case's new capital earns only its cost; base and bull keep today's ROIC (at least the WACC)
+    assert v.cases["bear"].ronic == pytest.approx(RATE.wacc)
+    assert v.cases["base"].ronic == v.cases["bull"].ronic == pytest.approx(max(f.ratios()["roic"], RATE.wacc))
+    assert v.table().loc["bear", "ronic"] == pytest.approx(RATE.wacc)
+    a = Assumptions.from_financials(f, years=5, long_run_growth=0.03, label="base").scaled(-0.04, -0.03, "bear")
+    assert v.cases["bear"].per_share == pytest.approx(dcf(a, f, RATE.wacc, 0.025, ronic=RATE.wacc).per_share)
+    assert v.premium_sensitivity == {}                    # no historical premium behind a given rate: no sensitivity
+
+
+def test_equity_premium_is_the_geometric_mean_with_the_arithmetic_as_a_sensitivity(monkeypatch):
+    from lighthouse import factors as ff
+    monkeypatch.setattr(ff, "market_premium", lambda *a, **k: {"arithmetic": 0.072, "geometric": 0.060, "months": 758})
+    f = company()
+    close = pd.Series(100.0, index=pd.bdate_range("2015-01-01", "2020-06-30"))
+    r = discount_rate(f, close, risk_free=0.03, beta=1.1)
+    assert r.equity_premium == pytest.approx(0.060) and r.arithmetic_premium == pytest.approx(0.072)
+    assert r.cost_of_equity == pytest.approx(0.03 + 1.1 * 0.060)
+    assert any("geometric" in n and "7.2%" in n for n in r.notes)
+    hi = r.with_premium(0.072)
+    assert hi.cost_of_equity == pytest.approx(0.03 + 1.1 * 0.072)
+    assert hi.wacc == pytest.approx(r.equity_weight * hi.cost_of_equity
+                                    + (1 - r.equity_weight) * r.cost_of_debt * (1 - r.tax_rate))
+    v = value(f, close, rate=r)
+    s = v.premium_sensitivity
+    assert s["equity_premium"] == pytest.approx(0.072) and s["wacc"] == pytest.approx(hi.wacc)
+    base = Assumptions.from_financials(f, years=5, long_run_growth=0.03, label="base")
+    assert s["per_share"] == pytest.approx(dcf(base, f, hi.wacc, 0.025).per_share)
+    assert s["per_share"] < v.cases["base"].per_share                          # a higher premium, a lower value
+    # an explicit premium has no sensitivity; no factor data falls back to the conventional 5.5%
+    assert discount_rate(f, close, risk_free=0.03, beta=1.0, equity_premium=0.05).arithmetic_premium is None
+
+    def fail(*a, **k):
+        raise OSError("offline")
+    monkeypatch.setattr(ff, "market_premium", fail)
+    off = discount_rate(f, close, risk_free=0.03, beta=1.0)
+    assert off.equity_premium == pytest.approx(0.055) and off.arithmetic_premium is None
 
 
 def test_net_debt_counts_short_term_investments():

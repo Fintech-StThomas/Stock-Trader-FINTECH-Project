@@ -250,7 +250,8 @@ def build_memo(memo) -> str:
                              "vs price": t["vs_price"].map(lambda x: f"{x:+.0%}"),
                              "growth yr 1 → 5": [f"{_p(a)} → {_p(b)}" for a, b in zip(t["growth_y1"], t["growth_last"])],
                              "margin yr 5": t["margin_last"].map(_p),
-                             "terminal share": t["terminal_share"].map(lambda x: f"{x:.0%}")}, index=t.index)
+                             "terminal share": t["terminal_share"].map(lambda x: f"{x:.0%}"),
+                             "RONIC": t["ronic"].map(_p)}, index=t.index)
         L.append(_md_table(show) + "\n")
         ud = v.upside_downside
         ud_text = ("the bull case is below the price" if v.cases["bull"].per_share < f.price else
@@ -265,7 +266,13 @@ def build_memo(memo) -> str:
         L.append(f"- Discount rate (WACC) {_p(v.rate.wacc, 2)}: risk-free {_p(v.rate.risk_free, 2)}, beta {v.rate.beta:.2f}, "
                  f"equity premium {_p(v.rate.equity_premium)}, cost of debt {_p(v.rate.cost_of_debt, 2)}; terminal growth "
                  f"{_p(v.terminal_growth)}, reinvesting growth / RONIC of operating profit after tax (RONIC "
-                 f"{_p(v.cases['base'].ronic)}: today's ROIC, at least the WACC). Free cash flow is after stock-based pay.")
+                 f"{_p(v.cases['base'].ronic)} in the base and bull cases: today's ROIC, at least the WACC; the WACC in "
+                 f"the bear case, where growth after year five adds no value). Free cash flow is after stock-based pay.")
+        ps = getattr(v, "premium_sensitivity", None) or {}
+        if ps:
+            L.append(f"- Equity premium sensitivity: at the arithmetic mean of the same data ({_p(ps['equity_premium'])}) "
+                     f"the WACC is {_p(ps['wacc'], 2)} and the base case ${ps['per_share']:,.2f} a share "
+                     f"({ps['per_share'] / f.price - 1:+.0%}).")
         if not v.bands.empty:
             b = v.bands.copy()
             labels = {"earnings_yield": "earnings yield", "fcf_yield": "FCF yield", "ebitda_ev": "EBITDA / EV"}
