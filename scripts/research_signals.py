@@ -252,13 +252,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     if not a.holdout:
         return 0
     # the hold-out: once per signal, both rules; trials = every configuration in the log
-    trial_sr = []
-    for name, by in tune_by.items():
-        for r, s in by.items():
-            for k in ("spread_net_sharpe", "long_only_net_sharpe"):
-                if np.isfinite(s.get(k, np.nan)):
-                    trial_sr.append(s[k] / np.sqrt(12))
-    sr_std = float(np.std(trial_sr, ddof=1)) if len(trial_sr) > 2 else 0.1
+    sr_std = log.trial_sharpe_std()          # every configuration in the log, not only this run's signals
     n_trials = log.trials()
     hrows, verdicts = [], []
     for name, sig in sigs.items():

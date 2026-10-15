@@ -432,6 +432,20 @@ class ExperimentLog:
         r = self.rows()
         return int(r["config_hash"].nunique()) if len(r) and "config_hash" in r else 0
 
+    def trial_sharpe_std(self, default: float = 0.1) -> float:
+        """The dispersion of monthly net Sharpe ratios across every configuration tried (the deflated Sharpe ratio's
+        variance of trials): the latest tuning row of each configuration and delisting rule, both the long-short and
+        the long-only Sharpe. Taken from the whole log, so a run that evaluates one signal is judged against every
+        trial, not against itself."""
+        r = self.rows()
+        if r.empty or "period" not in r:
+            return default
+        t = r[r["period"] == "tuning"].drop_duplicates(["config_hash", "delisting_rule"], keep="last")
+        sr = pd.concat([pd.to_numeric(t[c], errors="coerce") for c in ("spread_net_sharpe", "long_only_net_sharpe")
+                        if c in t]) / math.sqrt(12)
+        sr = sr[np.isfinite(sr)]
+        return float(sr.std(ddof=1)) if len(sr) > 2 else default
+
     def append(self, summary: Dict[str, object], config: Dict[str, object], data_version: Dict[str, object],
                holdout: bool = False, rule: str = "", period: str = "", holdout_id: str = "") -> None:
         """`config` describes the signal (not the rule or period), so one configuration is one trial."""
