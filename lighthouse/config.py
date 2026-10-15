@@ -180,6 +180,8 @@ class StrategyParams:
     # tested and rejected in the design phase (kept so the sensitivity tools can show why):
     trend_exit: Optional[float] = None          # exit when the trend beacon falls below this (None = off)
     max_entry_distance: Optional[float] = None  # "don't chase": skip entries when close is this far above the 200-SMA
+    min_entry_distance: Optional[float] = None  # enter only when close is more than this above the 200-SMA (0: above
+    #                                             it; the plain trend rule's entry, backtest.trend_rule)
     bear_entry_penalty: float = 10.0        # extra points required to enter in a bear market
     bear_size_multiplier: float = 0.5       # position scaling in a bear market
     block_entries_in_bear_turbulent: bool = True

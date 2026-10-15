@@ -8,6 +8,7 @@ history with the long-horizon rule:
   lighthouse_*    the full product, balanced profile (regime, exits, vol-targeted size)
   conservative_*  the full product, conservative profile
   same_*          the balanced product's average exposure held without timing (stock and cash in a fixed mix)
+  trend_*         the plain 200-day trend rule on the same engine (in when the review-day close is above the SMA)
   bh_*            buy and hold
 
 Costs: 5 bps commission + 5 bps slippage per side; fills at the next session's open (close for close-only files).
@@ -19,6 +20,7 @@ data (Yahoo prices, the FRED T-bill), under both delisting rules, and reports th
 
   reports/examples/cross_ticker_sp500_<DATE>.csv           one row per member and delisting rule
   reports/examples/cross_ticker_sp500_<DATE>_summary.csv   averages per rule, coverage, how many beat buy-and-hold
+  reports/examples/cross_ticker_sp500_<DATE>_timing_test.csv  the pre-registered test (METHODOLOGY section 8d)
 
 Run:  LIGHTHOUSE_OFFLINE=1 python scripts/cross_ticker_evaluation.py            # writes the CSV, prints the summary
       LIGHTHOUSE_OFFLINE=1 python scripts/cross_ticker_evaluation.py --check    # fails if the CSV is out of date
@@ -41,7 +43,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from lighthouse import analyze, InvestorProfile, StrategyParams  # noqa: E402
-from lighthouse.backtest import compute_metrics, run_backtest  # noqa: E402
+from lighthouse.backtest import compute_metrics, run_backtest, trend_rule  # noqa: E402
 from lighthouse.data import sample_pack_tickers  # noqa: E402
 
 OUT = ROOT / "reports" / "examples" / "cross_ticker_evaluation.csv"
@@ -55,6 +57,7 @@ def evaluate(ticker: str) -> dict:
     cons = analyze(ticker, InvestorProfile(horizon="long", risk="conservative"), p, years=40, source="sample").backtest.metrics
     m, bh = bt.metrics, compute_metrics(bt.buy_hold, bt.rf, p.trading_days)
     same = compute_metrics(bt.same_exposure, bt.rf, p.trading_days)
+    trend = trend_rule(r.prices, p, r.profile).metrics
     return {"ticker": ticker, "start": str(bt.start.date()), "end": str(bt.end.date()),
             "signals_cagr": sig["cagr"], "signals_sharpe": sig["sharpe"], "signals_mdd": sig["max_drawdown"],
             "lighthouse_cagr": m["cagr"], "lighthouse_vol": m["volatility"], "lighthouse_sharpe": m["sharpe"],
@@ -63,6 +66,7 @@ def evaluate(ticker: str) -> dict:
             "conservative_mdd": cons["max_drawdown"],
             "same_cagr": same["cagr"], "same_vol": same["volatility"], "same_sharpe": same["sharpe"],
             "same_mdd": same["max_drawdown"], "exposure": m["exposure"],
+            "trend_cagr": trend["cagr"], "trend_sharpe": trend["sharpe"], "trend_mdd": trend["max_drawdown"],
             "bh_cagr": bh["cagr"], "bh_vol": bh["volatility"], "bh_sharpe": bh["sharpe"], "bh_mdd": bh["max_drawdown"]}
 
 
@@ -92,13 +96,17 @@ def summary(df: pd.DataFrame) -> str:
              f"{df.conservative_sharpe.mean():.2f} | −{abs(df.conservative_mdd.mean()) * 100:.0f}% |",
              f"| Same exposure as balanced, never traded ({df.exposure.mean():.0%} in the stock) | "
              f"{pct(df.same_cagr.mean())} | {pct(df.same_vol.mean())} | {df.same_sharpe.mean():.2f} | "
-             f"−{abs(df.same_mdd.mean()) * 100:.0f}% |"]
+             f"−{abs(df.same_mdd.mean()) * 100:.0f}% |",
+             f"| Plain 200-day trend rule (fully invested above the SMA) | {pct(df.trend_cagr.mean())} | — | "
+             f"{df.trend_sharpe.mean():.2f} | −{abs(df.trend_mdd.mean()) * 100:.0f}% |"]
     n = len(df)
     lower_risk = int(((df.lighthouse_mdd > df.bh_mdd) & (df.lighthouse_vol < df.bh_vol)).sum())
     better_sharpe = int((df.lighthouse_sharpe > df.bh_sharpe).sum())
     beat_same = int((df.lighthouse_sharpe > df.same_sharpe).sum())
+    beat_trend = int((df.lighthouse_sharpe > df.trend_sharpe).sum())
     lines.append(f"\nLower drawdown and volatility in {lower_risk} of {n} stocks; higher Sharpe than buy-and-hold in "
-                 f"{better_sharpe} of {n}, than the same exposure without timing in {beat_same} of {n}.")
+                 f"{better_sharpe} of {n}, than the same exposure without timing in {beat_same} of {n}, than the plain "
+                 f"trend rule in {beat_trend} of {n}.")
     return "\n".join(lines)
 
 
@@ -143,7 +151,7 @@ def cohort(date: str, workers: int) -> int:
 
 
 def report_cohort(df, members, missing, uni, start, data_end) -> int:
-    from lighthouse.research.cohort import summarize
+    from lighthouse.research.cohort import summarize, timing_test
     tested = df["ticker"].nunique()
     summ = summarize(df, len(members))
     summ["start"], summ["end"] = str(start.date()), str(data_end.date())
@@ -164,7 +172,14 @@ def report_cohort(df, members, missing, uni, start, data_end) -> int:
               f"signals {pct(r.cohort_signals_cagr)}, the same exposure without timing {pct(r.cohort_same_cagr)} | "
               f"vs the same exposure: higher Sharpe on {int(r.beat_same_sharpe)}, lower drawdown on "
               f"{int(r.lower_mdd_than_same)}; average Sharpe {r.same_sharpe:.2f}, max DD {pct(r.same_mdd)}")
-    print(f"\nwrote {out.relative_to(ROOT)} and its _summary.csv")
+    if "trend_sharpe" in df:
+        tt = pd.concat([timing_test(df, rule) for rule in summ.index], ignore_index=True)
+        tt["cohort"] = str(start.date())
+        tt.to_csv(out.with_name(out.stem + "_timing_test.csv"), index=False)
+        with pd.option_context("display.width", 200, "display.max_columns", 20):
+            print("\nPRE-REGISTERED TIMING TEST (METHODOLOGY 8d; a hypothesis is accepted only if it holds in both "
+                  "cohorts under the exclude rule)\n" + tt.round(4).to_string(index=False))
+    print(f"\nwrote {out.relative_to(ROOT)}, its _summary.csv and _timing_test.csv")
     return 0
 
 

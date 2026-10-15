@@ -378,6 +378,8 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
             trend_ok = (not p.trend_gate) or (np.isfinite(tr[i]) and tr[i] > 0.0)
             if p.max_entry_distance is not None and np.isfinite(sd[i]) and sd[i] > p.max_entry_distance:
                 trend_ok = False
+            if p.min_entry_distance is not None and not (np.isfinite(sd[i]) and sd[i] > p.min_entry_distance):
+                trend_ok = False
             if ts[i] >= threshold and not blocked and trend_ok:
                 mult = (p.bear_size_multiplier if (use_regime and not bull[i]) else 1.0)
                 frac = backtest_size_fraction(atr[i], rvol[i], ts[i], prof, mult, mode=sizing)
@@ -424,9 +426,20 @@ def describe_risk_free(risk_free: Optional[pd.Series], index: pd.Index, fixed: f
 # --------------------------------------------------------------------------- #
 # Evaluation helpers
 # --------------------------------------------------------------------------- #
+def trend_rule(prices, params: StrategyParams, profile: InvestorProfile, start=None, risk_free=None) -> BacktestResult:
+    """The plain 200-day trend rule on the same engine as the product's rule: on each review day, fully invested when
+    the close is above the 200-day SMA, in cash (earning the risk-free rate) when below; the same review days, fills,
+    costs and cash yield, no score, no market regime, no stops. The yardstick for what the beacons add over one line
+    (METHODOLOGY section 8d)."""
+    p = params.copy(entry_score=0.0, exit_score=-1.0, trend_gate=False, min_entry_distance=0.0, exit_below_sma=0.0,
+                    trend_exit=None, max_entry_distance=None)
+    return run_backtest(prices, None, p, profile, use_regime=False, use_stops=False, sizing="full", start=start,
+                        risk_free=risk_free)
+
+
 def strategy_layers(prices, benchmark, params, profile, start=None, risk_free=None) -> pd.DataFrame:
-    """Add the product's layers one at a time to show what each contributes, then the full rule's average exposure held
-    without timing: the line every timing rule has to beat."""
+    """Add the product's layers one at a time to show what each contributes, then the two yardsticks every timing rule
+    has to beat: the full rule's average exposure held without timing, and the plain 200-day trend rule."""
     variants = [
         ("Technical signals only (fully invested)", dict(use_regime=False, use_stops=False, sizing="full")),
         ("+ market regime filter", dict(use_regime=True, use_stops=False, sizing="full")),
@@ -444,6 +457,7 @@ def strategy_layers(prices, benchmark, params, profile, start=None, risk_free=No
     same = compute_metrics(full.same_exposure, full.rf, params.trading_days)
     same["exposure"] = float(full.exposure.mean())
     rows["Same exposure, never traded"] = same
+    rows["Plain 200-day trend rule"] = trend_rule(prices, params, profile, start=start, risk_free=risk_free).metrics
     rows["Buy & hold"] = compute_metrics(base.buy_hold, base.rf, params.trading_days)
     if base.benchmark is not None:
         rows["S&P 500"] = compute_metrics(base.benchmark, base.rf, params.trading_days)

@@ -453,8 +453,57 @@ wait longer. Within three years only a signal much stronger than its backtest wo
 IC). What the forward journal can show soon is whether a near miss holds up at all, without any doubt about
 look-ahead; it cannot prove a small edge soon.
 
+**The share-count fix and the watch list (written 15 October 2026, before the re-run).** The signals that read a
+share count (`fundamental_signals.SHARE_COUNT_SIGNALS`: earnings, book, FCF, FCF after stock pay, EBITDA/EV, Altman Z,
+value against own history, net issuance, shareholder yield) used the pre-split count between a split and the next
+filing (§11, eighth session). They are re-run as new trials with the corrected count (configuration key `shares`),
+tuning then hold-out, under the §8b survival rule; the trial count grows by nine. Their hold-outs are not fresh: the
+near-identical uncorrected versions were evaluated on the same months, so a pass would be weak evidence and is
+reported as such. The watch list records `fcf_yield` under its corrected configuration (no forward snapshot existed
+under the old one) with the forward rule above unchanged, and it stays on the watch list whatever its new numbers
+show: dropping or adding a watched signal because of a re-run's result would be selection on the outcome.
+
 Automation: `.github/workflows/watch.yml` after the close on days 28-31 (and on Sundays, to keep its data cache), in
 the same concurrency group as the daily journal. The first snapshot is due after the close of 30 October 2026.
+
+### 8d. Pre-registered: does the rule's timing add anything? (written 15 October 2026, before the run)
+
+On the 20 sample stocks the rule's timing mostly cuts drawdowns: the stock and cash held in the rule's own average
+proportion, never traded, earned about as much (median CAGR 8.0% against the rule's 7.3%, drawdown -34% against
+-29%). Those are 20 survivors. This test asks the same question on the survivorship-aware cohorts of §8, with the
+answer rule fixed here before any cohort is run with the new yardsticks.
+
+**Data and rule tested.** `python scripts/cross_ticker_evaluation.py --cohort 1996-01-02` and `--cohort 2009-01-02`:
+every S&P 500 member on that date that Yahoo can price, from the date to the end of its data; the balanced investor,
+long horizon, default parameters: the product as shipped after the October 2026 simplification (price-only rule,
+liquidity-scaled costs, resting stops, cash and Sharpe at the 3-month T-bill). Per stock, three equity curves:
+
+* **A, the full rule** (`lighthouse_*`).
+* **B, the same exposure, never traded** (`same_*`): the stock and T-bills in A's average proportion over the stock's
+  window, rebalanced daily, no costs. It knows A's average exposure only after the fact: a yardstick, not a strategy.
+  Its Sharpe ratio equals buy-and-hold's (a fixed mix of a stock and the risk-free asset has the stock's Sharpe), so
+  the comparison with B is about return and drawdown at equal exposure.
+* **C, the plain 200-day trend rule** (`trend_*`, `backtest.trend_rule`): on the same review days, fully invested when
+  the close is above the 200-day SMA, in T-bills when below; the same engine, fills and costs, no score, no regime, no
+  stops.
+
+**Hypotheses, tested per stock with a two-sided sign test** (`research/cohort.timing_test`; ties and missing values
+left out):
+
+| | The full rule is better when | Accepted only if, in both cohorts |
+|---|---|---|
+| H1 timing adds return | A's CAGR > B's | A wins on more than half the stocks, sign-test p < 0.05 |
+| H2 timing cuts drawdown | A's max drawdown is shallower than B's | the same |
+| H3 the beacons add something over one line | A's Sharpe > C's | the same |
+
+The test reads the `exclude` delisting rule (every member Yahoo prices still trades, so the rules agree at the stock
+level; the `pessimistic` rows are reported too). Nothing else is chosen after the run: no subset of stocks, period or
+parameter.
+
+**What follows.** Nothing in the product changes automatically. If H1 fails, the documents say the timing does not add
+return over its own exposure (what it offers is the drawdown, if H2 holds). If H3 fails, the documents say a plain
+200-day trend rule does as well on these cohorts, and simplifying the rule to it is put to the user as a decision. The
+per-stock results, the summaries and `cross_ticker_sp500_<DATE>_timing_test.csv` are committed whatever they show.
 
 ## 9. Trade tickets: long and short (`lighthouse/tradeplan.py`)
 

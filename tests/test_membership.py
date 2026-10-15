@@ -74,6 +74,33 @@ def test_cohort_bounds_count_untested_members_as_lost():
     assert s.loc["pessimistic", "coverage"] == 0.5
 
 
+def test_pre_registered_timing_test_is_a_paired_sign_test():
+    """METHODOLOGY 8d: per stock, the full rule against the same exposure (CAGR, drawdown) and the plain trend rule
+    (Sharpe); a hypothesis holds in a cohort when the rule wins on more than half the stocks with p < 0.05."""
+    from scipy.stats import binomtest
+    from lighthouse.research.cohort import paired_sign_test, timing_test
+    n = 40
+    rng = np.random.default_rng(3)
+    base = rng.normal(0.08, 0.03, n)
+    df = pd.DataFrame({"ticker": [f"T{k}" for k in range(n)], "rule": "exclude",
+                       "lighthouse_cagr": base - 0.01, "same_cagr": base,                         # timing loses return
+                       "lighthouse_mdd": -0.25 + rng.normal(0, 0.01, n), "same_mdd": -0.40,       # ... and cuts drawdown
+                       "lighthouse_sharpe": 0.4 + np.r_[np.full(22, 0.01), np.full(18, -0.01)],   # 22 of 40: not enough
+                       "trend_sharpe": 0.4})
+    t = timing_test(df).set_index("hypothesis")
+    h1, h2, h3 = t.index
+    assert t.loc[h1, "wins"] == 0 and not t.loc[h1, "holds"]
+    assert t.loc[h2, "wins"] == n and t.loc[h2, "holds"] and t.loc[h2, "p_value"] < 1e-9
+    assert t.loc[h3, "wins"] == 22 and not t.loc[h3, "holds"]
+    assert t.loc[h3, "p_value"] == pytest.approx(binomtest(22, 40, 0.5).pvalue)
+    # ties and missing values are left out of the count
+    r = paired_sign_test(pd.Series([1.0, 2.0, np.nan, 3.0]), pd.Series([1.0, 1.0, 1.0, 1.0]))
+    assert (r["wins"], r["n"]) == (2, 2)
+    none = timing_test(df, rule="pessimistic")                          # no rows under that rule: nothing holds
+    assert (none["n"] == 0).all() and not none["holds"].any()
+
+
+
 def test_static_universe_says_it_is_biased():
     u = mb.static_universe("today's large caps", ["aapl", "brk.b"])
     assert u.members_on("2001-01-02") == ["AAPL", "BRK-B"] and "survivorship" in u.notes[0]

@@ -119,6 +119,7 @@ def test_evaluation_helpers_run(prices, benchmark):
     prof = InvestorProfile()
     layers = strategy_layers(prices, benchmark, p, prof)
     assert "Buy & hold" in layers.index and "S&P 500" in layers.index
+    assert {"Same exposure, never traded", "Plain 200-day trend rule"} <= set(layers.index)   # the two yardsticks
     grid = sensitivity_grid(prices, benchmark, p, prof, entry_values=(55, 60), exit_values=(35, 45))
     assert len(grid) == 4 and {"entry", "exit", "sharpe"} <= set(grid.columns)
     wf = walk_forward(prices, benchmark, p, prof, entry_values=(55, 60), exit_values=(35, 45))
@@ -190,3 +191,27 @@ def test_backtest_window_can_start_late(prices, benchmark):
     full = run_backtest(prices, benchmark)
     late = run_backtest(prices, benchmark, start=prices.index[400])
     assert late.start >= prices.index[400] and late.start > full.start
+
+
+def test_plain_trend_rule_holds_the_stock_only_above_its_200_day_average(prices):
+    """The second yardstick (METHODOLOGY 8d): on each review day (the month's last session), fully in above the
+    200-day SMA, out below it, filled the next session; the same engine, so the same fills and costs, and nothing else
+    (no score, no regime, no stops)."""
+    from lighthouse.backtest import trend_rule
+    from lighthouse.technicals import compute_indicators
+    p, prof = StrategyParams(), InvestorProfile()
+    res = trend_rule(prices, p, prof)
+    ind = compute_indicators(prices, p)
+    gap = ind["Close"] / ind["sma_slow"] - 1.0
+
+    def review_day_before(day):
+        d = ind.index[ind.index.get_loc(day) - 1]
+        assert d == ind.index[ind.index.to_period("M") == d.to_period("M")][-1]      # the month's last session
+        return d
+
+    assert len(res.trades) > 1
+    for t in res.trades:
+        assert t.size_fraction == 1.0
+        assert gap.loc[review_day_before(t.entry_date)] > 0                           # entered above the average
+        if t.exit_reason != "end of data (open)":
+            assert t.exit_reason == "below 200-day SMA" and gap.loc[review_day_before(t.exit_date)] < 0
