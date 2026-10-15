@@ -280,6 +280,82 @@ def test_insider_quarters_cached_by_the_old_parser_are_parsed_again(monkeypatch,
     assert P.insider_trades() is not None and calls == [url]                    # the new cache is used next time
 
 
+def _reissued_form345(issuers: dict, repeat_line: str = "") -> bytes:
+    """The 2020 Q1 excerpt with the issuer of some filings rewritten ({accession: (issuer CIK, symbol field)}), and
+    optionally one transaction line (by NONDERIV_TRANS_SK) listed twice on its form. Synthetic: the trades are real
+    rows of the excerpt, the issuers they are moved to are not."""
+    import io
+    import zipfile
+    src = zipfile.ZipFile(io.BytesIO((FIX / "form345_2020q1_excerpt.zip").read_bytes()))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name in src.namelist():
+            body = src.read(name)
+            if name in ("SUBMISSION.tsv", "NONDERIV_TRANS.tsv"):
+                tab = pd.read_csv(io.BytesIO(body), sep="\t", dtype=str, keep_default_na=False)
+                if name == "SUBMISSION.tsv":
+                    for accn, (cik, symbol) in issuers.items():
+                        rows = tab["ACCESSION_NUMBER"] == accn
+                        tab.loc[rows, ["ISSUERCIK", "ISSUERTRADINGSYMBOL"]] = [f"{cik:010d}", symbol]
+                elif repeat_line:
+                    again = tab[tab["NONDERIV_TRANS_SK"] == repeat_line].assign(NONDERIV_TRANS_SK="999999")
+                    tab = pd.concat([tab, again], ignore_index=True)
+                body = tab.to_csv(sep="\t", index=False).encode("utf-8")
+            z.writestr(name, body)
+    return buf.getvalue()
+
+
+BERKSHIRE, BROWN_FORMAN, ALPHABET = 1067983, 14693, 1652044       # their CIKs (every class files under one)
+OTHER_A, OTHER_B = 9_999_001, 9_999_002                            # synthetic issuers with look-alike symbols
+
+
+def test_class_shares_take_their_issuers_trades_and_nobody_elses():
+    # Berkshire's insiders file as 'BRK.A', Brown-Forman's as 'BFA, BFB'; the index holds BRK-B and BF-B. Before
+    # October 2026 those trades matched no member. Real trades of the excerpt, moved to these issuers:
+    blob = _reissued_form345({
+        "0001225208-20-000846": (BERKSHIRE, "BRK.A"),       # Hobson's purchase: 14,600 at $136.39, filed 16 Jan
+        "0001225208-20-001565": (BERKSHIRE, "BRK.B"),       # Pinto's sale: 15,212 at $135.72, filed 4 Feb
+        "0001127602-20-008690": (BROWN_FORMAN, "BFA, BFB"),  # Frank's two purchases, filed 2 Mar
+        "0001127602-20-004650": (ALPHABET, "GOOG"),         # Frank, 500 at $109.85, filed 10 Feb
+        "0001127602-20-007967": (ALPHABET, "GOOGL, GOOG"),  # Frank, 400 at $104.61, filed 26 Feb
+        "0001127602-20-009176": (OTHER_A, "BRKS"),          # Moorman's purchase under a look-alike symbol
+        "0001127602-20-005660": (OTHER_B, "BF.A"),          # Hernandez's sale: another issuer's 'BF.A'
+    }, repeat_line="274968")                                 # Frank's 500 at $91.79 listed twice on his form
+    t = P.parse_form345(blob)
+    tick = ["BRK-B", "BF-B", "GOOGL", "GOOG", "BRKS", "XOM"]
+    table = pd.DataFrame({"ticker": ["BRK-A", "BRK-B", "BF-A", "BF-B", "GOOGL", "GOOG", "XOM", "BRKS"],
+                          "cik": [BERKSHIRE, BERKSHIRE, BROWN_FORMAN, BROWN_FORMAN, ALPHABET, ALPHABET, 2115436,
+                                  OTHER_A]})
+    ciks = P.issuer_ciks_for(tick, table)
+    # class shares, and the classes of an issuer with two members; not a company with one listed class
+    assert ciks == {"BRK-B": BERKSHIRE, "BF-B": BROWN_FORMAN, "GOOGL": ALPHABET, "GOOG": ALPHABET}
+    assert P.issuer_ciks_for(tick, table.iloc[:0]) == {}
+    d = pd.DatetimeIndex(["2020-03-31"])
+    cap = pd.DataFrame(1e9, index=d, columns=tick)
+    new = P.insider_signals(t, d, tick, cap, issuer_ciks=ciks)
+    old = P.insider_signals(t, d, tick, cap)                 # by symbol only, as before (also: no ticker table)
+    b, n = new["insider_buyers"].loc["2020-03-31"], new["insider_net"].loc["2020-03-31"] * 1e9
+    frank_bf = 500 * 91.79 + 500 * 95.98 + 500 * 91.79       # the line listed twice on one form counts twice ...
+    assert b["BRK-B"] == 1 and n["BRK-B"] == pytest.approx(14_600 * 136.39 - 15_212 * 135.72)
+    assert b["BF-B"] == 1 and n["BF-B"] == pytest.approx(frank_bf)   # ... but its BFA and BFB copies once
+    # Alphabet: a Form 4 naming one class counts for both, one naming both counts once for each
+    assert n["GOOGL"] == pytest.approx(500 * 109.85 + 400 * 104.61) and n["GOOG"] == n["GOOGL"]
+    # look-alike symbols of other issuers stay theirs: Brooks Automation's 'BRKS', another company's 'BF.A'
+    assert b["BRKS"] == 1 and n["BRKS"] == pytest.approx(6_551 * 91.43)
+    # by symbol only, BRK-B saw only the sale filed as 'BRK.B' and BF-B nothing; every other member is unchanged
+    ob, on = old["insider_buyers"].loc["2020-03-31"], old["insider_net"].loc["2020-03-31"] * 1e9
+    assert ob["BRK-B"] == 0 and on["BRK-B"] == pytest.approx(-15_212 * 135.72) and on["BF-B"] == 0
+    assert on["GOOGL"] == pytest.approx(400 * 104.61) and on["GOOG"] == pytest.approx(500 * 109.85 + 400 * 104.61)
+    for k in ("insider_buyers", "insider_net"):
+        pd.testing.assert_frame_equal(new[k][["BRKS", "XOM"]], old[k][["BRKS", "XOM"]])
+    # still causal: the matching depends on the issuer, never on later filings
+    months = pd.DatetimeIndex(["2020-01-31", "2020-02-28", "2020-03-31"])
+    full = P.insider_signals(t, months, tick, issuer_ciks=ciks)["insider_buyers"]
+    part = P.insider_signals(t[t["filed"] <= "2020-02-28"], months, tick, issuer_ciks=ciks)["insider_buyers"]
+    pd.testing.assert_frame_equal(full.loc[:"2020-02-28"], part.loc[:"2020-02-28"])
+    assert full.loc["2020-01-31", "BRK-B"] == 1 and full.loc["2020-02-28", "BF-B"] == 0
+
+
 @pytest.mark.parametrize("cut", ["2020-01-31", "2020-02-28", "2020-03-13"])
 def test_insider_signals_are_causal(trades, cut):
     tick = ["XOM", "CVX", "JPM"]

@@ -160,14 +160,81 @@ def insider_trades(refresh: bool = False) -> pd.DataFrame:
     return drop_repeated_amendments(pd.concat(parts, ignore_index=True)) if parts else pd.DataFrame()
 
 
+_CLASS_SHARE = re.compile(r"^[A-Z]+-[A-Z]$")          # a share class as the price panel writes it: BRK-B, BF-B
+
+
+def issuer_ciks_for(tickers: Iterable[str], table: Optional[pd.DataFrame] = None) -> Dict[str, int]:
+    """{member: issuer CIK} for the members whose insider trades are matched by issuer rather than by symbol: a class
+    share (BRK-B, BF-B) and every class of an issuer with two or more classes among `tickers` (GOOGL and GOOG, FOXA and
+    FOX, NWSA and NWS). Every class of a company files under its one CIK, but a Form 4 names the class traded, in the
+    filer's spelling: Berkshire's insiders file as 'BRK.A', Brown-Forman's as 'BFA, BFB'. The CIKs come from EDGAR's
+    ticker table (today's tickers, as the fundamental signals use it); empty when it cannot be read, and then trades
+    match by symbol only."""
+    tickers = list(dict.fromkeys(tickers))
+    if table is None:
+        from ..edgar import ticker_table
+        try:
+            table = ticker_table()
+        except DataUnavailable:
+            return {}
+    cik = table.drop_duplicates("ticker").set_index("ticker")["cik"]
+    known = {t: int(cik[t]) for t in tickers if t in cik.index and pd.notna(cik[t])}
+    per_cik = pd.Series(known).value_counts() if known else pd.Series(dtype=int)
+    return {t: c for t, c in known.items() if _CLASS_SHARE.match(t) or per_cik.get(c, 0) > 1}
+
+
+# Every column of a trade except its symbol: the copies of one Form 4 line listed under several class symbols agree on
+# all of them.
+_LINE_COLUMNS = ["filed", "issuer_cik", "owner", "relationship", "code", "shares", "price", "value", "doc",
+                 "trans_date"]
+
+
+def member_trades(trades: pd.DataFrame, tickers: Iterable[str],
+                  issuer_ciks: Optional[Dict[str, int]] = None) -> pd.DataFrame:
+    """The trades of `tickers`, one row per trade and member (in `member`). A trade belongs to the member its filed
+    symbol names, which also covers companies that no longer exist. A member in `issuer_ciks` (see `issuer_ciks_for`)
+    also takes every trade filed under its issuer's CIK, whatever class the symbol names: BRK-B takes Berkshire's
+    'BRK.A' filings, and the two classes of an issuer in the index share its trades (a company's insiders trade one
+    company, as its two classes share one set of fundamentals). CIKs are never reused, so no other company's trades
+    can match this way (Brooks Automation's 'BRKS' or Saul Centers' 'BFS' stay theirs).
+
+    `parse_form345` lists a line that names several classes ('BFA, BFB') once per symbol, and those copies differ only
+    in the symbol; when two of them reach one member, the line counts once for it: among the rows that agree on every
+    column but the symbol, the member keeps those of one symbol (the most frequent, so two identical lines on one form
+    both count). Members matched by symbol only are not touched by this."""
+    tickers = list(dict.fromkeys(tickers))
+    by_symbol = trades[trades["symbol"].isin(tickers)].assign(member=lambda x: x["symbol"])
+    issuer_ciks = {t: int(c) for t, c in (issuer_ciks or {}).items() if t in set(tickers) and pd.notna(c)}
+    if not issuer_ciks or "issuer_cik" not in trades.columns:
+        return by_symbol
+    # members matched by symbol keep their rows in their order (their sums are exactly what they were)
+    parts = [by_symbol[~by_symbol["member"].isin(list(issuer_ciks))]]
+    grouped = trades[trades["symbol"].isin(list(issuer_ciks)) | trades["issuer_cik"].isin(list(issuer_ciks.values()))]
+    for t, cik in issuer_ciks.items():
+        hit = grouped[(grouped["symbol"] == t) | (grouped["issuer_cik"] == cik)]
+        if hit.empty:
+            continue
+        cols = [c for c in _LINE_COLUMNS if c in hit.columns]
+        frame = pd.DataFrame({"line": pd.util.hash_pandas_object(hit[cols], index=False).to_numpy(),  # NaN hash alike
+                              "symbol": hit["symbol"].fillna("").astype(str).to_numpy(), "n": 1})
+        frame["n"] = frame.groupby(["line", "symbol"])["n"].transform("size")
+        best = frame.sort_values("n", ascending=False, kind="stable").drop_duplicates("line")
+        pairs = pd.MultiIndex.from_frame(frame[["line", "symbol"]])
+        keep = pairs.isin(pd.MultiIndex.from_frame(best[["line", "symbol"]]))
+        parts.append(hit[keep].assign(member=t))
+    return pd.concat(parts).reset_index(drop=True)
+
+
 def insider_signals(trades: pd.DataFrame, dates: pd.DatetimeIndex, tickers: Iterable[str],
-                    market_cap: Optional[pd.DataFrame] = None, window_days: int = 90) -> Dict[str, pd.DataFrame]:
+                    market_cap: Optional[pd.DataFrame] = None, window_days: int = 90,
+                    issuer_ciks: Optional[Dict[str, int]] = None) -> Dict[str, pd.DataFrame]:
     """insider_buyers and insider_net at each month end, by the issuer's trading symbol as filed (which also covers
-    companies that no longer exist). A filing counts from the day after its filing date: EDGAR accepts Forms 4 until
-    10 pm and dates them that day, after the close at which the signal is read (as the fundamental and text signals
-    use a filing from the session after it). The window is the `window_days` days to the month end, by that date."""
+    companies that no longer exist), and for share classes by the issuer's CIK (`member_trades`). A filing counts
+    from the day after its filing date: EDGAR accepts Forms 4 until 10 pm and dates them that day, after the close at
+    which the signal is read (as the fundamental and text signals use a filing from the session after it). The window
+    is the `window_days` days to the month end, by that date."""
     tickers = list(tickers)
-    t = trades[trades["symbol"].isin(tickers)]
+    t = member_trades(trades, tickers, issuer_ciks)
     known = t["filed"] + pd.Timedelta(days=1)
     buyers = pd.DataFrame(0.0, index=dates, columns=tickers)
     net = pd.DataFrame(0.0, index=dates, columns=tickers)
@@ -175,9 +242,9 @@ def insider_signals(trades: pd.DataFrame, dates: pd.DatetimeIndex, tickers: Iter
         w = t[(known > d - pd.Timedelta(days=window_days)) & (known <= d)]
         if w.empty:
             continue
-        b = w[w["code"] == "P"].groupby("symbol")["owner"].nunique()
+        b = w[w["code"] == "P"].groupby("member")["owner"].nunique()
         buyers.loc[d, b.index] = b.to_numpy(float)
-        v = w.groupby("symbol")["value"].sum()
+        v = w.groupby("member")["value"].sum()
         net.loc[d, v.index] = v.to_numpy(float)
     if market_cap is not None:
         net = (net / market_cap.reindex(index=dates, columns=tickers)).where(market_cap.reindex(index=dates, columns=tickers) > 0)
@@ -365,7 +432,7 @@ def monthly(frames, panel, market_cap: Optional[pd.DataFrame] = None, refresh: b
             out[n] = hit
     tickers = list(panel.prices.columns)
     if "insider_buyers" not in out or "insider_net" not in out:
-        ins = insider_signals(insider_trades(), panel.dates, tickers, market_cap)
+        ins = insider_signals(insider_trades(), panel.dates, tickers, market_cap, issuer_ciks=issuer_ciks_for(tickers))
         for k, v in ins.items():
             store.write_frame("research_signals", k, v)
             out[k] = v

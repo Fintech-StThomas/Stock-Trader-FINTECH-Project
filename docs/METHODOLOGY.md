@@ -585,6 +585,16 @@ FINRA and SEC files, by the first live research runs, or by the first live MSFT 
 | The deflated Sharpe ratio's variance of trials came from the signals evaluated in the same run | A run with `--signals NAME` judged the signal against itself (the earnings-release tone's hold-out used 0.055 a month instead of the log's 0.185); its verdict does not change (it failed tuning; deflated Sharpe 0.01) | `ExperimentLog.trial_sharpe_std`: the latest tuning row of every logged configuration |
 | The post-mortem annualised trailing revenue growth over calendar days | One quarter's change over 167 days read as +9.6% a year (MSFT, May to October 2026) instead of about +18% | Annualised over the quarter ends behind the two trailing sums |
 
+### Seventh October 2026 session
+
+The data limits the sixth session documented and left open. The §8b results were computed before these fixes, on the
+data as it was, and they stay as logged: every hold-out has been used, so running the research again would be a new
+trial. Each row says which logged signals the fix touches and how much of them, as far as that can be counted offline.
+
+| Issue | Effect | Fix |
+|---|---|---|
+| A Form 4 names the share class traded, in the filer's spelling: Berkshire's insiders file as `BRK.A`, Brown-Forman's as `BFA, BFB`, while the index holds BRK-B and BF-B | Their trades matched no member, so `insider_buyers` and `insider_net` read no insider activity for BRK-B (a member since February 2010: about 200 month ends) and BF-B (about 213, 2009-2026) in every month, whatever was filed. Each class of a two-class issuer (GOOGL and GOOG, FOXA and FOX, NWSA and NWS) saw only the filings that named it. How many of those member-months held a trade cannot be counted offline (the insider data sets are not in the repository); they are two to eight of the 350-450 names ranked each month | `positioning.member_trades`: a class share, and every class of an issuer with two classes in the index, takes every trade filed under the issuer's CIK (from EDGAR's ticker table, as the fundamental signals use it; every class files under one CIK, and a CIK is never reused, so look-alike symbols such as Brooks Automation's `BRKS` or Saul Centers' `BFS` stay with their own issuers). A Form 4 line listed under several class symbols counts once. Chosen for two-class issuers: both classes carry the company's insider trades, as they carry its fundamentals. Every other member is matched by its symbol as filed, as before (a predecessor registrant, such as Google Inc. before October 2015, too). Without the ticker table, matching is by symbol only |
+
 ## 12. Speed
 
 Measured offline with Streamlit's test harness on the sample pack (before → after this session's work): first page load
