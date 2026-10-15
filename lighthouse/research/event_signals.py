@@ -209,7 +209,24 @@ def eightk_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False
 # --------------------------------------------------------------------------- #
 # 10-K text
 # --------------------------------------------------------------------------- #
-def text_history(ticker: str, lm, start: str = "2006-01-01", refresh: bool = False, source: str = "auto") -> pd.DataFrame:
+TENK_FORMS = ("10-K", "10-K405", "10-KT")
+TEXT_START = "2006-01-01"
+
+
+def tenk_filings(filings: pd.DataFrame, start: str = TEXT_START) -> pd.DataFrame:
+    """The annual reports the text signals read: forms 10-K, 10-K405 and 10-KT filed since `start`, oldest first."""
+    return filings[filings["form"].isin(list(TENK_FORMS)) & (filings["filed"] >= start)].sort_values("filed")
+
+
+def text_signal_daily(history: pd.DataFrame, index: pd.DatetimeIndex, col: str, sign: float) -> pd.Series:
+    """One text signal on the stock's sessions: `sign` x the feature `col` of its latest 10-K, from the session after
+    the filing date, kept TEXT_MAX_AGE_DAYS (`history`: rows of text_history, indexed by filing date)."""
+    ev = pd.Series(sign * pd.to_numeric(history[col], errors="coerce").to_numpy(),
+                   index=pd.DatetimeIndex(history.index) + pd.Timedelta(days=1)).dropna()
+    return hold_daily(ev, index, TEXT_MAX_AGE_DAYS)
+
+
+def text_history(ticker: str, lm, start: str = TEXT_START, refresh: bool = False, source: str = "auto") -> pd.DataFrame:
     """Text features of every 10-K the company filed since `start`, oldest first, indexed by filing date (cached)."""
     from ..edgar import cik_for, company_filings, fetch_document
     from ..text import features
@@ -218,7 +235,7 @@ def text_history(ticker: str, lm, start: str = "2006-01-01", refresh: bool = Fal
         return hit
     cik = cik_for(ticker)
     _, filings = company_filings(ticker, source=source)
-    tenk = filings[filings["form"].isin(["10-K", "10-K405", "10-KT"]) & (filings["filed"] >= start)].sort_values("filed")
+    tenk = tenk_filings(filings, start)
     rows, prev = [], None
     for _, f in tenk.iterrows():
         if not f.get("doc"):
@@ -287,9 +304,7 @@ def text_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False, 
         for t, h in hist.items():
             if col not in h:
                 continue
-            ev = pd.Series(sign * pd.to_numeric(h[col], errors="coerce").to_numpy(),
-                           index=pd.DatetimeIndex(h.index) + pd.Timedelta(days=1)).dropna()
-            daily[t] = hold_daily(ev, frames[t].index, TEXT_MAX_AGE_DAYS)
+            daily[t] = text_signal_daily(h, frames[t].index, col, sign)
         m = sample_at_month_ends(daily, panel.dates)
         store.write_frame("research_signals", name, m)
         out[name] = m
@@ -307,5 +322,6 @@ def monthly(frames, panel, refresh: bool = False, source: str = "auto", text: bo
 
 
 __all__ = ["announcement_returns", "hold_daily", "equal_weight_market", "earnings_monthly", "text_history",
+           "tenk_filings", "text_signal_daily", "TENK_FORMS",
            "text_monthly", "worker_sec_rate", "monthly", "DESCRIPTIONS", "TEXT_FEATURES", "in_eightk_sample",
            "release_document", "release_tone", "eightk_history", "eightk_tone_daily", "eightk_monthly"]

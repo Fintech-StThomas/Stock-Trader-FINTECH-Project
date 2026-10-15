@@ -398,6 +398,14 @@ def config_hash(name: str, config: Dict[str, object]) -> str:
     return hashlib.sha1(json.dumps({"name": name, **config}, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
+def signal_config(name: str, description: str = "") -> Dict[str, object]:
+    """The configuration a signal of the research run is logged with (scripts/research_signals.py): one signal with one
+    configuration is one trial. The forward watch list (research/watch.py) records its signals under the same
+    configuration, so its rows carry the config_hash of the logged trial."""
+    return {"signal": name, "universe": "sp500_pit", "quantiles": 5, "costs": "cs_spread+sqrt_impact@1m/100",
+            "borrow": 0.005, "description": description}
+
+
 class HoldoutUsed(RuntimeError):
     """The hold-out of this signal and configuration was already evaluated."""
 
@@ -507,4 +515,5 @@ def evaluate_holdout(panel: Panel, signal: pd.DataFrame, name: str, config: Dict
 
 
 __all__ = ["Panel", "build_panel", "sample_at_month_ends", "evaluate", "evaluate_holdout", "ExperimentLog",
-           "HoldoutUsed", "deflated_sharpe", "newey_west_se", "t_stats", "ols_nw", "cost_panel", "TUNING", "HOLDOUT"]
+           "HoldoutUsed", "deflated_sharpe", "newey_west_se", "t_stats", "ols_nw", "cost_panel", "TUNING", "HOLDOUT",
+           "config_hash", "signal_config"]
