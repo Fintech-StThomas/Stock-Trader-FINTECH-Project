@@ -82,6 +82,13 @@ work.
 * 15 October 2026: the SEC contact e-mail for that session's runs; up to 2-3 helper agents allowed for parallel work;
   the executive summary and pitch brought up to date with the current results (done); pull request #6 for
   `claude/focused-bohr-klq8zc` opened (merge only when the user says so).
+* 15 October 2026 (next session, branch `claude/ecstatic-wright-3w8w59`, from `main` after PR #6 was merged): work
+  open items 1 and 3 with helper agents; item 4 skipped (no local model here). The item 2 decisions: **the DCF's
+  equity premium is the geometric mean** of the Ken French market factor since 1963 (the arithmetic 7.2% shown as a
+  sensitivity); **RONIC = WACC in the bear case** (base and bull keep today's ROIC floored at the WACC); **REIT FFO
+  per NAREIT** (real-estate impairments added back, the impairment line kept beside it); **a bank that never tagged
+  preferred stock counts it as 0**, flagged (preferred tagged in other periods but not this one: still no tangible
+  book).
 
 ## Running the research again (a fresh container re-downloads everything)
 
