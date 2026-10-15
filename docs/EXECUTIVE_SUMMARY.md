@@ -111,7 +111,7 @@ once. The product's value is the risk discipline, not stock selection (`docs/MET
   liquidity, survivorship-aware cohorts, a research hold-out evaluated once with the trial count behind every
   verdict, and a plain list of what we tried and rejected (ATR stops on long-term positions, daily reviews, "don't
   chase" filters, 47 cross-sectional signal configurations).
-* **Runs anywhere** — live data when online, bundled real data when offline; 330 automated tests.
+* **Runs anywhere** — live data when online, bundled real data when offline; 331 automated tests.
 
 ## Major limitations and risks
 
