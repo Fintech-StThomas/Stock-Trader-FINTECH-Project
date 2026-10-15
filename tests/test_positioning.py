@@ -106,6 +106,19 @@ def test_short_volume_day_before_august_2018_sums_the_facilities(monkeypatch, tm
     assert not (tmp_path / "finra_shvol" / "20150105.parquet").exists()
 
 
+def test_an_early_file_without_a_header_line_is_read(monkeypatch, tmp_path):
+    # 22 November 2010: the Nasdaq file starts with its first row (no header), the NYSE file has one, the ADF file
+    # has a header and no rows, and the Chicago facility did not exist yet (403)
+    _serve(monkeypatch, tmp_path)
+    day = P.short_volume_day("2010-11-22")
+    assert day.loc["AAPL", "ShortVolume"] == 2_055_344 + 42_559
+    assert day.loc["AAPL", "TotalVolume"] == 4_611_502 + 92_786
+    assert day.loc["MSFT", "TotalVolume"] == 11_483_645 + 3_055_503
+    assert len(day) == 5 and "5" not in day.index                                # the trailer line is no symbol
+    with pytest.raises(ValueError):
+        P._read_shvol("20101122|AAPL|1\n")
+
+
 def test_short_volume_signal_uses_the_last_five_sessions_and_is_causal(monkeypatch, tmp_path):
     dates = pd.DatetimeIndex(["2023-12-29", "2024-01-31"])
     calls = _serve(monkeypatch, tmp_path / "full")

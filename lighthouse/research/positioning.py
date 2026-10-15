@@ -205,6 +205,22 @@ def _normalised_day(hit: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+SHVOL_COLUMNS = {5: ["Date", "Symbol", "ShortVolume", "TotalVolume", "Market"],
+                 6: ["Date", "Symbol", "ShortVolume", "ShortExemptVolume", "TotalVolume", "Market"]}
+
+
+def _read_shvol(txt: str) -> pd.DataFrame:
+    """One FINRA daily file as a table. Most start with a header line; some early Nasdaq files have none (FNSQ, 22
+    November 2010, starts with its first row), and are read with the columns of their field count."""
+    first = txt.lstrip().split("\n", 1)[0].strip()
+    if first.startswith("Date|"):
+        return pd.read_csv(io.StringIO(txt), sep="|", dtype={"Symbol": str})
+    names = SHVOL_COLUMNS.get(first.count("|") + 1)
+    if names is None:
+        raise ValueError(f"unrecognised FINRA short-volume file starting {first[:60]!r}")
+    return pd.read_csv(io.StringIO(txt), sep="|", dtype={"Symbol": str}, header=None, names=names)
+
+
 def short_volume_day(day) -> Optional[pd.DataFrame]:
     """Symbol, short volume and total volume for one session (all trade reporting facilities summed).
 
@@ -224,7 +240,7 @@ def short_volume_day(day) -> Optional[pd.DataFrame]:
             txt = _get(FINRA_SHVOL.format(name=n, date=key), timeout=60).text
         except DataUnavailable:
             continue
-        df = pd.read_csv(io.StringIO(txt), sep="|", dtype={"Symbol": str})
+        df = _read_shvol(txt)
         df = df[pd.to_numeric(df["Date"], errors="coerce").notna()]
         parts.append(df[["Symbol", "ShortVolume", "TotalVolume"]])
     if not parts:
