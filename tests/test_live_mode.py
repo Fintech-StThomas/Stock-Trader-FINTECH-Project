@@ -80,6 +80,23 @@ def test_nyse_calendar():
     assert sessions_behind("2026-06-30", pd.Timestamp("2026-07-06 09:00", tz=ET)) == 2
 
 
+def test_nyse_calendar_knows_the_one_off_closures():
+    from lighthouse.data import NYSE_SPECIAL_CLOSURES
+    h = {d.date() for d in nyse_holidays(1990, 2026)}
+    for day in ("1994-04-27", "2001-09-11", "2001-09-14", "2004-06-11", "2007-01-02", "2012-10-29", "2012-10-30",
+                "2018-12-05", "2025-01-09"):
+        assert pd.Timestamp(day).date() in h and not is_trading_day(day), day
+    assert all(pd.Timestamp(d).weekday() < 5 for d in NYSE_SPECIAL_CLOSURES)       # each one closed a weekday
+    assert is_trading_day("2001-09-17") and is_trading_day("2012-10-31") and is_trading_day("2025-01-10")
+    # the market clock on the day of mourning for President Carter: the last finished session is the 8th, and a bar
+    # of the 8th is current on the morning of the 10th (the old calendar counted the 9th as a missing session)
+    assert last_session_close(pd.Timestamp("2025-01-09 17:00", tz=ET)) == pd.Timestamp("2025-01-08 16:00", tz=ET)
+    assert sessions_behind("2025-01-08", pd.Timestamp("2025-01-10 09:00", tz=ET)) == 0
+    assert sessions_behind("2025-01-08", pd.Timestamp("2025-01-10 17:00", tz=ET)) == 1
+    # nothing changes once the closure has passed: the cache expires at the same closes as before
+    assert last_session_close(pd.Timestamp("2025-01-13 09:00", tz=ET)) == pd.Timestamp("2025-01-10 16:00", tz=ET)
+
+
 def test_cli_refuses_and_accepts_the_flag(capsys, strict):
     from lighthouse.__main__ import main
     assert main(["trade", "MSFT", "--source", "sample", "--horizon", "short", "--cash", "5000", "--years", "6"]) == 2

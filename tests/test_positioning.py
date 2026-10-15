@@ -18,6 +18,7 @@ import pytest
 
 from lighthouse import data, store
 from lighthouse.data import DataUnavailable
+from lighthouse.http import HTTPStatusError
 from lighthouse.research import positioning as P
 
 FIX = Path(__file__).parent / "fixtures" / "positioning"
@@ -31,8 +32,9 @@ class _Resp:
 
 
 def _serve(monkeypatch, tmp_path, until=None):
-    """Answer FINRA and SEC URLs from the fixtures, as the hosts do: a missing daily file is HTTP 403 (DataUnavailable),
-    a date without short interest is HTTP 204 with no body. `until`: pretend nothing after this date exists yet."""
+    """Answer FINRA and SEC URLs from the fixtures, as the hosts do: a missing daily file is HTTP 403 (HTTPStatusError,
+    as `http.fetch` raises it), a date without short interest is HTTP 204 with no body. `until`: pretend nothing after
+    this date exists yet."""
     calls = []
     monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
     cut = pd.Timestamp(until) if until is not None else None
@@ -49,7 +51,7 @@ def _serve(monkeypatch, tmp_path, until=None):
         name = url.rsplit("/", 1)[-1]
         f = FIX / name
         if not f.exists() or (cut is not None and pd.Timestamp(name[-12:-4]) > cut):
-            raise DataUnavailable(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>")
+            raise HTTPStatusError(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>", 403)
         return _Resp(f.read_bytes())
 
     monkeypatch.setattr(P, "_get", fake)
@@ -106,6 +108,69 @@ def test_short_volume_day_before_august_2018_sums_the_facilities(monkeypatch, tm
     assert not (tmp_path / "finra_shvol" / "20150105.parquet").exists()
 
 
+def _failing_once(monkeypatch, failures: dict):
+    """Wrap the fixture server: the first request for each named file fails with the given error, later ones are
+    served as usual."""
+    served = P._get
+
+    def fake(url, **kw):
+        name = url.rsplit("/", 1)[-1]
+        if name in failures:
+            raise failures.pop(name)
+        return served(url, **kw)
+    monkeypatch.setattr(P, "_get", fake)
+
+
+def test_a_session_is_cached_only_when_every_facility_answered(monkeypatch, tmp_path):
+    # 2 January 2015: FNSQ, FNYX and FNRA published; FNQC did not exist yet and FINRA answers 403 ("no such file").
+    # Before October 2026 a timeout on one facility (a plain DataUnavailable: no answer through every retry) was
+    # skipped like a 403 and the session cached without it, for good.
+    calls = _serve(monkeypatch, tmp_path)
+    timeout = DataUnavailable("cdn.finra.org: gave up after 5 attempts (ReadTimeout: read timed out) for the file")
+    _failing_once(monkeypatch, {"FNYXshvol20150102.txt": timeout})
+    part = P.short_volume_day("2015-01-02")
+    assert part.loc["AAPL", "ShortVolume"] == 4_537_230 + 196_866              # FNSQ and FNRA: usable in this run ...
+    assert store.read_frame("finra_shvol", "20150102") is None                   # ... but not cached
+    full = P.short_volume_day("2015-01-02")                                      # asked again: every facility answers
+    assert full.loc["AAPL", "ShortVolume"] == 4_537_230 + 1_120_622 + 196_866
+    assert store.read_json("finra_shvol", "20150102") == {
+        "facilities": {"FNSQ": "published", "FNYX": "published", "FNQC": "not published", "FNRA": "published"},
+        "rows": len(full)}
+    n = len(calls)
+    assert P.short_volume_day("2015-01-02").equals(full) and len(calls) == n       # now from the cache
+    # an HTTP error other than "no such file" (401 here) is a failure too, not an absent facility
+    _serve(monkeypatch, tmp_path / "auth")
+    _failing_once(monkeypatch, {"FNRAshvol20150102.txt": HTTPStatusError("HTTP 401 from cdn.finra.org", 401)})
+    assert P.short_volume_day("2015-01-02").loc["AAPL", "ShortVolume"] == 4_537_230 + 1_120_622
+    assert store.read_frame("finra_shvol", "20150102") is None
+
+
+def test_a_signal_built_on_a_partial_session_is_not_cached(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    _serve(monkeypatch, tmp_path)
+    _failing_once(monkeypatch, {"FNSQshvol20150102.txt": DataUnavailable("cdn.finra.org: gave up after 5 attempts")})
+    # only the short-volume part of `monthly` is under test: the other positioning signals are stubbed
+    monkeypatch.setattr(P, "insider_trades", lambda: None)
+    monkeypatch.setattr(P, "issuer_ciks_for", lambda tickers: {})
+    monkeypatch.setattr(P, "insider_signals", lambda trades, dates, tickers, cap, issuer_ciks=None: {
+        k: pd.DataFrame(np.nan, index=dates, columns=tickers) for k in ("insider_buyers", "insider_net")})
+    monkeypatch.setattr(P, "days_to_cover_signal", lambda dates, tickers: pd.DataFrame(np.nan, index=dates,
+                                                                                       columns=tickers))
+    # 9 January 2015: the window is 2 and 5-8 January; the excerpt holds 2 January only (the rest answer 403)
+    panel = SimpleNamespace(dates=pd.DatetimeIndex(["2015-01-09"]), prices=pd.DataFrame(columns=["AAPL", "MSFT"]))
+    first = P.monthly(None, panel)["short_volume"]
+    assert first.attrs["incomplete_sessions"] == ["2015-01-02"]
+    assert first.loc["2015-01-09", "AAPL"] == pytest.approx(-(1_120_622 + 196_866) / (2_937_726 + 533_853))
+    assert store.read_frame("research_signals", "short_volume") is None          # not cached as complete
+    assert store.read_json("research", "short_volume_incomplete") == ["2015-01-02"]
+    again = P.monthly(None, panel)["short_volume"]                               # the next run downloads it again
+    assert again.attrs["incomplete_sessions"] == [] and store.read_json("research", "short_volume_incomplete") == []
+    assert again.loc["2015-01-09", "AAPL"] == pytest.approx(-(4_537_230 + 1_120_622 + 196_866)
+                                                            / (17_474_580 + 2_937_726 + 533_853))
+    pd.testing.assert_frame_equal(store.read_frame("research_signals", "short_volume"), again, check_freq=False,
+                                  check_index_type=False)
+
+
 def test_an_early_file_without_a_header_line_is_read(monkeypatch, tmp_path):
     # 22 November 2010: the Nasdaq file starts with its first row (no header), the NYSE file has one, the ADF file
     # has a header and no rows, and the Chicago facility did not exist yet (403)
@@ -144,6 +209,33 @@ def test_short_volume_signal_uses_the_last_five_sessions_and_is_causal(monkeypat
     calls = _serve(monkeypatch, tmp_path / "early")
     early = P.short_volume_signal(pd.DatetimeIndex(["2009-06-30"]), TICKERS)
     assert early.isna().all().all() and calls == []
+
+
+def test_the_short_volume_window_skips_one_off_closures(monkeypatch, tmp_path):
+    # Hurricane Sandy closed the market on 29 and 30 October 2012. October's signal reads the five sessions before
+    # the 31st: 22-26 October. Before October 2026 the calendar knew only the regular holidays, asked for the two
+    # closed days (no file: 403) and summed three sessions. Synthetic files (one facility, two symbols), one a day.
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    vols = {"20121022": (100, 1_000), "20121023": (200, 1_000), "20121024": (300, 1_000), "20121025": (400, 1_000),
+            "20121026": (500, 1_000), "20121019": (900, 1_000)}
+    calls = []
+
+    def fake(url, **kw):
+        name = url.rsplit("/", 1)[-1]
+        calls.append(name)
+        day = name[-12:-4]
+        if not name.startswith("FNSQ") or day not in vols:
+            raise HTTPStatusError(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>", 403)
+        short, total = vols[day]
+        body = (f"Date|Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market\n{day}|AAA|{short}|0|{total}|Q\n"
+                f"{day}|BBB|1|0|10|Q\n2\n")
+        return _Resp(body.encode())
+    monkeypatch.setattr(P, "_get", fake)
+    assert not data.is_trading_day("2012-10-29") and not data.is_trading_day("2012-10-30")
+    sig = P.short_volume_signal(pd.DatetimeIndex(["2012-10-31"]), ["AAA", "BBB"])
+    asked = sorted({c[-12:-4] for c in calls})
+    assert asked == ["20121022", "20121023", "20121024", "20121025", "20121026"]   # five real sessions, no closure
+    assert sig.loc["2012-10-31", "AAA"] == pytest.approx(-(100 + 200 + 300 + 400 + 500) / 5_000)
 
 
 # --------------------------------------------------------------------------- #
@@ -278,6 +370,82 @@ def test_insider_quarters_cached_by_the_old_parser_are_parsed_again(monkeypatch,
     got = P.insider_trades()
     assert calls == [url] and "doc" in got.columns and len(got) == len(trades)
     assert P.insider_trades() is not None and calls == [url]                    # the new cache is used next time
+
+
+def _reissued_form345(issuers: dict, repeat_line: str = "") -> bytes:
+    """The 2020 Q1 excerpt with the issuer of some filings rewritten ({accession: (issuer CIK, symbol field)}), and
+    optionally one transaction line (by NONDERIV_TRANS_SK) listed twice on its form. Synthetic: the trades are real
+    rows of the excerpt, the issuers they are moved to are not."""
+    import io
+    import zipfile
+    src = zipfile.ZipFile(io.BytesIO((FIX / "form345_2020q1_excerpt.zip").read_bytes()))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name in src.namelist():
+            body = src.read(name)
+            if name in ("SUBMISSION.tsv", "NONDERIV_TRANS.tsv"):
+                tab = pd.read_csv(io.BytesIO(body), sep="\t", dtype=str, keep_default_na=False)
+                if name == "SUBMISSION.tsv":
+                    for accn, (cik, symbol) in issuers.items():
+                        rows = tab["ACCESSION_NUMBER"] == accn
+                        tab.loc[rows, ["ISSUERCIK", "ISSUERTRADINGSYMBOL"]] = [f"{cik:010d}", symbol]
+                elif repeat_line:
+                    again = tab[tab["NONDERIV_TRANS_SK"] == repeat_line].assign(NONDERIV_TRANS_SK="999999")
+                    tab = pd.concat([tab, again], ignore_index=True)
+                body = tab.to_csv(sep="\t", index=False).encode("utf-8")
+            z.writestr(name, body)
+    return buf.getvalue()
+
+
+BERKSHIRE, BROWN_FORMAN, ALPHABET = 1067983, 14693, 1652044       # their CIKs (every class files under one)
+OTHER_A, OTHER_B = 9_999_001, 9_999_002                            # synthetic issuers with look-alike symbols
+
+
+def test_class_shares_take_their_issuers_trades_and_nobody_elses():
+    # Berkshire's insiders file as 'BRK.A', Brown-Forman's as 'BFA, BFB'; the index holds BRK-B and BF-B. Before
+    # October 2026 those trades matched no member. Real trades of the excerpt, moved to these issuers:
+    blob = _reissued_form345({
+        "0001225208-20-000846": (BERKSHIRE, "BRK.A"),       # Hobson's purchase: 14,600 at $136.39, filed 16 Jan
+        "0001225208-20-001565": (BERKSHIRE, "BRK.B"),       # Pinto's sale: 15,212 at $135.72, filed 4 Feb
+        "0001127602-20-008690": (BROWN_FORMAN, "BFA, BFB"),  # Frank's two purchases, filed 2 Mar
+        "0001127602-20-004650": (ALPHABET, "GOOG"),         # Frank, 500 at $109.85, filed 10 Feb
+        "0001127602-20-007967": (ALPHABET, "GOOGL, GOOG"),  # Frank, 400 at $104.61, filed 26 Feb
+        "0001127602-20-009176": (OTHER_A, "BRKS"),          # Moorman's purchase under a look-alike symbol
+        "0001127602-20-005660": (OTHER_B, "BF.A"),          # Hernandez's sale: another issuer's 'BF.A'
+    }, repeat_line="274968")                                 # Frank's 500 at $91.79 listed twice on his form
+    t = P.parse_form345(blob)
+    tick = ["BRK-B", "BF-B", "GOOGL", "GOOG", "BRKS", "XOM"]
+    table = pd.DataFrame({"ticker": ["BRK-A", "BRK-B", "BF-A", "BF-B", "GOOGL", "GOOG", "XOM", "BRKS"],
+                          "cik": [BERKSHIRE, BERKSHIRE, BROWN_FORMAN, BROWN_FORMAN, ALPHABET, ALPHABET, 2115436,
+                                  OTHER_A]})
+    ciks = P.issuer_ciks_for(tick, table)
+    # class shares, and the classes of an issuer with two members; not a company with one listed class
+    assert ciks == {"BRK-B": BERKSHIRE, "BF-B": BROWN_FORMAN, "GOOGL": ALPHABET, "GOOG": ALPHABET}
+    assert P.issuer_ciks_for(tick, table.iloc[:0]) == {}
+    d = pd.DatetimeIndex(["2020-03-31"])
+    cap = pd.DataFrame(1e9, index=d, columns=tick)
+    new = P.insider_signals(t, d, tick, cap, issuer_ciks=ciks)
+    old = P.insider_signals(t, d, tick, cap)                 # by symbol only, as before (also: no ticker table)
+    b, n = new["insider_buyers"].loc["2020-03-31"], new["insider_net"].loc["2020-03-31"] * 1e9
+    frank_bf = 500 * 91.79 + 500 * 95.98 + 500 * 91.79       # the line listed twice on one form counts twice ...
+    assert b["BRK-B"] == 1 and n["BRK-B"] == pytest.approx(14_600 * 136.39 - 15_212 * 135.72)
+    assert b["BF-B"] == 1 and n["BF-B"] == pytest.approx(frank_bf)   # ... but its BFA and BFB copies once
+    # Alphabet: a Form 4 naming one class counts for both, one naming both counts once for each
+    assert n["GOOGL"] == pytest.approx(500 * 109.85 + 400 * 104.61) and n["GOOG"] == n["GOOGL"]
+    # look-alike symbols of other issuers stay theirs: Brooks Automation's 'BRKS', another company's 'BF.A'
+    assert b["BRKS"] == 1 and n["BRKS"] == pytest.approx(6_551 * 91.43)
+    # by symbol only, BRK-B saw only the sale filed as 'BRK.B' and BF-B nothing; every other member is unchanged
+    ob, on = old["insider_buyers"].loc["2020-03-31"], old["insider_net"].loc["2020-03-31"] * 1e9
+    assert ob["BRK-B"] == 0 and on["BRK-B"] == pytest.approx(-15_212 * 135.72) and on["BF-B"] == 0
+    assert on["GOOGL"] == pytest.approx(400 * 104.61) and on["GOOG"] == pytest.approx(500 * 109.85 + 400 * 104.61)
+    for k in ("insider_buyers", "insider_net"):
+        pd.testing.assert_frame_equal(new[k][["BRKS", "XOM"]], old[k][["BRKS", "XOM"]])
+    # still causal: the matching depends on the issuer, never on later filings
+    months = pd.DatetimeIndex(["2020-01-31", "2020-02-28", "2020-03-31"])
+    full = P.insider_signals(t, months, tick, issuer_ciks=ciks)["insider_buyers"]
+    part = P.insider_signals(t[t["filed"] <= "2020-02-28"], months, tick, issuer_ciks=ciks)["insider_buyers"]
+    pd.testing.assert_frame_equal(full.loc[:"2020-02-28"], part.loc[:"2020-02-28"])
+    assert full.loc["2020-01-31", "BRK-B"] == 1 and full.loc["2020-02-28", "BF-B"] == 0
 
 
 @pytest.mark.parametrize("cut", ["2020-01-31", "2020-02-28", "2020-03-13"])

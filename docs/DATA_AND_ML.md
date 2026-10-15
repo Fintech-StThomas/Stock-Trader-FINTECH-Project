@@ -135,6 +135,16 @@ So **no signal carries weight in `lighthouse/decision.py`**, and the verdicts st
 not a stock picker. The research harness, its experiment log and the hold-out guard stay in place for the next idea:
 a new signal is one more trial, and the forward journal (Phase 2) collects the out-of-sample data no backtest can.
 
+These results predate five data fixes made after them (`docs/METHODOLOGY.md` §11, seventh session), and they were not
+run again: every hold-out has been used, so a re-run would be a new trial. The fixes touch few member-months, each a few
+names in a month of 350-450: the insider signals of BRK-B and BF-B (about 200 and 213 month ends that read no insider
+activity, because their Form 4s name the other share class) and of the classes of GOOGL/GOOG, FOXA/FOX and NWSA/NWS;
+one short-volume window (October 2012, three sessions instead of five, Hurricane Sandy); XOM's filing-based signals
+(the earnings reaction, the 10-K text signals and the earnings-release tone, missing in almost all its months because
+its filing list held only the new holding company's filings); and possibly pre-2018 short-volume sessions cached
+without a facility whose download failed (not countable: the run's cache was not kept). Whether any verdict would
+change is not known without that new trial.
+
 ## 6. What free data can and cannot prove
 
 What it can prove:
@@ -157,6 +167,10 @@ What it cannot prove:
   realistic costs can look negative here. Every result also shows a flat 10 bps a side; quote or TAQ data would settle it.
 * **Anything before 2009 in fundamentals,** or for companies whose filings the ticker table no longer maps (most of the
   dead), or for concepts a company tags under its own taxonomy (some banks' loans and intangibles, some REITs' gains).
+  A company that moved to a new registrant keeps its history only when the pair is listed (`edgar.PREDECESSOR_CIKS`,
+  which merges the facts and the filing lists; XOM today): EDGAR does not link the two.
+* **Unplanned market closures before they happen.** The calendar knows the regular holidays and the one-off closures
+  since 1990 (9/11, Hurricane Sandy, the national days of mourning); a new one has to be added when it is announced.
 * **Borrow costs and short availability.** Assumed (0.5% a year), not measured.
 * **Forward-looking events.** Earnings dates are known from 8-K filings after the fact; there is no free forward
   calendar or consensus estimate, so the reverse DCF stands in for expectations.

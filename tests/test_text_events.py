@@ -316,6 +316,24 @@ def test_eightk_tone_is_the_change_known_the_day_after_and_causal(lm, monkeypatc
     pd.testing.assert_series_equal(ev.eightk_tone_daily(stub, idx), d)
 
 
+def test_text_history_reads_each_10k_under_the_registrant_that_filed_it(lm, monkeypatch):
+    # a successor issuer's list holds its predecessor's 10-Ks (edgar.submissions merges them), which sit under the
+    # predecessor's CIK: ExxonMobil Holdings Corp (2115436, 2026) <- Exxon Mobil Corp (34088). Synthetic filings.
+    from lighthouse import edgar
+    filings = pd.DataFrame({"accn": ["a-2024", "a-2025", "a-2027"], "form": ["10-K", "10-K", "10-K"],
+                            "filed": pd.to_datetime(["2024-02-20", "2025-02-19", "2027-02-17"]),
+                            "doc": ["k24.htm", "k25.htm", "k27.htm"], "cik": [34088, 34088, 2115436]})
+    monkeypatch.setattr(edgar, "cik_for", lambda t: 2115436)
+    monkeypatch.setattr(edgar, "company_filings", lambda t, source="auto", refresh=False: ({}, filings))
+    asked = []
+    monkeypatch.setattr(edgar, "fetch_document", lambda cik, accn, doc, cache=True: asked.append((cik, accn)) or
+                        "We expect a loss. Our risk factors are uncertain. Revenue may decline.")
+    monkeypatch.setattr(ev.store, "read_frame", lambda kind, key: None)
+    monkeypatch.setattr(ev.store, "write_frame", lambda kind, key, df: None)
+    h = ev.text_history("XOM", lm)
+    assert asked == [(34088, "a-2024"), (34088, "a-2025"), (2115436, "a-2027")] and len(h) == 3
+
+
 def test_eightk_sample_is_a_fixed_half():
     names = [f"T{k:04d}" for k in range(2000)]
     picked = [t for t in names if ev.in_eightk_sample(t)]

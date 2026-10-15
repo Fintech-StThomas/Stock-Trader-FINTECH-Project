@@ -287,6 +287,155 @@ def test_facts_cache_is_used_as_it_is_offline_or_when_edgar_is_unreachable(facts
     assert srv.calls == 0 and set(got.concept) == {"NetIncomeLoss"}
 
 
+class _FsdsServer:
+    """Stands in for www.sec.gov's Financial Statement Data Sets: every quarter is the recorded MSFT subset of 2017 Q3
+    (five tags); counts the downloads; `down = True` behaves like an unreachable EDGAR."""
+
+    def __init__(self):
+        self.blob = (FIX / "fsds_2017q3_msft_subset.zip").read_bytes()
+        self.calls, self.down = 0, False
+
+    def __call__(self, url, **kw):
+        if self.down:
+            raise DataUnavailable("EDGAR unreachable (test)")
+        assert "financial-statement-data-sets" in url
+        self.calls += 1
+        blob = self.blob
+
+        class Reply:
+            content = blob
+        return Reply()
+
+
+def test_bulk_data_set_cache_records_its_tags_and_refetches_for_more(monkeypatch, tmp_path):
+    monkeypatch.setattr(edgar.store._data, "CACHE_DIR", tmp_path)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")          # the fetch is replaced: nothing reaches the network
+    srv = _FsdsServer()
+    monkeypatch.setattr(edgar, "_get", srv)
+    old_list = ["NetIncomeLoss", "SalesRevenueNet"]
+    monkeypatch.setattr(pit, "CONCEPTS", old_list)          # the concept list of the day
+    first = edgar.bulk_quarter(2017, 3)
+    meta = edgar.store.read_json("edgar_fsds", "2017q3")
+    assert srv.calls == 1 and set(first["concept"]) == set(old_list)
+    assert meta["concepts"] == old_list and meta["rows"] == len(first)
+    only = edgar.bulk_quarter(2017, 3, ciks=[789019], tags=["us-gaap:NetIncomeLoss"])   # within the record: cached
+    assert srv.calls == 1 and len(only) == len(first) and edgar.bulk_quarter(2017, 3, ciks=[1]).empty
+    # a tag the cache was not filtered to: before October 2026 it read as never reported; now downloaded again, and
+    # the cache keeps the union (never shrinks)
+    grown = edgar.bulk_quarter(2017, 3, tags=["StockholdersEquity"])
+    assert srv.calls == 2 and set(grown["concept"]) == {"NetIncomeLoss", "SalesRevenueNet", "StockholdersEquity"}
+    assert len(grown) == len(edgar.parse_fsds_zip(srv.blob, tags=old_list + ["StockholdersEquity"])) > len(first)
+    # a tag no filer has that quarter is recorded too: asking again does not download again
+    edgar.bulk_quarter(2017, 3, tags=["SomeNewTag"])
+    edgar.bulk_quarter(2017, 3, tags=["SomeNewTag", "NetIncomeLoss"])
+    assert srv.calls == 3
+    # offline, the cache is used as it is (Assets reads as unreported); with EDGAR unreachable too
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "1")
+    off = edgar.bulk_quarter(2017, 3, tags=["Assets"])
+    assert srv.calls == 3 and "Assets" not in set(off["concept"]) and len(off) == len(grown)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")
+    srv.down = True
+    assert len(edgar.bulk_quarter(2017, 3, tags=["Assets"])) == len(grown)
+    srv.down = False
+    assert "Assets" in set(edgar.bulk_quarter(2017, 3, tags=["Assets"])["concept"]) and srv.calls == 4
+    # a table cached before the record existed covers only the tags it has rows for
+    edgar.store.write_frame("edgar_fsds", "2016q4", first)
+    edgar.bulk_quarter(2016, 4, tags=["SalesRevenueNet"])
+    assert srv.calls == 4
+    edgar.bulk_quarter(2016, 4, tags=["EarningsPerShareDiluted"])
+    assert srv.calls == 5
+
+
+# --------------------------------------------------------------------------- #
+# Filing lists of a successor issuer and its predecessor
+# --------------------------------------------------------------------------- #
+XOM_NEW, XOM_OLD = 2115436, 34088           # ExxonMobil Holdings Corp (2026) <- Exxon Mobil Corp
+
+
+def _payload(cik: int, name: str, rows: list) -> dict:
+    """A submissions JSON in EDGAR's layout (filings.recent: one list per field)."""
+    keys = ["accessionNumber", "filingDate", "form", "items", "primaryDocument"]
+    recent = {k: [r[i] for r in rows] for i, k in enumerate(keys)}
+    recent.update(reportDate=[""] * len(rows), acceptanceDateTime=[""] * len(rows), isXBRL=[0] * len(rows))
+    return {"cik": str(cik), "name": name, "sic": "2911", "fiscalYearEnd": "1231", "tickers": ["XOM"],
+            "filings": {"recent": recent, "files": []}}
+
+
+# the successor's rows as EDGAR listed them in October 2026 (the sample pack's XOM list); the predecessor's are
+# synthetic (accession numbers 9999999999-...), plus one 8-K both registrants list and a filing on a shared day
+NEW_ROWS = [("0002115436-26-000003", "2026-07-07", "8-K", "7.01", "xom-20260707.htm"),
+            ("0002115436-26-000006", "2026-07-31", "8-K", "2.02,7.01", "xom-20260731.htm"),
+            ("0000034088-26-000093", "2026-08-03", "10-Q", "", "xom-20260630.htm"),
+            ("0001193125-26-373026", "2026-08-28", "8-K", "8.01,9.01", "d82162d8k.htm")]
+OLD_ROWS = [("9999999999-25-000001", "2025-05-01", "10-Q", "", "q1.htm"),
+            ("9999999999-26-000001", "2026-02-18", "10-K", "", "k2025.htm"),
+            ("9999999999-26-000002", "2026-05-01", "8-K", "2.02,9.01", "er.htm"),
+            ("9999999999-26-000003", "2026-07-07", "8-K", "8.01", "same_day.htm"),
+            ("0001193125-26-373026", "2026-08-28", "8-K", "8.01,9.01", "d82162d8k.htm")]
+
+
+class _SubmissionsServer:
+    def __init__(self, payloads: dict):
+        self.payloads, self.calls = payloads, []
+
+    def __call__(self, url, **kw):
+        self.calls.append(url)
+        for cik, payload in self.payloads.items():
+            if url == edgar.SUBMISSIONS_URL.format(cik=cik):
+                class Reply:
+                    def json(self):
+                        return payload
+                return Reply()
+        raise DataUnavailable(f"HTTP 404 (test) for {url}")
+
+
+def test_a_successor_filing_list_holds_its_predecessors_filings(monkeypatch, tmp_path):
+    monkeypatch.setattr(edgar.store._data, "CACHE_DIR", tmp_path)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")          # the fetch is replaced: nothing reaches the network
+    srv = _SubmissionsServer({XOM_NEW: _payload(XOM_NEW, "ExxonMobil Holdings Corp", NEW_ROWS),
+                              XOM_OLD: _payload(XOM_OLD, "EXXON MOBIL CORP", OLD_ROWS)})
+    monkeypatch.setattr(edgar, "_get", srv)
+    prof, f = edgar.submissions(XOM_NEW)
+    assert prof["cik"] == XOM_NEW and prof["name"] == "ExxonMobil Holdings Corp"      # the successor's profile
+    assert list(f["accn"]) == ["9999999999-25-000001", "9999999999-26-000001", "9999999999-26-000002",
+                               "0002115436-26-000003", "9999999999-26-000003", "0002115436-26-000006",
+                               "0000034088-26-000093", "0001193125-26-373026"]
+    assert f["filed"].is_monotonic_increasing and str(f["filed"].dtype) == "datetime64[ns]"
+    # each row says whose list it came from; the 8-K both list is kept once, as the successor lists it
+    assert list(f["cik"]) == [XOM_OLD, XOM_OLD, XOM_OLD, XOM_NEW, XOM_OLD, XOM_NEW, XOM_NEW, XOM_NEW]
+    assert edgar.registrant_cik(f.iloc[1], XOM_NEW) == XOM_OLD                     # the predecessor's 10-K
+    assert edgar.registrant_cik(pd.Series({"accn": "x"}), XOM_NEW) == XOM_NEW      # a list without the column
+    # the predecessor's earnings releases are now Exxon's too (the event signals read them)
+    assert list(edgar.earnings_release_dates(f)) == [pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31")]
+    # each registrant is cached as EDGAR lists it and merged when read: offline, from the cache, no request
+    assert len(edgar.store.read_frame("edgar_filings", f"{XOM_OLD:010d}")) == len(OLD_ROWS)
+    assert "cik" not in edgar.store.read_frame("edgar_filings", f"{XOM_NEW:010d}").columns
+    n = len(srv.calls)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "1")
+    pd.testing.assert_frame_equal(edgar.submissions(XOM_NEW)[1], f)
+    assert len(srv.calls) == n
+    # a predecessor that cannot be read is left out
+    monkeypatch.setattr(edgar.store._data, "CACHE_DIR", tmp_path / "new_only")
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")
+    monkeypatch.setattr(edgar, "_get", _SubmissionsServer({XOM_NEW: _payload(XOM_NEW, "ExxonMobil Holdings Corp",
+                                                                             NEW_ROWS)}))
+    only = edgar.submissions(XOM_NEW)[1]
+    assert list(only["accn"]) == [r[0] for r in NEW_ROWS] and set(only["cik"]) == {XOM_NEW}
+    # a company without predecessors: its own list, unchanged, with its CIK
+    payload = json.loads((FIX / "msft_submissions_2017_2018.json").read_text())
+    monkeypatch.setattr(edgar, "_get", _SubmissionsServer({789019: payload}))
+    own = edgar.submissions(789019)[1]
+    pd.testing.assert_frame_equal(own.drop(columns="cik"), edgar.parse_submissions(payload)[1], check_dtype=False)
+    assert set(own["cik"]) == {789019}
+
+
+def test_the_sample_pack_filing_list_recorded_before_the_merge_still_reads():
+    # data/sample/edgar/XOM_filings.parquet holds the new holding company's filings only (recorded October 2026)
+    prof, f = edgar.company_filings("XOM", source="sample")
+    assert prof["cik"] == XOM_NEW and len(f) == 6 and set(f["cik"]) == {XOM_NEW}
+    assert str(f["filed"].dtype) == "datetime64[ns]"
+
+
 def test_sample_pack_dates_are_nanoseconds_whichever_pandas_wrote_them():
     # the pack is re-recorded with pandas 3 (microsecond dates in Parquet) and read by pandas 2 on Python 3.10, which
     # refuses to merge microsecond with nanosecond dates

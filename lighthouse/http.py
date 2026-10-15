@@ -32,6 +32,16 @@ class ConfigurationError(RuntimeError):
     """A setting the user must provide (for example the SEC contact e-mail) is missing."""
 
 
+class HTTPStatusError(DataUnavailable):
+    """The host answered, with a status that retrying does not change (404, 403 without a rate-limit message, ...):
+    for most hosts a definite "there is no such file". A timeout, a dropped connection or a throttling or server
+    error that lasted through every retry raises a plain DataUnavailable instead (a transient failure)."""
+
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = int(status)
+
+
 def sec_user_agent() -> str:
     """The User-Agent the SEC requires: a name and a contact e-mail, from the environment."""
     custom = os.environ.get("SEC_USER_AGENT", "").strip()
@@ -120,8 +130,9 @@ def fetch(url: str, params: Optional[dict] = None, *, timeout: float = 30.0, ret
           headers: Optional[dict] = None, method: str = "GET", json_body: Optional[dict] = None):
     """GET (or POST) `url` under its host's policy and return the `requests.Response` (status 2xx).
 
-    Raises DataUnavailable offline, after the retries, or for a non-retryable HTTP error; ConfigurationError when the
-    host needs a setting (the SEC contact e-mail) that is missing."""
+    Raises DataUnavailable offline or after the retries, HTTPStatusError (a DataUnavailable with the `status`) for a
+    non-retryable HTTP error, ConfigurationError when the host needs a setting (the SEC contact e-mail) that is
+    missing."""
     if offline_mode():
         raise DataUnavailable(f"offline mode (LIGHTHOUSE_OFFLINE=1): not fetching {url}")
     pol = policy_for(url)
@@ -142,7 +153,8 @@ def fetch(url: str, params: Optional[dict] = None, *, timeout: float = 30.0, ret
             if 200 <= resp.status_code < 300:
                 return resp
             if not _is_throttle(resp):
-                raise DataUnavailable(f"HTTP {resp.status_code} from {host} for {url}: {(resp.text or '')[:160]}")
+                raise HTTPStatusError(f"HTTP {resp.status_code} from {host} for {url}: {(resp.text or '')[:160]}",
+                                      resp.status_code)
             last_err = f"HTTP {resp.status_code} (throttled)"
             retry_after = resp.headers.get("Retry-After")
             resp.close()
