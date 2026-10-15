@@ -398,12 +398,14 @@ def config_hash(name: str, config: Dict[str, object]) -> str:
     return hashlib.sha1(json.dumps({"name": name, **config}, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
-def signal_config(name: str, description: str = "") -> Dict[str, object]:
+def signal_config(name: str, description: str = "", **extra) -> Dict[str, object]:
     """The configuration a signal of the research run is logged with (scripts/research_signals.py): one signal with one
-    configuration is one trial. The forward watch list (research/watch.py) records its signals under the same
-    configuration, so its rows carry the config_hash of the logged trial."""
+    configuration is one trial. `extra` adds what changed a signal's values since its first trial (for example the
+    share-count method: fundamental_signals.config_extra), so a corrected signal is a new trial. The forward watch
+    list (research/watch.py) records its signals under the same configuration, so its rows carry the config_hash of
+    the logged trial."""
     return {"signal": name, "universe": "sp500_pit", "quantiles": 5, "costs": "cs_spread+sqrt_impact@1m/100",
-            "borrow": 0.005, "description": description}
+            "borrow": 0.005, "description": description, **extra}
 
 
 class HoldoutUsed(RuntimeError):

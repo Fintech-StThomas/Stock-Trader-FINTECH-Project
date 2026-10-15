@@ -100,7 +100,6 @@ def test_pre_registered_timing_test_is_a_paired_sign_test():
     assert (none["n"] == 0).all() and not none["holds"].any()
 
 
-
 def test_static_universe_says_it_is_biased():
     u = mb.static_universe("today's large caps", ["aapl", "brk.b"])
     assert u.members_on("2001-01-02") == ["AAPL", "BRK-B"] and "survivorship" in u.notes[0]
@@ -115,6 +114,22 @@ def test_market_cap_from_cover_shares_and_as_traded_price():
     assert 5.5e11 < mc["AAPL"] < 7.0e11 and np.isnan(mc["NOPE"])
     u = mb.market_cap_universe(["AAPL"], ["2015-01-02", "2016-01-04"], {"AAPL": split_adj}, top_n=1, source="sample")
     assert u.members_on("2015-06-01") == ["AAPL"]
+
+
+def test_market_cap_after_a_split_uses_the_restated_count():
+    """AAPL on 15 September 2020, after the 4-for-1 split of 31 August and before the next 10-K: the latest cover page
+    (July 2020) counts pre-split shares; restated, the value is ~$1.97tn (unrestated it was a quarter of that), the
+    same as the memo's and the research signals' market value."""
+    px = pd.read_csv("data/sample/prices/AAPL.csv", index_col=0, parse_dates=True)["Close"]
+    from lighthouse.data import load_prices
+    from lighthouse.research import fundamental_signals as FS
+    from lighthouse.total_return import load_actions, price_only_close, to_units_of
+    split_adj = price_only_close(px, to_units_of(load_actions("AAPL", source="sample"), px.index[-1]))
+    mc = mb.market_cap_on("2020-09-15", ["AAPL"], {"AAPL": split_adj}, source="sample")["AAPL"]
+    assert 1.8e12 < mc < 2.2e12
+    df = load_prices("AAPL", source="sample", years=None)
+    df.attrs = {}
+    assert FS.daily_values("AAPL", df, source="sample")["market_cap"].loc["2020-09-15"] == pytest.approx(mc, rel=1e-9)
 
 
 def test_delisting_names_match_edgar_filers(monkeypatch):

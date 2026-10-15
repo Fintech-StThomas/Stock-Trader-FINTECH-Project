@@ -103,6 +103,15 @@ def split_factor_after(dates, actions: pd.DataFrame, end=None) -> np.ndarray:
     return out
 
 
+def restate_shares(shares, filed, actions: pd.DataFrame, end) -> np.ndarray:
+    """Share counts filed on the dates `filed`, restated in the share units of `end`: times every split with an ex-date
+    after the filing and on or before `end`. Times a price in the units of `end` (as traded that day, or a series
+    adjusted at `end`) this is the market value, also when the count was filed before a split and the price is from
+    after it (AAPL's cover page of October 2019 against a price after the 4-for-1 split of 31 August 2020). The one
+    definition of market value: the memo, the research signals and the membership market cap all use it."""
+    return np.asarray(shares, float) * split_factor_after(filed, actions, end)
+
+
 def to_units_of(actions: pd.DataFrame, end) -> pd.DataFrame:
     """Actions up to `end`, with dividends restated from today's share units to the units of `end` (a price series
     adjusted on that date, such as the sample pack, does not know the splits that came later)."""
@@ -205,6 +214,6 @@ def delisting_return(rule: str) -> Optional[float]:
     return -1.0 if rule == "pessimistic" else None
 
 
-__all__ = ["load_actions", "split_factor_after", "to_units_of", "price_only_close", "total_return_index",
+__all__ = ["load_actions", "split_factor_after", "restate_shares", "to_units_of", "price_only_close", "total_return_index",
            "as_traded_close", "per_share_in_units_of", "apply_delisting", "is_delisted", "delisting_return",
            "DELISTING_RULES", "DataUnavailable"]

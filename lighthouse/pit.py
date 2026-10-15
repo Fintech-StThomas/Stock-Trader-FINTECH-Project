@@ -17,7 +17,7 @@ fundamentals are unknown (the backtest's fundamental gate is then off).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -251,7 +251,8 @@ def build_statements(facts: pd.DataFrame, source: str = "SEC EDGAR XBRL") -> Sta
 
     Columns: every LINE_ITEMS key that was reported, the classic aliases the beacons use (total_debt = long + short
     debt, fcf = operating cash flow - capex, ebitda = operating income + D&A), the cover-page shares outstanding of the
-    same filing (`cover_shares`), and `filed`: the date the row became public."""
+    same filing or the latest before it (`cover_shares`, filed on `cover_filed`), and `filed`: the date the row became
+    public."""
     if facts is None or facts.empty:
         return StatementHistory(source=source)
     orig = original_facts(facts)
@@ -268,13 +269,13 @@ def build_statements(facts: pd.DataFrame, source: str = "SEC EDGAR XBRL") -> Sta
     q_ends = pd.DatetimeIndex(sorted(set().union(*flow_q))) if flow_q else pd.DatetimeIndex([])
     annual = _period_table({k: v for k, v in a_vals.items()}, a_ends)
     quarterly = _period_table({k: v for k, v in q_vals.items()}, q_ends)
-    cover = _cover_shares(facts)
+    cover = cover_shares(facts)
     for tab in (annual, quarterly):
         if tab.empty:
             continue
         _add_aliases(tab)
-        if cover is not None:
-            tab["cover_shares"] = _match_cover(tab, cover)
+        if len(cover):
+            tab[["cover_shares", "cover_filed"]] = _match_cover(tab, cover)
     return StatementHistory(annual=annual, quarterly=quarterly, source=source)
 
 
@@ -300,24 +301,26 @@ def _add_aliases(tab: pd.DataFrame) -> None:
         tab["ebitda"] = tab["operating_income"] + tab["d_and_a"]
 
 
-def _cover_shares(facts: pd.DataFrame) -> Optional[pd.DataFrame]:
+def cover_shares(facts: pd.DataFrame) -> pd.Series:
+    """Shares outstanding from each filing's cover page (dei:EntityCommonStockSharesOutstanding), indexed by the date
+    it was filed: the count public from that date. A company with several share classes reports each; their sum is
+    the count. Two filings on one day (a 10-K/A and a 10-Q) can carry different counts: the latest cover date wins.
+    The only reader of the cover page: the statements (`cover_shares` column) and membership's market cap use it."""
     f = facts[(facts["concept"] == "EntityCommonStockSharesOutstanding") & (facts["unit"] == "shares")]
     if f.empty:
-        return None
-    # one value per filing (a company with several share classes reports each; their sum is the share count)
-    g = f.groupby("accn").agg(val=("val", "sum"), filed=("filed", "min"), end=("end", "max")).sort_values("filed")
-    return g
+        return pd.Series(dtype=float, name="shares")
+    g = f.groupby("accn").agg(val=("val", "sum"), filed=("filed", "min"), end=("end", "max")).reset_index()
+    g = g.dropna(subset=["filed", "val"]).sort_values(["filed", "end", "accn"]).drop_duplicates("filed", keep="last")
+    return pd.Series(g["val"].to_numpy(), index=pd.DatetimeIndex(pd.to_datetime(g["filed"])), name="shares")
 
 
-def _match_cover(tab: pd.DataFrame, cover: pd.DataFrame) -> pd.Series:
+def _match_cover(tab: pd.DataFrame, cover: pd.Series) -> pd.DataFrame:
     """The cover-page share count reported with each row's filing (same filing date), else the latest one filed
-    before it."""
-    # two filings on one day (a 10-K/A and a 10-Q) can carry different counts: the most recent cover date wins
-    c = cover.reset_index().dropna(subset=["filed", "val"]).sort_values(["filed", "end", "accn"])
-    c = c.drop_duplicates("filed", keep="last")[["filed", "val"]]
+    before it, with the date that count was filed (`cover_filed`: a split after it changes the count's units)."""
+    c = pd.DataFrame({"filed": cover.index, "val": cover.to_numpy(), "cover_filed": cover.index})
     left = pd.DataFrame({"filed": pd.to_datetime(tab["filed"]).to_numpy(), "_row": np.arange(len(tab))}).sort_values("filed")
     m = pd.merge_asof(left, c, on="filed", direction="backward").sort_values("_row")
-    return pd.Series(m["val"].to_numpy(), index=tab.index)
+    return pd.DataFrame({"cover_shares": m["val"].to_numpy(), "cover_filed": m["cover_filed"].to_numpy()}, index=tab.index)
 
 
 def ttm(quarterly: pd.DataFrame, column: str) -> pd.Series:

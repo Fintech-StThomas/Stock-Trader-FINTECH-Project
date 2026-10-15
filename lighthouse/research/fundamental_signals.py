@@ -2,8 +2,14 @@
 Fundamental signals from SEC filings, each known from the session after the filing that made it public.
 
 From the point-in-time quarterly statements (lighthouse.pit: values as first reported, dated by filing), trailing-twelve-
-month (TTM) flows and latest balance-sheet stocks; market values from the cover-page share count of the latest filing x
-the as-traded price. A value older than 15 months (a company that stopped filing) is not used.
+month (TTM) flows and latest balance-sheet stocks; market values from the cover-page share count of the latest filing,
+restated for any split since that filing (total_return.restate_shares), x the price. A value older than 15 months (a
+company that stopped filing) is not used.
+
+Until October 2026 the share count was not restated: between a split's ex-date and the next filing the market value
+used the pre-split count (AAPL, 31 August to 30 October 2020: $550bn instead of $2.1tn). The signals that read a share
+count (SHARE_COUNT_SIGNALS) are logged with `shares` in their configuration since the fix, so the corrected values are
+new trials; the earlier trials stay in reports/research/experiments.csv under their own hashes.
 
 Earnings      sue            standardised unexpected earnings, seasonal random walk: (EPS_q - EPS_q-4) / standard
                              deviation of that change over the previous 8 quarters (Foster, Olsen & Shevlin 1984;
@@ -30,13 +36,25 @@ import pandas as pd
 
 from .. import store
 from ..pit import load_statements, ttm
-from ..total_return import load_actions, price_only_close, split_factor_after, to_units_of
+from ..total_return import load_actions, price_only_close, restate_shares, to_units_of
 from .harness import sample_at_month_ends
 
 MAX_AGE_DAYS = 460
 FUNDAMENTAL_SIGNALS = ["sue", "gp_assets", "roic", "roic_trend", "accruals", "piotroski", "altman_z", "beneish",
                        "fcf_sbc_yield", "cash_conversion", "earnings_yield", "book_to_market", "fcf_yield", "ebitda_ev",
                        "value_own_history", "net_issuance", "shareholder_yield"]
+# the signals that read a share count (market value or issuance), and how the count is put in the price's units
+SHARE_COUNT_SIGNALS = ["earnings_yield", "book_to_market", "fcf_yield", "fcf_sbc_yield", "ebitda_ev", "altman_z",
+                       "value_own_history", "net_issuance", "shareholder_yield"]
+SHARES = "cover page, restated for splits after its filing"
+
+
+def config_extra(name: str) -> Dict[str, object]:
+    """What a signal's logged configuration adds to harness.signal_config: the share-count method for the signals
+    that read one (their values changed with the split fix, so they are new trials), nothing for the others."""
+    return {"shares": SHARES} if name in SHARE_COUNT_SIGNALS else {}
+
+
 DESCRIPTIONS = {
     "sue": "standardised unexpected earnings (seasonal random walk)", "gp_assets": "gross profit / assets",
     "roic": "return on invested capital", "roic_trend": "1-year change in ROIC", "accruals": "low accruals",
@@ -65,6 +83,8 @@ def quarterly_features(q: pd.DataFrame) -> pd.DataFrame:
     for c in ("total_assets", "equity", "total_debt", "cash", "current_assets", "current_liabilities", "receivables",
               "ppe", "retained_earnings", "total_liabilities", "long_term_debt", "cover_shares", "shares"):
         f[c] = q[c] if c in q else np.nan
+    # when the cover-page count was filed (an earlier filing's count when this one had none)
+    f["cover_filed"] = pd.to_datetime(q["cover_filed"]).fillna(f["filed"]) if "cover_filed" in q else f["filed"]
     if "gross_profit_ttm" in f and f["gross_profit_ttm"].isna().all() and {"revenue", "cost_of_revenue"} <= set(q.columns):
         f["gross_profit_ttm"] = ttm(q.assign(gp=q["revenue"] - q["cost_of_revenue"]), "gp")
     a = f["total_assets"]
@@ -138,7 +158,10 @@ def daily_values(ticker: str, frame: pd.DataFrame, source: str = "auto") -> Dict
     acts = load_actions(ticker, source=source, max_age_hours=None)
     acts_u = to_units_of(acts, idx[-1]) if not acts.empty else acts
     po = price_only_close(frame["Close"], acts_u) if not acts.empty else frame["Close"]
-    traded = po * split_factor_after(idx, acts_u, idx[-1]) if not acts.empty else po
+    # the share count in the units of the last price, like `po`: their product is the market value on every day, the
+    # splits between a filing and that day included (and only those: later splits cancel out of the product)
+    feats = feats.assign(shares_units=restate_shares(feats["cover_shares"], feats["cover_filed"], acts_u, idx[-1])
+                         if not acts.empty else feats["cover_shares"])
 
     def daily(col: str) -> pd.Series:
         s = pd.Series(np.asarray(feats[col], float), index=pd.DatetimeIndex(feats["filed"]) + pd.Timedelta(days=1))
@@ -148,8 +171,8 @@ def daily_values(ticker: str, frame: pd.DataFrame, source: str = "auto") -> Dict
         age = (pd.Series(idx, index=idx) - known_at).dt.days
         return on.where(age <= MAX_AGE_DAYS)
 
-    shares = daily("cover_shares")
-    mcap = traded * shares
+    shares = daily("shares_units")
+    mcap = po * shares
     out = {c: daily(c) for c in ("sue", "gp_assets", "roic", "roic_trend", "accruals", "piotroski", "beneish",
                                  "cash_conversion")}
     ni, eq, ocf, capex, sbc = (daily(c) for c in ("net_income_ttm", "equity", "operating_cash_flow_ttm", "capex_ttm", "sbc_ttm"))
@@ -170,9 +193,8 @@ def daily_values(ticker: str, frame: pd.DataFrame, source: str = "auto") -> Dict
         hist_m = ey.rolling(1260, min_periods=500).mean()
         hist_s = ey.rolling(1260, min_periods=500).std()
         out["value_own_history"] = (ey - hist_m) / hist_s
-        # net issuance: shares in today's units (a split is not an issue of new shares)
-        adj = shares * split_factor_after(idx, acts_u, idx[-1]) if not acts.empty else shares
-        out["net_issuance"] = -(adj / adj.shift(252) - 1.0)
+        # net issuance: shares in one unit throughout (a split is not an issue of new shares)
+        out["net_issuance"] = -(shares / shares.shift(252) - 1.0)
         payout = daily("dividends_paid_ttm").fillna(0.0) + daily("buybacks_ttm").fillna(0.0) - daily("stock_issued_ttm").fillna(0.0)
         out["shareholder_yield"] = (payout / mcap).where(mcap > 0)
     out["market_cap"] = mcap
@@ -206,4 +228,5 @@ def monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False, sourc
     return out
 
 
-__all__ = ["FUNDAMENTAL_SIGNALS", "DESCRIPTIONS", "quarterly_features", "daily_values", "monthly"]
+__all__ = ["FUNDAMENTAL_SIGNALS", "SHARE_COUNT_SIGNALS", "DESCRIPTIONS", "config_extra", "quarterly_features",
+           "daily_values", "monthly"]

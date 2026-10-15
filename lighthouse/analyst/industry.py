@@ -188,14 +188,11 @@ class _Book:
     def cover_shares(self, by: pd.Timestamp) -> Optional[_Val]:
         """The cover-page share count of the latest filing up to `by` (a filing date): the exact count, which
         `CommonStockSharesOutstanding` is not always (some banks tag it rounded to the hundred million)."""
-        c = pit._cover_shares(self.facts) if len(self.facts) else None
-        if c is None:
-            return None
-        c = c[pd.to_datetime(c["filed"]) <= by + pd.Timedelta(days=pit.SAME_FILING_DAYS)]
+        c = pit.cover_shares(self.facts) if len(self.facts) else pd.Series(dtype=float)
+        c = c[c.index <= by + pd.Timedelta(days=pit.SAME_FILING_DAYS)]
         if c.empty:
             return None
-        last = c.sort_values(["filed", "end"]).iloc[-1]
-        return float(last["val"]), pd.Timestamp(last["filed"])
+        return float(c.iloc[-1]), pd.Timestamp(c.index[-1])
 
 
 def _label_end(e: pd.Timestamp) -> str:

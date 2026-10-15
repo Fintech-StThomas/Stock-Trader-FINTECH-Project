@@ -48,6 +48,10 @@ def test_quarters_from_year_to_date_values_and_first_reported_values(msft_facts)
     # every row carries the date it became public, never before its period ended
     assert (pd.to_datetime(q["filed"]) > q.index).all() and (pd.to_datetime(a["filed"]) > a.index).all()
     assert h.has_filing_dates and "cover_shares" in a
+    # each row's cover-page count says when it was filed: its own filing, or an earlier one if it carried none
+    assert (pd.to_datetime(q["cover_filed"]) <= pd.to_datetime(q["filed"])).all()
+    cover = pit.cover_shares(msft_facts)                 # the one reader of the cover page (membership uses it too)
+    assert cover.index.is_monotonic_increasing and q["cover_shares"].dropna().isin(cover.to_numpy()).all()
 
 
 def test_statements_are_point_in_time_under_truncation():

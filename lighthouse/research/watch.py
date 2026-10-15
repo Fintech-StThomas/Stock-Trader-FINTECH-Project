@@ -163,7 +163,8 @@ class WatchSignal:
 
     @property
     def config(self) -> Dict[str, object]:
-        return H.signal_config(self.name, self.description)
+        from . import fundamental_signals as FS
+        return H.signal_config(self.name, self.description, **FS.config_extra(self.name))
 
 
 def _at(daily: Dict[str, pd.Series], as_of, tickers) -> pd.Series:

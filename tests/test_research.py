@@ -114,6 +114,14 @@ def test_fundamental_signals_on_real_filings_and_causal(monkeypatch):
     assert full["sue"].dropna().between(-50, 50).all()
     # a split is not an issue of shares: AAPL's 4-for-1 split in August 2020 leaves net issuance near zero
     assert abs(full["net_issuance"].loc["2021-03-01"]) < 0.1
+    # nor a change in market value: the cover page of 30 July 2020 counts pre-split shares, the price after 31 August
+    # is post-split; the count is restated, so the value moves only with the price (+3.4% that day) and agrees with
+    # the memo's (analyst.financials) and membership's market cap
+    mc = full["market_cap"]
+    assert mc.loc["2020-08-31"] / mc.loc["2020-08-28"] == pytest.approx(df["Close"].loc["2020-08-31"] / df["Close"].loc["2020-08-28"],
+                                                                        rel=1e-9)
+    assert 1.8e12 < mc.loc["2020-09-15"] < 2.2e12
+    assert abs(full["net_issuance"].loc["2020-10-15"]) < 0.1
     # truncating the filings at a date leaves every earlier value unchanged
     facts = edgar.company_facts(ticker="AAPL", source="sample")
     cut = pd.Timestamp("2016-06-30")

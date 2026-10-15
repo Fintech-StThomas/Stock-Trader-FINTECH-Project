@@ -270,23 +270,18 @@ def sample_members(universe: Universe, date, n: int, seed: int = 7) -> List[str]
 # EDGAR: market capitalisation and delistings
 # --------------------------------------------------------------------------- #
 def cover_shares_series(ticker: str, source: str = "auto") -> pd.Series:
-    """Shares outstanding from each filing's cover page (dei:EntityCommonStockSharesOutstanding, all classes summed),
-    indexed by filing date: the count public on that date."""
+    """Shares outstanding from each filing's cover page, indexed by filing date: the count public on that date
+    (pit.cover_shares, the statements' own reader)."""
     from .edgar import company_facts
-    f = company_facts(ticker=ticker, source=source, concepts=["EntityCommonStockSharesOutstanding"])
-    f = f[(f["concept"] == "EntityCommonStockSharesOutstanding") & (f["unit"] == "shares")]
-    if f.empty:
-        return pd.Series(dtype=float)
-    g = f.groupby("accn").agg(val=("val", "sum"), filed=("filed", "min"), end=("end", "max"))
-    g = g.sort_values(["filed", "end"]).drop_duplicates("filed", keep="last")
-    return pd.Series(g["val"].to_numpy(), index=pd.DatetimeIndex(g["filed"]), name="shares")
+    from .pit import cover_shares
+    return cover_shares(company_facts(ticker=ticker, source=source, concepts=["EntityCommonStockSharesOutstanding"]))
 
 
 def market_cap_on(date, tickers: Iterable[str], prices: Dict[str, pd.Series], source: str = "auto") -> pd.Series:
-    """Market capitalisation on `date` = the latest cover-page share count filed by then x the as-traded close that day
-    (`prices` holds split-adjusted closes adjusted at their last date; the split factor puts them back as traded).
-    Missing shares or price -> NaN."""
-    from .total_return import load_actions, split_factor_after
+    """Market capitalisation on `date` = the latest cover-page share count filed by then, restated for any split
+    since that filing, x the close that day (`prices` holds split-adjusted closes adjusted at their last date, so the
+    count is put in the units of that date: total_return.restate_shares). Missing shares or price -> NaN."""
+    from .total_return import load_actions, restate_shares
     d = pd.Timestamp(date)
     out = {}
     for t in tickers:
@@ -308,8 +303,7 @@ def market_cap_on(date, tickers: Iterable[str], prices: Dict[str, pd.Series], so
             out[t] = np.nan
             continue
         acts = load_actions(t, source=source)
-        traded = float(p.iloc[-1]) * float(split_factor_after([p.index[-1]], acts, px.index[-1])[0])
-        out[t] = traded * float(sh.iloc[-1])
+        out[t] = float(p.iloc[-1]) * float(restate_shares([sh.iloc[-1]], [sh.index[-1]], acts, px.index[-1])[0])
     return pd.Series(out, name="market_cap")
 
 
@@ -326,7 +320,8 @@ def market_cap_universe(candidates: Iterable[str], dates: Sequence, prices: Dict
         rows += [(t, d, end) for t in mc.index]
     iv = pd.DataFrame(rows, columns=["ticker", "start", "end"])
     return Universe(f"Top {top_n} by EDGAR market cap", iv,
-                    notes=["market cap = cover-page shares x as-traded close; candidates supplied by the caller"])
+                    notes=["market cap = cover-page shares (restated for splits since the filing) x close; candidates "
+                           "supplied by the caller"])
 
 
 def delisting_dates(names: Dict[str, str], start_year: int = 2001) -> pd.DataFrame:

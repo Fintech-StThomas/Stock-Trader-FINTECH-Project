@@ -121,24 +121,43 @@ def main(argv=None) -> int:
     cov = panel.coverage()
     print(f"{uni.summary()}; {len(frames)} priced, {len(missing)} without prices; "
           f"coverage {cov[cov.index >= '2009-01-01'].mean():.0%} of member-months 2009-{panel.dates[-1].year}")
-    sigs = monthly_signals(frames, panel, refresh=a.refresh_signals)
+    product = [n for n in S.PRODUCT_SIGNALS if a.signals is None or n in a.signals]
+    sigs = monthly_signals(frames, panel, product, refresh=a.refresh_signals) if product else {}
     if not a.product_only:
         sigs.update(library_signals(frames, panel, a))
     return evaluate_all(a, uni, frames, missing, panel, sigs)
 
 
+def _wanted(a, names) -> bool:
+    """Is any of `names` asked for (`--signals`; none given: all are)?"""
+    return a.signals is None or bool(set(a.signals) & set(names))
+
+
 def library_signals(frames, panel, a) -> dict:
-    """The signal library: fundamental (SEC filings), FINRA short volume, the earnings reaction and the 10-K text."""
+    """The signal library: fundamental (SEC filings), FINRA short volume, the earnings reaction and the 10-K text.
+    With --signals, only the families that hold a requested signal are computed (no FINRA or 10-K download for a
+    fundamental signal)."""
     from lighthouse.research import event_signals as EV
     from lighthouse.research import fundamental_signals as FS
     from lighthouse.research import positioning as PO
-    sigs = FS.monthly(frames, panel, refresh=a.refresh_signals)
-    sigs.pop("market_cap")
-    sigs.update(PO.monthly(frames, panel, refresh=a.refresh_signals))
-    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text))
+    sigs = {}
+    if _wanted(a, FS.FUNDAMENTAL_SIGNALS):
+        sigs.update(FS.monthly(frames, panel, refresh=a.refresh_signals))
+        sigs.pop("market_cap")
+    if _wanted(a, PO.DESCRIPTIONS):
+        sigs.update(PO.monthly(frames, panel, refresh=a.refresh_signals))
+    if _wanted(a, EV.DESCRIPTIONS):
+        sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text))
     for mod in (FS, PO, EV):
         S.DESCRIPTIONS.update(mod.DESCRIPTIONS)
     return sigs
+
+
+def config_for(name: str) -> dict:
+    """The logged configuration of a signal: harness.signal_config plus what changed its values since its first
+    trial (fundamental_signals.config_extra: the share-count method)."""
+    from lighthouse.research import fundamental_signals as FS
+    return H.signal_config(name, S.DESCRIPTIONS.get(name, ""), **FS.config_extra(name))
 
 
 def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
@@ -155,7 +174,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     dv = data_version(uni, frames, missing, panel)
     rows, tune_by = [], {}
     for name, sig in sigs.items():
-        cfg = H.signal_config(name, S.DESCRIPTIONS.get(name, ""))
+        cfg = config_for(name)
         tune_by[name] = {}
         for rule in DELISTING_RULES:
             res = H.evaluate(panel, sig, name, rule, H.TUNING, costs, factors)
@@ -179,7 +198,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     n_trials = log.trials()
     hrows, verdicts = [], []
     for name, sig in sigs.items():
-        cfg = H.signal_config(name, S.DESCRIPTIONS.get(name, ""))
+        cfg = config_for(name)
         try:
             res = H.evaluate_holdout(panel, sig, name, cfg, log, dv, costs, factors, allow_repeat=a.allow_repeat,
                                      n_trials=n_trials, sr_std=sr_std)
