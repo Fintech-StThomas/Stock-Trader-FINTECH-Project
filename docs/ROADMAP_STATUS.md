@@ -73,16 +73,17 @@ phases; the budget is $0 (free data, free libraries, free hosting).
 
 ## Phase 4 findings (15 October 2026)
 
-* **No library signal survives the pre-registered rule.** 36 signals, 46 trials with the product's own. Three passed
+* **No library signal survives the pre-registered rule.** 37 signals, 47 trials with the product's own. Three passed
   tuning (FCF yield, FCF yield after SBC, size); in the hold-out the FCF yields kept a positive but insignificant IC
-  (+0.009, t 0.7) and size reversed. Deflated Sharpe ratios about 0. No blend, no weights in `decision.py`. Full table:
+  (+0.009, t 0.7) and size reversed. The earnings-release tone (8-K, half the members) failed both tests. Deflated Sharpe ratios about 0. No blend, no weights in `decision.py`. Full table:
   METHODOLOGY §8b; files: `reports/research/`.
 * **Short-sale volume ranks stocks but cannot pay its costs** at monthly rebalancing (IC t 3.5 / 1.9; turnover 60-66% a
   month; -6.5% a year net). **Risk-factor similarity** was significant only in the hold-out (t 2.3): a forward-journal
   candidate, not a survivor.
 * **Fixed before the hold-out**: five positioning parser bugs found by tests on real FINRA and SEC excerpts, a few
   hours of same-session look-ahead in the Form 4 and short-volume timing, repeated 4/A amendments, a $1.56 trillion
-  typing error, headerless 2010 FINRA files, and the text workers' share of the SEC rate (METHODOLOGY §11).
+  typing error, headerless 2010 FINRA files, and the text workers' share of the SEC rate (METHODOLOGY §11). After it: the
+  deflated Sharpe's variance of trials now comes from the whole log (a single-signal run had used its own).
 * **Coverage**: 645 of 883 members since 2008 priced; 80-90% of member-months tested in the hold-out (Altman Z 46%,
   GP/A 62%), 23-71% in tuning (fundamental signals lowest).
 

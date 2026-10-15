@@ -128,7 +128,7 @@ evaluated once), under both delisting rules, with the deflated Sharpe ratio coun
 | Price and size | 12-1 momentum, low volatility, 1-month reversal, 52-week high, size | Size passed tuning (t 2.0) and reversed out of sample |
 | Panel | industry momentum, residual momentum | None |
 | Positioning (Form 4, FINRA) | insider buyers, insider net purchases, short-sale volume, days to cover | Short-sale volume ranks stocks in both periods but turns over too fast to trade monthly after costs |
-| Events and text (8-K, 10-K) | 3-day earnings reaction, earnings-release tone, 10-K similarity, risk-factor similarity, Loughran-McDonald tone, fog | Risk-factor similarity was significant only in the hold-out; the tone hypotheses had the wrong sign |
+| Events and text (8-K, 10-K) | 3-day earnings reaction, earnings-release tone (half the members), 10-K similarity, risk-factor similarity, Loughran-McDonald tone, fog | Risk-factor similarity was significant only in the hold-out; the 10-K tone hypotheses had the wrong sign; the earnings-release tone had no IC out of sample |
 | Institutions (13F) | breadth of ownership | None |
 
 So **no signal carries weight in `lighthouse/decision.py`**, and the verdicts stay what they were: a risk-control rule,
@@ -140,7 +140,7 @@ a new signal is one more trial, and the forward journal (Phase 2) collects the o
 What it can prove:
 
 * **That a rule does not work.** A signal with negative or zero rank correlation over 17 years of the point-in-time
-  S&P 500, before any cost, does not work there; free data is enough to say no, and the harness said it 46 times.
+  S&P 500, before any cost, does not work there; free data is enough to say no, and the harness said it 47 times.
 * **What a company reported, and when.** SEC XBRL facts carry the filing date of every number, so fundamentals are
   point in time from 2009 (large filers), and the analyst toolkit's memo uses only what was public on its date.
 * **Risk.** Volatility, drawdowns and the effect of a regime filter or a stop are measured on prices, which are good

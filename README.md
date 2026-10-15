@@ -114,7 +114,7 @@ its prices stop (`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, 
 Cash earns the T-bill, stops rest as orders and costs scale with liquidity in these runs. We say it out loud: as a way to
 time single stocks, the rule has shown no edge. It delivers the risk profile you asked for (lower volatility and drawdown
 on nearly every stock), at a large cost in return. Nor do its scores pick stocks: on the point-in-time S&P 500 none of
-them ranked next month's returns, before or after costs. Neither did any of 36 further signals built from free data
+them ranked next month's returns, before or after costs. Neither did any of 37 further signals built from free data
 (value, quality, earnings, momentum, insider and short-sale activity, 13F breadth, 10-K and earnings-release text): three
 passed the 2009-2017 test and none the 2018-2026 hold-out, so none carries weight in the verdict (`docs/METHODOLOGY.md`
 §8b, `docs/DATA_AND_ML.md` §5-6). §8 has the timing details, and `docs/ROADMAP_STATUS.md` the research behind it.
@@ -160,7 +160,7 @@ data/sample/           bundled real historical data: prices, SEC filings (facts,
 reports/examples/      example report, charts and the cross-ticker evaluation
 reports/research/      the research harness's experiment log, hold-out log, results and verdicts
 docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · ROADMAP_STATUS.md
-tests/                 284 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
+tests/                 285 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
                        and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 

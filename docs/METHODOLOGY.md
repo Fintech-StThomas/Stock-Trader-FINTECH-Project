@@ -278,10 +278,11 @@ volatility and drawdown); they are not a stock-selection tool, and nothing here 
 The broader signal library (value, quality, momentum, earnings, positioning, text; Phase 4) is the place to look for
 one that is.
 
-**Results for the signal library** (Phase 4, run 15 October 2026 at commit `a1c64bb`, the same protocol, data and costs;
-645 of 883 ever-members priced). 36 signals, each one configuration fixed before its tuning run: with the product's ten,
-46 trials behind the deflated Sharpe ratio (cross-trial Sharpe dispersion 0.186 a month). Coverage in the hold-out is
-80-90% of member-months for every signal (46% for the Altman Z, which needs current assets, and 62% for gross
+**Results for the signal library** (Phase 4, run 15 October 2026 at commit `a1c64bb`, the earnings-release tone last at
+`6f7ecc1`; the same protocol, data and costs; 645 of 883 ever-members priced). 37 signals, each one configuration fixed
+before its tuning run: with the product's ten, 47 trials behind the deflated Sharpe ratio (cross-trial Sharpe dispersion
+0.185 a month). Coverage in the hold-out is
+80-90% of member-months for every signal (24% for the earnings-release tone, run on half the members; 46% for the Altman Z, which needs current assets, and 62% for gross
 profitability, which banks and insurers do not report); in the tuning period 23-71%, lowest for the fundamental
 signals (XBRL from 2009, trends and changes need a year or more of filings). Both delisting rules again give identical
 numbers. Returns are annualised; "better use" is the long-only or long-short version the rule picks from the tuning
@@ -328,6 +329,7 @@ results; net returns after the cost model (in brackets at a flat 10 bps a side).
 | `lm_litigious` | -0.000 (-0.0) | +1.6% | L/S +0.6% (+1.0%) | -0.014 (-1.4) | -5.3% | 0.00 | no |
 | `lm_negative` | -0.021 (-1.6) | -6.6% | L/O -4.9% (-4.6%) | -0.012 (-1.4) | -1.4% | 0.00 | no |
 | `fog` | -0.001 (-0.2) | -0.6% | L/O -1.0% (-0.7%) | +0.001 (+0.1) | +0.2% | 0.00 | no |
+| `eightk_tone` (half the members) | +0.007 (+0.8) | +2.8% | L/O +0.2% (+2.2%) | +0.000 (+0.0) | -2.2% | 0.01 | no |
 | *Institutions (13F)* | | | | | | | |
 | `inst_breadth` | +0.006 (+0.4) | +1.8% | L/O -0.4% (+0.6%) | +0.001 (+0.1) | +0.6% | 0.00 | no |
 
@@ -337,7 +339,7 @@ Interpretation:
   +0.024, t 2.3; long-short +3.5% a year after costs), the same after stock-based pay (+2.3%), and small size within the
   index (t 2.00, +3.3%). In the hold-out the two FCF yields kept their sign (IC +0.009, t 0.7; long-short +0.9% and
   +0.3% a year) but not their strength, and size reversed (the largest companies led after 2018). Every deflated Sharpe
-  ratio is about 0: with 46 trials the bar for a single hold-out Sharpe is high, and none came near it. The sector- and
+  ratio is about 0: with 47 trials the bar for a single hold-out Sharpe is high, and none came near it. The sector- and
   size-neutral blend (`lighthouse/research/blend.py`) is built for survivors only, so it was not run: blending the three
   tuning passers after seeing their hold-out would be choosing on the hold-out. `lighthouse/decision.py` is unchanged.
 * **Short-sale volume predicts and cannot be traded monthly.** The strongest IC in both periods (t 3.5 in tuning, 1.9 in
@@ -346,6 +348,9 @@ Interpretation:
 * **Risk-factor similarity** (Lazy Prices on Item 1A) had a flat tuning period and a hold-out IC of +0.011 (t 2.3): the
   rule does not allow promoting it on hold-out evidence. It is a candidate for the forward journal, which gives new
   out-of-sample data, not for weight.
+* **The earnings-release tone** (the change in net tone from the company's previous release, half the members, a
+  median of 170 names a month) had a small positive tuning IC (+0.007, t 0.8) and none in the hold-out (t 0.0); its
+  35% monthly turnover costs more than its +2.8% gross spread.
 * **The 10-K tone hypotheses had the wrong sign.** More uncertainty and negative words came before *higher* returns
   (tuning t -2.4 and -1.6, hold-out -1.1 and -1.4), which reads as a risk premium rather than mispricing. Signs were
   registered before testing and are not flipped after.
@@ -577,6 +582,7 @@ FINRA and SEC files, by the first live research runs, or by the first live MSFT 
 | The sample pack predated the newer cash and short-term investment concepts | MSFT's offline net debt was +$70bn instead of net cash | Sample pack re-recorded (122 concepts, filing lists, profiles); MSFT offline net debt -$61bn; `cross_ticker --check` unchanged |
 | The DCF's terminal value capitalised the last projected year's free cash flow | A company in a build-out carried that year's capex forever: MSFT (capex 35% of revenue, D&A 10%) was worth $94 a share and no growth rate up to 60% a year reproduced its price | Value-driver terminal value, NOPAT x (1 - g / RONIC) / (WACC - g), RONIC = today's ROIC floored at the WACC (Koller, Goedhart & Wessels, *Valuation*): MSFT base case $199 at the same 11.5% WACC; the price implies 36.6% growth a year for five years |
 | The re-recorded sample pack was written by pandas 3, which stores dates in microseconds | pandas 2 (the newest on Python 3.10, which CI runs) refused to merge them with nanosecond dates: 40+ offline tests failed on CI's 3.10 job | Facts and filing lists are cast to nanoseconds when read; a test pins the unit |
+| The deflated Sharpe ratio's variance of trials came from the signals evaluated in the same run | A run with `--signals NAME` judged the signal against itself (the earnings-release tone's hold-out used 0.055 a month instead of the log's 0.185); its verdict does not change (it failed tuning; deflated Sharpe 0.01) | `ExperimentLog.trial_sharpe_std`: the latest tuning row of every logged configuration |
 | The post-mortem annualised trailing revenue growth over calendar days | One quarter's change over 167 days read as +9.6% a year (MSFT, May to October 2026) instead of about +18% | Annualised over the quarter ends behind the two trailing sums |
 
 ## 12. Speed

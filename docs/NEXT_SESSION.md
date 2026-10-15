@@ -7,12 +7,13 @@ optional next work.
 
 ## What this session found (details: METHODOLOGY §8b and §11, DATA_AND_ML §5-6, ROADMAP_STATUS)
 
-* **No signal survives the pre-registered rule.** The 36 library signals went through tuning (2009-2017) and the
-  hold-out (2018-2026, evaluated once; 46 trials with the product's own ten). Three passed tuning (FCF yield, FCF yield
+* **No signal survives the pre-registered rule.** The 37 library signals went through tuning (2009-2017) and the
+  hold-out (2018-2026, evaluated once; 47 trials with the product's own ten). Three passed tuning (FCF yield, FCF yield
   after SBC, size); in the hold-out the FCF yields kept a positive, insignificant IC (t 0.7) and size reversed. The
   sector/size-neutral blend is built (`lighthouse/research/blend.py`, `research_signals.py --blend`) but there is
   nothing to blend, and `lighthouse/decision.py` is unchanged (`cross_ticker_evaluation.py --check` unchanged).
-  The earnings-release tone (`eightk_tone`, half the members) was evaluated last: see METHODOLOGY §8b.
+  The earnings-release tone (`eightk_tone`, half the members) was evaluated last and failed both tests (hold-out IC
+  0.000).
 * **Near misses worth forward-testing, not weighting**: short-sale volume (IC t 3.5 / 1.9, but 60-66% monthly turnover
   makes it lose after costs) and risk-factor similarity (significant only in the hold-out, t 2.3).
 * **Analyst toolkit on live data** (MSFT): peers, peer-median beacons, industry metrics, XBRL segments, thesis tracker
@@ -55,7 +56,7 @@ optional next work.
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on the branch the session is given;
   never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12; 284 tests),
+* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12; 285 tests),
   with an empty `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. CI's 3.10 job runs
   pandas 2 (pandas 3 needs Python 3.11): after re-recording data or touching dates, run the suite once under pandas 2
   as well (a virtualenv with `pandas>=2.3,<3`), which is how the microsecond-date failure was found.
