@@ -1,9 +1,9 @@
 # Handoff: where the research-grade Lighthouse work stopped (15 October 2026)
 
 Branch `claude/focused-bohr-klq8zc` (started from `main` at 2ec89f2, after the Phase 1-3 work was merged as pull
-request #5) carries Phases 4-8. **The pull request for it has not been opened**: the user decides (ask first, and ask
-again before merging once CI passes). The eight-phase plan in `docs/ROADMAP_STATUS.md` is done; what follows is
-optional next work.
+request #5) carries Phases 4-8. The user asked for its pull request to be opened (15 October 2026); ask again before
+merging it once CI passes. The eight-phase plan in `docs/ROADMAP_STATUS.md` is done; what follows is optional next
+work.
 
 ## What this session found (details: METHODOLOGY §8b and §11, DATA_AND_ML §5-6, ROADMAP_STATUS)
 
@@ -40,15 +40,12 @@ optional next work.
 2. **Decisions the code leaves strict, for the user**: the DCF's equity premium (the Ken French arithmetic mean since
    1963, 7.2%; a 5-5.5% premium is common in practice) and RONIC (today's ROIC floored at the WACC); FFO without adding
    back real-estate impairments (NAREIT adds them back); a bank that never tags preferred stock gets no tangible book.
-3. **Stale pitch documents**: `docs/EXECUTIVE_SUMMARY.md` (and possibly `docs/PITCH.md`) still quote the timing results
-   from before cash earned the T-bill (balanced Sharpe 0.40, "36 automated tests", "statements lagged 90 days"). Ask the
-   user whether they are frozen deliverables before editing.
-4. **Known data limits** (documented, not fixed): Berkshire's and Brown-Forman's Form 4 symbols (`BRK.A`, `BFA, BFB`)
+3. **Known data limits** (documented, not fixed): Berkshire's and Brown-Forman's Form 4 symbols (`BRK.A`, `BFA, BFB`)
    do not map to the class in the index; one-off market closures shorten the 5-session short-volume window; a
    transient error on one pre-2018 FINRA facility caches a partial day; `edgar.bulk_quarter` filters concepts at
    download like the facts cache once did; XOM's filing list holds only the new holding company's filings (the facts
    merge the predecessor CIK, the submissions do not).
-5. **Local LLM red team** (`memo --red-team`, Ollama): untested live; only if the user runs a local model.
+4. **Local LLM red team** (`memo --red-team`, Ollama): untested live; only if the user runs a local model.
 
 ## Rules that stay in force
 
@@ -82,7 +79,9 @@ optional next work.
 * 14 October 2026: **short-horizon longs keep the R-target exit** (the trend exit's edge came from a survivor-only
   cohort; reopen only with data that includes the delisted).
 * 14 October 2026: PR #5 (Phases 1-3) opened and merged.
-* 15 October 2026: the SEC contact e-mail for that session's runs; up to 2-3 helper agents allowed for parallel work.
+* 15 October 2026: the SEC contact e-mail for that session's runs; up to 2-3 helper agents allowed for parallel work;
+  the executive summary and pitch brought up to date with the current results (done); the pull request for
+  `claude/focused-bohr-klq8zc` opened (merge only when the user says so).
 
 ## Running the research again (a fresh container re-downloads everything)
 
