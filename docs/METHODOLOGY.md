@@ -360,6 +360,101 @@ Interpretation:
   logged before those fixes (insider and short-volume signals) stay in `reports/research/experiments.csv`; the results
   above are the corrected ones.
 
+### 8c. Forward watch list (`lighthouse/research/watch.py`, `python -m lighthouse journal watch`)
+
+Every hold-out in §8b has been used once, and a second look is a new trial. The only clean new evidence is data that
+did not exist when the signals were tested, so three near misses are recorded in the forward journal at each month end
+and scored as the months pass. They are **watch-only**: none carries weight in any verdict, ticket or in
+`lighthouse/decision.py`. `tests/test_watch.py` checks that the decision code never imports the watch list or the
+scorecard, and that a verdict and a ticket are the same with or without a journal full of watch rows.
+
+| Signal | Logged trial (`config_hash`) | Tuning IC (NW t) | Hold-out IC (NW t) | Use chosen in tuning | Why it is watched |
+|---|---|---|---|---|---|
+| `fcf_yield` | `a86f74152373` | +0.024 (+2.3) | +0.009 (+0.7) | long-short | passed tuning; kept its sign out of sample, too weakly to count |
+| `short_volume` | `84d37c55a0d9` | +0.019 (+3.5) | +0.013 (+1.9) | long-only | the strongest IC in both periods, but 60-66% monthly turnover loses it after costs |
+| `risk_similarity` | `7207f773a97c` | -0.000 (-0.1) | +0.011 (+2.3) | long-only | significant only in the hold-out, which the rule cannot use for promotion |
+
+**The same trial, not a new one.** Each signal is computed by the code that produced its logged result
+(`fundamental_signals.daily_values`, `positioning.short_volume_signal`, the 10-K text features of `event_signals`),
+with the same parameters and configuration (`harness.signal_config`), and every row carries the logged configuration
+hash. A variant, for example short-sale volume rebalanced quarterly to cut its turnover, is a new configuration: it is
+logged as a new trial in `reports/research/experiments.csv` first and recorded under its own name. Two differences
+in how the numbers are reached, not in the numbers: the 10-K features are computed for the latest 10-K and the one
+before it only (the research run read every 10-K since 2006; a test compares the two on synthetic filings), and the
+prices are three years long instead of from 2007 (the snapshot needs no more). The logged FCF yield has a flaw it
+keeps here: its market value is the cover-page share count of the latest filing times the price, so between a split's
+ex-date and the next filing the count is the pre-split one (AAPL, 31 August to 30 October 2020: market value $550bn
+instead of $2.1tn, FCF yield four times too high). Correcting it would be a new trial.
+
+**What is recorded** (journal schema 2: two new tables, append-only like `decisions` and `events`; a journal file
+written before them is upgraded when opened, without touching its rows):
+
+* `watch_signals`: after the close of each month's last NYSE session, one row per signal and point-in-time S&P 500
+  member, priced or not (so coverage shows): the value, its rank, percentile and quintile among the members the harness
+  would test that month (priced at the month end, traded on 15 of the last 21 sessions), the stock's per-side cost under
+  the harness's cost model, the configuration hash, the data version (price source and how many prices reached the
+  date, the membership date, the 10-K or the FINRA sessions used), the code version and the run.
+* `watch_outcomes`: once the next month's last session has closed, each of those members' total return over the
+  month under both delisting rules, by the harness's panel code.
+
+**What counts as forward.**
+
+* The snapshot date is the last finished session. The recorder does nothing unless it is the month's last (Good Friday
+  or Memorial Day can move it earlier) and takes no date, so it cannot backdate. Everything it uses was public at that
+  close: prices to it, a filing from the session after its filing date, FINRA's files of the five sessions before it.
+* A snapshot is forward evidence only if it was written before the next session's open (9:30 New York: 13:30 UTC in
+  summer, 14:30 UTC in winter), before any return it predicts exists. A late one stays in the journal, is listed as
+  late and is not scored.
+* A month is scored only once its outcome is recorded; nothing is scored early. The recorder writes nothing when fewer
+  than 90% of the priced members have a price for the snapshot date (the feed has not published the close yet).
+
+**How it is scored** (`lighthouse/scorecard.score_watch`; `journal score`; the app's Journal tab): the harness's own
+`evaluate` on the forward months, with the statistics of §8b: monthly Spearman IC with its Newey-West t (3 lags), the
+share of months with IC > 0, the top quintile minus the equal-weight universe before and after the cost model and at a
+flat 10 bps a side, the long-short spread with borrow, top-quintile turnover and coverage, under both delisting rules.
+On the same data the forward scorer reproduces the harness's numbers exactly (tested).
+
+**The forward rule**, written on 15 October 2026, before any forward data existed. A watch signal is put to the user
+as a candidate for a new pre-registered test only if, at an annual look and under both delisting rules:
+
+1. at least 36 forward months have been scored (on-time snapshots with recorded outcomes);
+2. no more than one month end in six since its first snapshot is missing or late (otherwise the record is incomplete
+   and is not judged);
+3. the mean forward IC is positive with a Newey-West t of at least 2.0, and above zero in more than half the months;
+4. the use chosen in tuning (long-short for FCF yield, long-only for the other two) earned a positive mean return after
+   the harness's cost model. Short-sale volume did not in either period.
+
+The rule is read once a year, on the forward months to the latest December month end (from the end of January, when
+December's outcome is known). Checking every month and stopping at the first t above 2 would multiply the false-alarm
+rate. Three signals and an annual look still make a false alarm likelier than one test's 2.3%, which is one reason
+meeting the rule promotes nothing: weighting any signal in `lighthouse/decision.py` still needs the user's decision and
+a new pre-registered test with its own hold-out, logged as a new trial. A signal that does not meet the rule stays on
+the list until the user removes it.
+
+**How long it takes.** If the true monthly IC were the logged mean, with the same spread and autocorrelation, the
+Newey-West t would grow with the square root of the months: n = logged months × (2 / logged NW t)². The monthly IC's
+standard deviation is the logged mean ÷ plain t × √months (`watch.months_needed`, from the experiment log, exclude
+rule; both rules give the same numbers):
+
+| Signal | IC from | Monthly IC mean | Monthly IC sd | Months for an expected NW t of 2 | Months for an 80% chance |
+|---|---|---|---|---|---|
+| `fcf_yield` | tuning | +0.024 | 0.108 | 70 | 141 |
+| `fcf_yield` | hold-out | +0.009 | 0.136 | 770 | 1,554 |
+| `short_volume` | tuning | +0.019 | 0.068 | 34 | 68 |
+| `short_volume` | hold-out | +0.013 | 0.078 | 123 | 248 |
+| `risk_similarity` | tuning | -0.000 | 0.065 | never | never |
+| `risk_similarity` | hold-out | +0.011 | 0.058 | 82 | 165 |
+
+At the hold-out ICs, the more recent and the less selected estimates, even a median outcome needs about 7 years for
+risk-factor similarity, 10 for short volume and over 60 for FCF yield to reach a t of 2; the 36-month minimum is a
+floor, not an expectation. The logged ICs are the best of 47 trials, so the true ones are probably smaller and the
+wait longer. Within three years only a signal much stronger than its backtest would pass (short volume at its tuning
+IC). What the forward journal can show soon is whether a near miss holds up at all, without any doubt about
+look-ahead; it cannot prove a small edge soon.
+
+Automation: `.github/workflows/watch.yml` after the close on days 28-31 (and on Sundays, to keep its data cache), in
+the same concurrency group as the daily journal. The first snapshot is due after the close of 30 October 2026.
+
 ## 9. Trade tickets: long and short (`lighthouse/tradeplan.py`)
 
 | Item | Rule | Reasoning |
