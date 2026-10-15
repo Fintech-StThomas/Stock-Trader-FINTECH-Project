@@ -278,6 +278,88 @@ volatility and drawdown); they are not a stock-selection tool, and nothing here 
 The broader signal library (value, quality, momentum, earnings, positioning, text; Phase 4) is the place to look for
 one that is.
 
+**Results for the signal library** (Phase 4, run 15 October 2026 at commit `a1c64bb`, the earnings-release tone last at
+`6f7ecc1`; the same protocol, data and costs; 645 of 883 ever-members priced). 37 signals, each one configuration fixed
+before its tuning run: with the product's ten, 47 trials behind the deflated Sharpe ratio (cross-trial Sharpe dispersion
+0.185 a month). Coverage in the hold-out is
+80-90% of member-months for every signal (24% for the earnings-release tone, run on half the members; 46% for the Altman Z, which needs current assets, and 62% for gross
+profitability, which banks and insurers do not report); in the tuning period 23-71%, lowest for the fundamental
+signals (XBRL from 2009, trends and changes need a year or more of filings). Both delisting rules again give identical
+numbers. Returns are annualised; "better use" is the long-only or long-short version the rule picks from the tuning
+results; net returns after the cost model (in brackets at a flat 10 bps a side).
+
+|---|---|---|---|---|---|---|---|
+| *Fundamental (SEC filings)* | | | | | | | |
+| `sue` | +0.008 (+1.0) | +0.4% | L/O -1.5% (-0.4%) | +0.007 (+0.8) | -0.5% | 0.00 | no |
+| `gp_assets` | +0.002 (+0.1) | -0.1% | L/O -1.3% (-1.0%) | +0.009 (+0.7) | -1.1% | 0.00 | no |
+| `roic` | +0.008 (+0.6) | +1.6% | L/O +0.3% (+0.6%) | +0.019 (+1.6) | +3.0% | 0.00 | no |
+| `roic_trend` | -0.012 (-1.5) | -2.2% | L/O -1.1% (-0.5%) | +0.002 (+0.2) | +2.3% | 0.00 | no |
+| `accruals` | +0.006 (+0.6) | +2.1% | L/O +2.4% (+2.9%) | -0.002 (-0.2) | +1.5% | 0.00 | no |
+| `piotroski` | +0.005 (+0.6) | +0.4% | L/O -0.8% (+0.0%) | -0.007 (-0.8) | -2.3% | 0.00 | no |
+| `altman_z` | +0.001 (+0.0) | -1.5% | L/O -0.8% (-0.4%) | +0.004 (+0.3) | -0.2% | 0.00 | no |
+| `beneish` | +0.005 (+0.5) | +2.0% | L/S -0.5% (+0.9%) | +0.000 (+0.0) | -2.2% | 0.00 | no |
+| `cash_conversion` | -0.003 (-0.3) | +0.1% | L/O -0.7% (-0.3%) | -0.000 (-0.0) | +0.6% | 0.00 | no |
+| `earnings_yield` | +0.015 (+1.4) | +0.7% | L/O -0.2% (+0.4%) | +0.010 (+0.8) | -1.1% | 0.00 | no |
+| `book_to_market` | -0.001 (-0.1) | -0.1% | L/O +0.4% (+0.8%) | -0.003 (-0.2) | +0.5% | 0.00 | no |
+| `fcf_yield` | +0.024 (+2.3) | +5.4% | L/S +3.5% (+4.5%) | +0.009 (+0.7) | +0.9% | 0.00 | **tuning only** |
+| `fcf_sbc_yield` | +0.022 (+2.1) | +4.2% | L/S +2.3% (+3.2%) | +0.009 (+0.7) | +0.3% | 0.00 | **tuning only** |
+| `ebitda_ev` | +0.017 (+1.4) | +2.0% | L/O +0.7% (+1.2%) | +0.005 (+0.3) | +0.8% | 0.00 | no |
+| `value_own_history` | -0.003 (-0.3) | -3.7% | L/O -2.4% (-1.6%) | -0.001 (-0.2) | -3.2% | 0.00 | no |
+| `net_issuance` | +0.022 (+2.0) | +3.7% | L/S +1.5% (+2.6%) | +0.011 (+1.0) | -1.3% | 0.00 | no |
+| `shareholder_yield` | +0.014 (+1.3) | +0.2% | L/O +0.2% (+0.7%) | +0.019 (+1.5) | +1.0% | 0.00 | no |
+| *Price and size* | | | | | | | |
+| `mom_12_1` | -0.008 (-0.4) | -7.8% | L/O -5.3% (-3.8%) | +0.002 (+0.1) | -0.4% | 0.00 | no |
+| `low_vol` | -0.015 (-0.6) | -11.0% | L/O -5.0% (-4.7%) | -0.011 (-0.5) | -3.2% | 0.00 | no |
+| `reversal_1m` | +0.017 (+1.2) | +2.8% | L/O -4.5% (+0.2%) | +0.001 (+0.1) | -6.8% | 0.00 | no |
+| `high_52w` | -0.023 (-1.0) | -12.8% | L/O -8.8% (-6.5%) | +0.000 (+0.0) | -4.8% | 0.00 | no |
+| `size` | +0.022 (+2.0) | +4.9% | L/S +3.3% (+4.1%) | -0.004 (-0.3) | -1.8% | 0.00 | **tuning only** |
+| *Panel* | | | | | | | |
+| `industry_mom` | -0.018 (-1.4) | -7.5% | L/O -6.7% (-5.4%) | +0.012 (+1.0) | +1.9% | 0.00 | no |
+| `residual_mom` | -0.002 (-0.2) | +0.8% | L/O -1.0% (+0.2%) | +0.002 (+0.2) | +0.3% | 0.00 | no |
+| *Positioning (Form 4, FINRA)* | | | | | | | |
+| `insider_buyers` | +0.004 (+0.7) | +0.6% | L/O -0.8% (+0.6%) | +0.002 (+0.5) | -2.2% | 0.00 | no |
+| `insider_net` | +0.000 (+0.0) | +1.8% | L/O +0.1% (+1.5%) | +0.001 (+0.1) | -0.9% | 0.00 | no |
+| `short_volume` | +0.019 (+3.5) | +3.2% | L/O -2.7% (+0.4%) | +0.013 (+1.9) | -3.3% | 0.00 | no |
+| `days_to_cover` | n/a (data from 2018) | n/a | n/a | +0.013 (+1.7) | -1.9% | 0.00 | no |
+| *Events and text (8-K, 10-K)* | | | | | | | |
+| `ear_3d` | +0.003 (+0.3) | -1.4% | L/O -1.9% (-0.0%) | +0.001 (+0.2) | -3.0% | 0.00 | no |
+| `text_similarity` | -0.000 (-0.1) | -0.3% | L/O -1.6% (-1.0%) | +0.010 (+1.9) | -0.1% | 0.00 | no |
+| `risk_similarity` | -0.000 (-0.1) | +0.3% | L/O -0.7% (-0.2%) | +0.011 (+2.3) | +0.6% | 0.00 | no |
+| `lm_uncertainty` | -0.022 (-2.4) | -5.3% | L/O -3.3% (-3.1%) | -0.012 (-1.1) | -2.3% | 0.00 | no |
+| `lm_litigious` | -0.000 (-0.0) | +1.6% | L/S +0.6% (+1.0%) | -0.014 (-1.4) | -5.3% | 0.00 | no |
+| `lm_negative` | -0.021 (-1.6) | -6.6% | L/O -4.9% (-4.6%) | -0.012 (-1.4) | -1.4% | 0.00 | no |
+| `fog` | -0.001 (-0.2) | -0.6% | L/O -1.0% (-0.7%) | +0.001 (+0.1) | +0.2% | 0.00 | no |
+| `eightk_tone` (half the members) | +0.007 (+0.8) | +2.8% | L/O +0.2% (+2.2%) | +0.000 (+0.0) | -2.2% | 0.01 | no |
+| *Institutions (13F)* | | | | | | | |
+| `inst_breadth` | +0.006 (+0.4) | +1.8% | L/O -0.4% (+0.6%) | +0.001 (+0.1) | +0.6% | 0.00 | no |
+
+Interpretation:
+
+* **Nothing survives, so nothing is weighted.** Three signals passed the tuning test: the free-cash-flow yield (IC
+  +0.024, t 2.3; long-short +3.5% a year after costs), the same after stock-based pay (+2.3%), and small size within the
+  index (t 2.00, +3.3%). In the hold-out the two FCF yields kept their sign (IC +0.009, t 0.7; long-short +0.9% and
+  +0.3% a year) but not their strength, and size reversed (the largest companies led after 2018). Every deflated Sharpe
+  ratio is about 0: with 47 trials the bar for a single hold-out Sharpe is high, and none came near it. The sector- and
+  size-neutral blend (`lighthouse/research/blend.py`) is built for survivors only, so it was not run: blending the three
+  tuning passers after seeing their hold-out would be choosing on the hold-out. `lighthouse/decision.py` is unchanged.
+* **Short-sale volume predicts and cannot be traded monthly.** The strongest IC in both periods (t 3.5 in tuning, 1.9 in
+  the hold-out), but its top quintile turns over 60-66% a month, so a gross long-short spread of +3.2% a year becomes
+  -6.5% under the cost model (about break-even at 10 bps a side). A real signal in rank terms that the costs eat.
+* **Risk-factor similarity** (Lazy Prices on Item 1A) had a flat tuning period and a hold-out IC of +0.011 (t 2.3): the
+  rule does not allow promoting it on hold-out evidence. It is a candidate for the forward journal, which gives new
+  out-of-sample data, not for weight.
+* **The earnings-release tone** (the change in net tone from the company's previous release, half the members, a
+  median of 170 names a month) had a small positive tuning IC (+0.007, t 0.8) and none in the hold-out (t 0.0); its
+  35% monthly turnover costs more than its +2.8% gross spread.
+* **The 10-K tone hypotheses had the wrong sign.** More uncertainty and negative words came before *higher* returns
+  (tuning t -2.4 and -1.6, hold-out -1.1 and -1.4), which reads as a risk premium rather than mispricing. Signs were
+  registered before testing and are not flipped after.
+* **Momentum, low volatility and the 52-week high** were negative in 2009-2017 (the 2009 momentum crash and the rally
+  in the riskiest stocks) and near zero after: in large caps these classic anomalies have been weak since 2009.
+* Several parser and timing errors were fixed before the hold-out was run (§11, sixth session): the tuning rows
+  logged before those fixes (insider and short-volume signals) stay in `reports/research/experiments.csv`; the results
+  above are the corrected ones.
+
 ## 9. Trade tickets: long and short (`lighthouse/tradeplan.py`)
 
 | Item | Rule | Reasoning |
@@ -479,6 +561,29 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | The Ken French 49-industry file's first table was found only as "main" | Industry momentum could not load (the research run stopped) | The first table of a library file is also stored under its own title |
 | The strategy backtest computed liquidity costs itself, with no cap | On a series that barely trades (EP's cached 2014 data: $0.80, a few hundred shares a day) a sale filled at a negative price and the equity curve went below zero (5 cohort stocks: CPWR, EP, COMS, DIGI, MCIC) | Per-side cost capped at 300 bps in the backtest and in `costs.CostModel` (`costs.MAX_COST_BPS`); sample-pack results unchanged |
 | The DCF's free cash flow subtracted stock-based pay twice (once in the operating margin, once again) | Equity values understated by roughly the SBC share of cash flow (~15% for MSFT) | FCFF after SBC = EBIT x (1 - t) + D&A - capex - change in working capital; the cash view adds SBC back |
+
+### Sixth October 2026 session (signal library, analyst toolkit on live data)
+
+Every one of these was found before the library's hold-out was evaluated: by the parser tests recorded from real
+FINRA and SEC files, by the first live research runs, or by the first live MSFT memo.
+
+| Issue | Effect | Fix |
+|---|---|---|
+| FINRA writes class shares `BRK/B`; symbols were renamed after the daily sum | BRK-B and BF-B had no short volume; two raw symbols could share a label and the research run stopped ("duplicate labels") | Symbols normalised before summing; a session cached by the old code is normalised when read |
+| Form 4 purchases of preferred stock, notes and warrants counted as insider buys | A $5.1m purchase of JPMorgan Series HH preferred counted as a buy of the common (about 200 of 30,895 rows in 2020 Q1) | Non-common securities left out |
+| The Form 4 issuer symbol is free text (`LEN, LEN-B`, `(CALX)`, `NYSE: SCS`) | Those filings matched no ticker | Quotes, brackets and US exchange prefixes removed; lists split on commas and semicolons, never on spaces |
+| Days to cover used FINRA's published figure | It is floored at 1.00 (41% of rows in December 2023, 7% of liquid stocks tied) and is 999.99 at zero volume | Short interest / average daily volume from the two quantities; zero volume is missing |
+| An empty short-interest answer for a recent date was cached | A month still running asked for a future settlement date and stayed missing for good | Empty answers under 30 days old are not cached |
+| A Form 4 dated the month-end session, and that session's FINRA short volume, were used at its close | A few hours of look-ahead: EDGAR dates Forms 4 accepted until 10 pm, FINRA posts the file in the evening | A Form 4 counts from the day after its filing date (as filings do everywhere else); short volume reads the five sessions before the month's last |
+| 4/A amendments repeat whole forms; one 2020 Q1 row had the total typed into the price field ($1.56 trillion) | Trades double counted in `insider_net`; one row could dominate a stock's net purchases | 4/A rows that repeat a Form 4 transaction are dropped; a row above $5bn keeps its buyer, not its value |
+| Some 2010 FINRA files have no header line | The parser stopped the run | Such files are read with the columns of their field count |
+| The 10-K text workers took 8 SEC requests a second whatever share the run was given | Several processes together could exceed the SEC's 10 a second | The workers split `LIGHTHOUSE_SEC_RATE` |
+| A company's XBRL facts were cached filtered to the concepts of the day | When the concept list grew, the new concepts read as never reported | The cache records its concepts and is downloaded again when asked for more (offline it is used as it is) |
+| The sample pack predated the newer cash and short-term investment concepts | MSFT's offline net debt was +$70bn instead of net cash | Sample pack re-recorded (122 concepts, filing lists, profiles); MSFT offline net debt -$61bn; `cross_ticker --check` unchanged |
+| The DCF's terminal value capitalised the last projected year's free cash flow | A company in a build-out carried that year's capex forever: MSFT (capex 35% of revenue, D&A 10%) was worth $94 a share and no growth rate up to 60% a year reproduced its price | Value-driver terminal value, NOPAT x (1 - g / RONIC) / (WACC - g), RONIC = today's ROIC floored at the WACC (Koller, Goedhart & Wessels, *Valuation*): MSFT base case $199 at the same 11.5% WACC; the price implies 36.6% growth a year for five years |
+| The re-recorded sample pack was written by pandas 3, which stores dates in microseconds | pandas 2 (the newest on Python 3.10, which CI runs) refused to merge them with nanosecond dates: 40+ offline tests failed on CI's 3.10 job | Facts and filing lists are cast to nanoseconds when read; a test pins the unit |
+| The deflated Sharpe ratio's variance of trials came from the signals evaluated in the same run | A run with `--signals NAME` judged the signal against itself (the earnings-release tone's hold-out used 0.055 a month instead of the log's 0.185); its verdict does not change (it failed tuning; deflated Sharpe 0.01) | `ExperimentLog.trial_sharpe_std`: the latest tuning row of every logged configuration |
+| The post-mortem annualised trailing revenue growth over calendar days | One quarter's change over 167 days read as +9.6% a year (MSFT, May to October 2026) instead of about +18% | Annualised over the quarter ends behind the two trailing sums |
 
 ## 12. Speed
 

@@ -1,0 +1,2 @@
+Date|Symbol|ShortVolume|TotalVolume|Market
+0

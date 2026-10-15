@@ -20,12 +20,13 @@ The investor enters a ticker and a few facts about themselves: horizon (long or 
 cash they can invest now and, optionally, the value of the stocks they already hold. Lighthouse then runs automatically:
 
 1. **Collects and cleans the data** — ten-plus years of daily prices and volume, the S&P 500, and fundamentals
-   (valuation ratios, profitability, leverage, cash flow, growth, up to five years of annual statements). Every
-   cleaning step and every data source is reported. If the internet is unavailable it falls back to a bundled
-   historical sample pack so it always runs.
+   from the company's SEC filings since 2009, each number dated by the filing that first reported it. Every cleaning
+   step and every data source is reported. If the internet is unavailable it falls back to a bundled historical
+   sample pack (real prices and recorded SEC filings) so it always runs.
 2. **Fundamental analysis** — thirteen *beacons* (P/E, forward P/E, PEG, P/B, EV/EBITDA, earnings stability, ROE,
    operating margin, debt/equity, free-cash-flow yield, current ratio, revenue growth, EPS growth), each compared with
    a sector norm or an absolute band and voting between −1 and +1. Valuation weighs 40%, quality 35%, growth 25%.
+   The investment memo can also score them against the median of real peers (same industry, closest in size).
 3. **Technical analysis** — six beacons: trend (50/200-day SMA, Golden/Death Cross), RSI(14), MACD(12/26/9),
    position in low-lag price bands (%B), volume confirmation (OBV and 20/60-day volume ratio) and distance from the 52-week high.
 4. **Market weather** — the S&P 500 is classified Bull/Bear (above/below its 200-day average) and Calm/Turbulent
@@ -48,6 +49,10 @@ cash they can invest now and, optionally, the value of the stocks they already h
    variance, hierarchical risk parity, maximum Sharpe or simpler rules on a shrunk covariance matrix, with VaR,
    expected shortfall, beta, risk contributions, stress tests and a walk-forward test of every method.
 
+10. **Analyst memo and thesis tracker** — for one company: a linked three-statement model, bull / base / bear
+   DCFs and the growth the price implies, peers, industry metrics (banks, REITs, software, insurers), business
+   segments, red flags, a catalyst calendar, and a thesis whose kill criteria are checked on every new filing.
+
 It ships as a Colab/Jupyter notebook, a command-line tool and a point-and-click Streamlit app. A non-programmer
 changes nothing but the inputs cell.
 
@@ -66,26 +71,35 @@ its 200-day average. Short-term investors get a weekly review and an ATR trailin
 ## Key results (what we found, honestly)
 
 Example: Microsoft, long-term balanced investor, $25,000 portfolio, 2% max loss (offline sample, as of Nov 2017):
-**Buy, score 71** (fundamental 63, technical 83, market Bull/Calm). Plan: 19 shares ≈ $1,594 (6.5% of the
+**Buy, score 71** (fundamental 63, technical 83, market Bull/Calm). Plan: 19 shares ≈ $1,594 (6.6% of the
 portfolio), exit level $64.73, worst case $364 — the max-loss rule, not the risk preset, limited the size because
 the exit sits 23% below the price.
 
-Rule tested on 20 S&P 500 stocks, December 1990 – December 2022 (10 bps costs per side, next-day fills):
+Rule tested on 20 S&P 500 stocks, December 1990 – December 2022 (costs scaled to each stock's liquidity, stops as
+resting orders, next-day fills, uninvested cash earning 2%; `reports/examples/cross_ticker_evaluation.csv`):
 
 | | CAGR | Volatility | Sharpe | Max drawdown |
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
-| Lighthouse signals + regime, fully invested when in | 10.2% | — | 0.45 | −57% |
-| **Lighthouse, balanced profile (vol-targeted)** | 6.5% | 12.7% | 0.40 | **−32%** |
-| Lighthouse, conservative profile | 4.6% | 8.8% | 0.33 | −23% |
+| Lighthouse signals + regime, fully invested when in | 10.9% | — | 0.47 | −55% |
+| **Lighthouse, balanced profile (vol-targeted)** | 7.3% | 12.2% | 0.47 | **−27%** |
+| Lighthouse, conservative profile | 5.8% | 8.5% | 0.47 | −18% |
 
 Lighthouse cut the maximum drawdown and the volatility of **every one of the 20 stocks**, kept the balanced
-profile's realised volatility close to its 15% target, and averaged 12 trades per stock in 32 years with a 57% win
-rate. It did **not** beat buy-and-hold on raw return or Sharpe ratio for most names (3 of 20 on Sharpe): these are
-survivors that compounded relentlessly, and any rule that is sometimes in cash trails them. Its value is
-risk-managed exposure: in Bear/Turbulent markets the Microsoft rule lost 17% annualised while buy-and-hold lost 31%.
-The out-of-sample test shows that tuning thresholds on the first 60% of history adds nothing on the last 40% — the
-default rule is a plateau, not a lucky spike.
+profile's realised volatility below its 15% target (12.2% on average), and averaged 12 trades per stock in 32 years
+with a 53% win rate. It did **not** beat buy-and-hold on raw return except on one name (GE) and beat it on Sharpe ratio for
+9 of 20: these are survivors that compounded relentlessly, and any rule that is sometimes in cash trails them. Its value
+is risk-managed exposure: in Bear/Turbulent markets the Microsoft rule lost 18% annualised while buy-and-hold lost 31%.
+On Microsoft, thresholds tuned on the first 60% of the history did a little better on the last 40% than the defaults
+(Sharpe 0.47 against 0.42), and across 25 threshold pairs the Sharpe ratio moved within 0.06-0.21: the defaults sit in
+a broad, flat region, so tuning buys little.
+
+Survivorship-aware tests are harsher. On every S&P 500 member of 2 January 1996 (258 of 487 with free prices) the
+balanced rule's Sharpe averaged 0.24 against buy-and-hold's 0.36; on the members of 2 January 2009 (330 of 498), 0.30
+against 0.48. And the scores do not pick stocks: on the point-in-time S&P 500, 2009-2026, neither the product's own
+scores nor any of 37 further signals built from free data (value, quality, earnings, momentum, insider and short-sale
+activity, institutional breadth, filing text) ranked next month's returns well enough to survive a hold-out tested
+once. The product's value is the risk discipline, not stock selection (`docs/METHODOLOGY.md` §8, §8b).
 
 ## What makes Lighthouse different
 
@@ -93,15 +107,17 @@ default rule is a plateau, not a lucky spike.
 * **Personal** — the same stock gets a different size and exit level for different investors; the max-loss rule is
   the investor's, not ours.
 * **Market-aware** — the rule changes with the market's weather instead of pretending every year is 2017.
-* **Honest testing** — no look-ahead, statements lagged 90 days, costs, out-of-sample and sensitivity tests, and a
-  plain list of what we tried and rejected (ATR stops on long-term positions, daily reviews, "don't chase" filters).
-* **Runs anywhere** — live data when online, bundled real data when offline; 36 automated tests.
+* **Honest testing** — no look-ahead (every SEC figure is used from the session after its filing), costs scaled to
+  liquidity, survivorship-aware cohorts, a research hold-out evaluated once with the trial count behind every
+  verdict, and a plain list of what we tried and rejected (ATR stops on long-term positions, daily reviews, "don't
+  chase" filters, 47 cross-sectional signal configurations).
+* **Runs anywhere** — live data when online, bundled real data when offline; 285 automated tests.
 
 ## Major limitations and risks
 
 Single-stock timing is hard: in long sideways markets (Microsoft 2002–2012) the rule bleeds small losses, and in
-relentless bull runs it holds too little. Sector norms are long-run approximations, not live peer data. Yahoo
-Finance provides only four to five years of statements, so the point-in-time fundamental gate acts only in recent
-years. The backtest ignores taxes and checks stops at the close. The evaluation universe is survivorship-biased in
-favour of buy-and-hold. Lighthouse is decision support, not advice: it shows the evidence and its reasoning; the
-decision stays with the investor.
+relentless bull runs it holds too little. Sector norms are long-run approximations (peer medians are an option in the
+memo). SEC fundamentals start in 2009, so the point-in-time fundamental gate is off before then. Free data has no
+prices for most delisted companies, so every survivorship-aware result is a bound, not an estimate. The backtest
+ignores taxes; borrow fees for shorts are an assumption. Lighthouse is decision support, not advice: it shows the
+evidence and its reasoning; the decision stays with the investor.

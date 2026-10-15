@@ -1,0 +1,19 @@
+{
+ "cik": 200406,
+ "name": "JOHNSON & JOHNSON",
+ "sic": "2834",
+ "sicDescription": "Pharmaceutical Preparations",
+ "fiscalYearEnd": "0103",
+ "entityType": "operating",
+ "stateOfIncorporation": "NJ",
+ "tickers": [
+  "JNJ"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "JOHNSON & JOHNSON ET AL"
+ ]
+}

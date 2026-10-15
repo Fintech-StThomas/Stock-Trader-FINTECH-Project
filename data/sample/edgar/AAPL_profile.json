@@ -1,0 +1,21 @@
+{
+ "cik": 320193,
+ "name": "Apple Inc.",
+ "sic": "3571",
+ "sicDescription": "Electronic Computers",
+ "fiscalYearEnd": "0926",
+ "entityType": "operating",
+ "stateOfIncorporation": "CA",
+ "tickers": [
+  "AAPL"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "APPLE INC",
+  "APPLE COMPUTER INC",
+  "APPLE COMPUTER INC/ FA"
+ ]
+}

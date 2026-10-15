@@ -1,0 +1,38 @@
+{
+ "cik": 19617,
+ "name": "JPMORGAN CHASE & CO",
+ "sic": "6021",
+ "sicDescription": "National Commercial Banks",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "JPM",
+  "JPM-PC",
+  "AMJB",
+  "JPM-PD",
+  "JPM-PJ",
+  "JPM-PK",
+  "JPM-PL",
+  "JPM-PM",
+  "VYLD"
+ ],
+ "exchanges": [
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "JPMORGAN CHASE & CO",
+  "J P MORGAN CHASE & CO",
+  "CHASE MANHATTAN CORP /DE/",
+  "CHEMICAL BANKING CORP"
+ ]
+}

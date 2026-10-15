@@ -1,0 +1,17 @@
+{
+ "cik": 40545,
+ "name": "GENERAL ELECTRIC CO",
+ "sic": "3600",
+ "sicDescription": "Electronic & Other Electrical Equipment (No Computer Equip)",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "NY",
+ "tickers": [
+  "GE"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}

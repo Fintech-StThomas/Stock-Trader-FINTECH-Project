@@ -1,0 +1,17 @@
+{
+ "cik": 80424,
+ "name": "PROCTER & GAMBLE Co",
+ "sic": "2840",
+ "sicDescription": "Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics",
+ "fiscalYearEnd": "0630",
+ "entityType": "operating",
+ "stateOfIncorporation": "OH",
+ "tickers": [
+  "PG"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}

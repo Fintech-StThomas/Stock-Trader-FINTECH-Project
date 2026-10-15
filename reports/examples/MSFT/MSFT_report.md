@@ -52,11 +52,11 @@ Market weather is Bull / Calm: the S&P 500 is above its 200-day average (up-tren
   - Scaled by conviction 0.75 (score 71) and market-regime multiplier 1.
 
 ### How this rule behaved in the past (2002-09-04 → 2017-11-10)
-Long-only, reviewed monthly at the close, filled at the next open, 10 bps commission + slippage per side, statements lagged 90 days. Returns are for the capital allocated to this stock. Sharpe and Sortino use a fixed 2% a year (no T-bill series: offline or sample data).
+Long-only, reviewed monthly at the close, filled at the next open; costs: commission + Corwin-Schultz half spread (floor 5 bps) + square-root impact; stops: resting orders (gaps fill at the open); cash earns the risk-free rate; statements dated by their SEC filing date. Returns are for the capital allocated to this stock. Sharpe and Sortino use a fixed 2% a year (no T-bill series: offline or sample data).
 
 |  | Total return | CAGR | Volatility | Sharpe | Sortino | Max drawdown | Calmar | Trades | Win rate | Avg win | Avg loss | Profit Factor | Time invested | Years |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Lighthouse strategy | 70.9% | 3.6% | 13.1% | 0.18 | 0.26 | -28.7% | 0.13 | 7 | 57.1% | 30.0% | -2.7% | 25.42 | 53.9% | 15.2 |
+| Lighthouse strategy | 52.6% | 2.8% | 12.6% | 0.13 | 0.18 | -32.7% | 0.09 | 9 | 44.4% | 25.2% | -9.2% | 2.29 | 51.3% | 15.2 |
 | Buy & hold | 362.4% | 10.6% | 26.2% | 0.44 | 0.65 | -59.1% | 0.18 | n/a | n/a | n/a | n/a | n/a | n/a | 15.2 |
 | S&P 500 | 189.0% | 7.2% | 18.6% | 0.36 | 0.51 | -56.8% | 0.13 | n/a | n/a | n/a | n/a | n/a | n/a | 15.2 |
 
@@ -64,10 +64,10 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 
 |  | CAGR | Volatility | Sharpe | Max drawdown | Trades | Win rate | Time invested |
 |---|---|---|---|---|---|---|---|
-| Technical signals only (fully invested) | 5.8% | 18.7% | 0.29 | -35.6% | 7 | 57.1% | 74.3% |
-| + market regime filter | 5.8% | 18.7% | 0.29 | -35.6% | 7 | 57.1% | 74.3% |
-| + fundamental gate (point-in-time) | 5.8% | 18.7% | 0.29 | -35.6% | 7 | 57.1% | 74.3% |
-| + volatility-targeted sizing (full Lighthouse) | 3.6% | 13.1% | 0.18 | -28.7% | 7 | 57.1% | 53.9% |
+| Technical signals only (fully invested) | 6.2% | 18.7% | 0.31 | -35.9% | 7 | 57.1% | 74.3% |
+| + market regime filter | 6.2% | 18.7% | 0.31 | -35.9% | 7 | 57.1% | 74.3% |
+| + fundamental gate (point-in-time) | 6.2% | 18.7% | 0.31 | -35.9% | 7 | 57.1% | 74.3% |
+| + volatility-targeted sizing (full Lighthouse) | 2.8% | 12.6% | 0.13 | -32.7% | 9 | 44.4% | 51.3% |
 | Buy & hold | 10.6% | 26.2% | 0.44 | -59.1% | n/a | n/a | n/a |
 | S&P 500 | 7.2% | 18.6% | 0.36 | -56.8% | n/a | n/a | n/a |
 
@@ -75,20 +75,20 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 
 | regime | Days | Share of time | Strategy ann. return | Buy & hold ann. return | Avg exposure |
 |---|---|---|---|---|---|
-| Bull / Calm | 2496 | 65.2% | 8.6% | 22.9% | 65.5% |
-| Bear / Turbulent | 564 | 14.7% | -16.8% | -30.5% | 21.0% |
-| Bear / Calm | 391 | 10.2% | -13.2% | -19.6% | 16.0% |
-| Bull / Turbulent | 375 | 9.8% | 26.6% | 51.6% | 66.1% |
+| Bull / Calm | 2496 | 65.2% | 7.7% | 22.9% | 63.5% |
+| Bear / Turbulent | 564 | 14.7% | -18.1% | -30.5% | 12.4% |
+| Bear / Calm | 391 | 10.2% | -10.8% | -19.6% | 15.6% |
+| Bull / Turbulent | 375 | 9.8% | 23.5% | 51.6% | 65.4% |
 
 **Out-of-sample check** (thresholds tuned before 2011-10-13, tested after it)
 
 |  | Total return | CAGR | Volatility | Sharpe | Max drawdown | Trades |
 |---|---|---|---|---|---|---|
-| Default rule (60/35) | 67.2% | 8.8% | 13.7% | 0.54 | -26.5% | 3 |
-| Tuned in-sample (50/25) | 67.2% | 8.8% | 13.7% | 0.54 | -26.5% | 3 |
+| Default rule (60/35) | 50.6% | 7.0% | 13.4% | 0.42 | -29.5% | 5 |
+| Tuned in-sample (70/30) | 56.7% | 7.7% | 13.4% | 0.47 | -26.7% | 4 |
 | Buy & hold | 263.3% | 23.6% | 22.2% | 0.98 | -18.0% | n/a |
 
-**Sensitivity**: across 25 entry/exit threshold pairs the Sharpe ratio ranges from 0.08 (entry 55/exit 45) to 0.20 (entry 65/exit 25); median 0.18.
+**Sensitivity**: across 25 entry/exit threshold pairs the Sharpe ratio ranges from 0.06 (entry 55/exit 45) to 0.21 (entry 70/exit 25); median 0.13.
 
 ### Data notes and warnings
 - OFFLINE DATA (sample): series ends 2017-11-10; connect to the internet for live prices
@@ -97,7 +97,7 @@ Long-only, reviewed monthly at the close, filled at the next open, 10 bps commis
 
 ### Limitations you should know
 - Sector norms are long-run approximations, not live peer data; a cheap stock in an expensive sector can still be expensive.
-- Fundamentals are the latest reported figures; the backtest's fundamental gate uses only the years of statements the feed provides.
-- The backtest is long-only with simple costs; it ignores taxes, dividends on cash, and intraday stop execution.
+- The fundamental beacons use the latest reported figures; the backtest's fundamental gate uses SEC filings as first reported, from the day after each was filed (when EDGAR is reachable).
+- The backtest is long-only; costs are estimated from the stock's own spread and volume, stops rest as orders (an overnight gap fills at the open), and it ignores taxes. Run `python -m lighthouse memo` for the analyst view.
 - Past behaviour of a rule is evidence about its *design*, not a promise about its future returns.
 - Lighthouse is a decision-support tool, not investment advice.

@@ -176,7 +176,7 @@ def company_filings(ticker: str, source: str = "auto", refresh: bool = False) ->
         if fp.exists() and pp.exists():
             f = pd.read_parquet(fp)
             for c in ("filed", "report_date"):
-                f[c] = pd.to_datetime(f[c], errors="coerce")
+                f[c] = _ns(f[c])
             f["items"] = f["items"].fillna("").astype(str)
             return json.loads(pp.read_text()), f
         raise DataUnavailable(f"{ticker}: no EDGAR filing list in the sample pack")
@@ -225,6 +225,13 @@ def flatten_company_facts(payload: dict, concepts: Optional[Iterable[str]] = Non
     return _typed_facts(df)
 
 
+def _ns(s) -> pd.Series:
+    """Dates at nanosecond resolution. Parquet written by pandas 3 stores microseconds, which pandas 2 keeps on reading
+    and then refuses to merge with nanosecond dates (`merge_asof`: "incompatible merge keys"); the sample pack is read
+    by both (CI runs Python 3.10, where pandas 3 is not available)."""
+    return pd.to_datetime(s, errors="coerce").astype("datetime64[ns]")
+
+
 def _typed_facts(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=FACT_COLUMNS)
@@ -233,7 +240,7 @@ def _typed_facts(df: pd.DataFrame) -> pd.DataFrame:
         if c not in df.columns:
             df[c] = None
     for c in ("start", "end", "filed"):
-        df[c] = pd.to_datetime(df[c], errors="coerce")
+        df[c] = _ns(df[c])
     df["val"] = pd.to_numeric(df["val"], errors="coerce")
     df["fy"] = pd.to_numeric(df["fy"], errors="coerce")
     for c in ("taxonomy", "concept", "unit", "accn", "fp", "form", "frame"):
@@ -248,7 +255,8 @@ def sample_facts_path(ticker: str):
 def company_facts(cik: Optional[int] = None, ticker: Optional[str] = None, concepts: Optional[Iterable[str]] = None,
                   refresh: bool = False, source: str = "auto") -> pd.DataFrame:
     """The company's XBRL facts as a long table (see `flatten_company_facts`), filtered to the concepts Lighthouse uses
-    (`pit.CONCEPTS`) unless `concepts` says otherwise. Order: fresh cache -> EDGAR -> stale cache -> sample pack."""
+    (`pit.CONCEPTS`) unless `concepts` says otherwise. Order: fresh cache that was filtered to every concept asked for
+    -> EDGAR -> stale cache -> sample pack (see `_facts_for_cik`). The table can hold more concepts than asked."""
     from .pit import CONCEPTS
     concepts = list(concepts) if concepts is not None else CONCEPTS
     if source == "sample" or (offline_mode() and cik is None and ticker is not None):
@@ -273,12 +281,44 @@ def company_facts(cik: Optional[int] = None, ticker: Optional[str] = None, conce
     return _typed_facts(pd.concat(parts, ignore_index=True)) if len(parts) > 1 else parts[0]
 
 
+def _concept_names(concepts: Iterable[str]) -> set:
+    """Bare concept names ("us-gaap:Revenues" -> "Revenues"), the form `flatten_company_facts` filters on."""
+    return {str(c).split(":")[-1] for c in concepts}
+
+
+def cached_fact_concepts(key: str, cached: pd.DataFrame) -> Optional[set]:
+    """The concepts a cached facts table was filtered to, from its sidecar (edgar_facts/<key>.json), or None when it
+    has no usable record: written before the sidecar existed, or the sidecar describes another write (its row count
+    differs, e.g. two processes refreshed the same company at once and their writes interleaved)."""
+    meta = store.read_json("edgar_facts", key)
+    if not isinstance(meta, dict) or not isinstance(meta.get("concepts"), list) or meta.get("rows") != len(cached):
+        return None
+    return {str(c) for c in meta["concepts"]}
+
+
 def _facts_for_cik(cik: int, concepts, refresh: bool, ticker: Optional[str]) -> pd.DataFrame:
+    """One company's facts: the cache when it is fresh (any age offline) AND was filtered to every concept asked for;
+    else EDGAR. The cache keeps no rows for the concepts it was not filtered to, so a request that has grown since
+    (new line items) must download again or it would read those items as never reported. A table without a record of
+    its concepts (written before the record existed) covers only the concepts it has rows for. Offline or with EDGAR
+    unreachable the cache is used as it is, whatever it lacks (missing concepts then read as unreported, as before).
+
+    A download is filtered to the union of what is asked, what the cache held and `pit.CONCEPTS`, so a narrow request
+    (one concept) never shrinks the cache under the full statements. The record of the concepts is written after the
+    table: a crash in between leaves a table without a record, which is refetched when asked for more (never a record
+    that claims concepts the table lacks)."""
+    from .pit import CONCEPTS
     key = f"{int(cik):010d}"
     path = store.path_for("edgar_facts", key)
     cached = store.read_frame("edgar_facts", key)
-    if cached is not None and not refresh and (offline_mode() or store.age_hours(path) < FRESH_HOURS):
-        return _typed_facts(cached)
+    want = _concept_names(concepts)
+    have: set = set()
+    if cached is not None:
+        recorded = cached_fact_concepts(key, cached)
+        have = recorded if recorded is not None else set(cached["concept"].dropna().astype(str))
+        fresh = offline_mode() or store.age_hours(path) < FRESH_HOURS
+        if not refresh and fresh and (want <= have or offline_mode()):
+            return _typed_facts(cached)
     try:
         payload = _get(FACTS_URL.format(cik=int(cik)), timeout=60).json()
     except DataUnavailable:
@@ -288,8 +328,11 @@ def _facts_for_cik(cik: int, concepts, refresh: bool, ticker: Optional[str]) -> 
         if ticker and p.exists():
             return _typed_facts(pd.read_parquet(p))
         raise
-    df = flatten_company_facts(payload, concepts)
+    keep = sorted(want | have | _concept_names(CONCEPTS))
+    df = flatten_company_facts(payload, keep)
     store.write_frame("edgar_facts", key, df)
+    store.write_json("edgar_facts", key, {"concepts": keep, "rows": int(len(df)),
+                                          "written": pd.Timestamp.now(tz="UTC").isoformat()})
     return df
 
 

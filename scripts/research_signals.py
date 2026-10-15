@@ -141,8 +141,13 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-repeat", action="store_true", help="re-evaluate a hold-out (counts as another trial)")
     ap.add_argument("--no-text", action="store_true", help="skip the 10-K text signals (reads every 10-K since 2006)")
     ap.add_argument("--no-13f", action="store_true", help="skip 13F breadth (reads the SEC's 13F data sets, ~3 GB)")
+    ap.add_argument("--no-8k", action="store_true", help="skip the earnings-release tone (reads ~17,000 8-K exhibits "
+                    "for half the members)")
     ap.add_argument("--product-only", action="store_true", help="only the signals the product already uses (beacons, "
                     "technical, fundamental and composite scores)")
+    ap.add_argument("--blend", nargs="+", default=None, metavar="SIGNAL",
+                    help="evaluate only the sector/size-neutral equal-weight blend of these signals (the survivors; "
+                    "lighthouse/research/blend.py); it is one more trial")
     a = ap.parse_args(argv)
     uni, frames, missing, panel = load_inputs()
     cov = panel.coverage()
@@ -160,7 +165,33 @@ def main(argv=None) -> int:
         sigs = {k: v for k, v in sigs.items() if k in keep}
     else:
         sigs.update(library_signals(frames, panel, a))
+    if a.blend:
+        sigs = {blend_name(a.blend): neutral_blend(sigs, a.blend, panel)}
+        a.signals = None
     return evaluate_all(a, uni, frames, missing, panel, sigs)
+
+
+def blend_name(components) -> str:
+    return "blend_neutral_" + "+".join(sorted(components))
+
+
+def neutral_blend(sigs: dict, components, panel) -> pd.DataFrame:
+    """The sector/size-neutral equal-weight blend of `components` (lighthouse/research/blend.py), over each month's
+    tested universe (members that traded)."""
+    from lighthouse.research import blend as B
+    unknown = [c for c in components if c not in sigs]
+    if unknown:
+        raise SystemExit(f"--blend: unknown signals {unknown}")
+    sics = store.read_json("research", "sic_codes", None) or {}
+    industries = B.industries_from_sic(sics, panel.prices.columns)
+    mcap = np.exp(-sigs["size"]) if "size" in sigs else None
+    if not any(industries.values()) or mcap is None:
+        raise SystemExit("--blend needs the SIC codes and market values of the library run (run it without "
+                         "--product-only first)")
+    mask = panel.investable
+    S.DESCRIPTIONS[blend_name(components)] = ("sector (FF49) and size neutral equal-weight blend of "
+                                              + ", ".join(sorted(components)))
+    return B.blend({c: sigs[c] for c in sorted(components)}, industries, mcap, mask)
 
 
 def library_signals(frames, panel, a) -> dict:
@@ -177,7 +208,7 @@ def library_signals(frames, panel, a) -> dict:
     sigs.update(PO.monthly(frames, panel, market_cap=mcap, refresh=a.refresh_signals))
     from lighthouse.research import event_signals as EV
     from lighthouse.research import institutions as IN
-    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text))
+    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text, eightk=not a.no_8k))
     if not a.no_13f:
         sigs.update(IN.monthly(frames, panel, refresh=a.refresh_signals))
     for mod in (FS, PS, PO, EV, IN):
@@ -221,13 +252,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     if not a.holdout:
         return 0
     # the hold-out: once per signal, both rules; trials = every configuration in the log
-    trial_sr = []
-    for name, by in tune_by.items():
-        for r, s in by.items():
-            for k in ("spread_net_sharpe", "long_only_net_sharpe"):
-                if np.isfinite(s.get(k, np.nan)):
-                    trial_sr.append(s[k] / np.sqrt(12))
-    sr_std = float(np.std(trial_sr, ddof=1)) if len(trial_sr) > 2 else 0.1
+    sr_std = log.trial_sharpe_std()          # every configuration in the log, not only this run's signals
     n_trials = log.trials()
     hrows, verdicts = [], []
     for name, sig in sigs.items():

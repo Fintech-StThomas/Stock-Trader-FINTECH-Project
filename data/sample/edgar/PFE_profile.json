@@ -1,0 +1,19 @@
+{
+ "cik": 78003,
+ "name": "PFIZER INC",
+ "sic": "2834",
+ "sicDescription": "Pharmaceutical Preparations",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "PFE"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "PFIZER INC"
+ ]
+}

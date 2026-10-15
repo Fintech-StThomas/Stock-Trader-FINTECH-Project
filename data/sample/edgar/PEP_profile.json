@@ -1,0 +1,17 @@
+{
+ "cik": 77476,
+ "name": "PEPSICO INC",
+ "sic": "2080",
+ "sicDescription": "Beverages",
+ "fiscalYearEnd": "1226",
+ "entityType": "operating",
+ "stateOfIncorporation": "NC",
+ "tickers": [
+  "PEP"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}

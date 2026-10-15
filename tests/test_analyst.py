@@ -53,6 +53,38 @@ def test_dcf_falls_with_the_discount_rate_and_rises_with_growth():
         dcf(a, f, 0.02, terminal_growth=0.025)
 
 
+def test_terminal_value_reinvests_for_growth_not_last_years_capex():
+    f = company()
+    a = Assumptions.from_financials(f, years=5)
+    rate, g = 0.08, 0.025
+    r = dcf(a, f, rate, g)
+    p = r.projection
+    roic = f.ratios()["roic"]
+    assert r.ronic == pytest.approx(max(roic, rate))
+    # by hand: NOPAT of year 6 = EBIT of year 5 x (1 + g) x (1 - tax); reinvestment g / RONIC of it
+    nopat6 = p["operating_income"].iloc[-1] * (1 + g) * (1 - a.tax_rate)
+    tv = nopat6 * (1 - g / r.ronic) / (rate - g)
+    disc = (1 + rate) ** -np.arange(1, 6)
+    ev = float((p["fcff_after_sbc"].to_numpy() * disc).sum()) + tv * disc[-1]
+    assert r.enterprise_value == pytest.approx(ev)
+    assert r.per_share == pytest.approx((ev - f.net_debt) / f.shares)
+    # a build-out (capex 35% of revenue in the projection years) costs those years' cash, not the terminal value
+    heavy = dcf(Assumptions(**{**a.to_dict(), "capex_pct": 0.35}), f, rate, g)
+    pv_tv = lambda x: x.terminal_share * x.enterprise_value                     # noqa: E731
+    assert pv_tv(heavy) == pytest.approx(pv_tv(r)) and heavy.enterprise_value < r.enterprise_value
+    # new capital earns at least its cost: a low-ROIC company's growth adds nothing, and never destroys value
+    weak = company(margin=0.02)
+    assert dcf(Assumptions.from_financials(weak, years=5), weak, rate, g).ronic == pytest.approx(rate)
+    # an explicit RONIC: the higher it is, the less of the profit growth consumes
+    assert dcf(a, f, rate, g, ronic=0.30).per_share > dcf(a, f, rate, g, ronic=0.10).per_share
+    # a loss in the last year is capitalised as it is (nothing to reinvest)
+    loss = Assumptions(**{**a.to_dict(), "operating_margin": [-0.05] * 5})
+    pl = project(loss)
+    want = pl["operating_income"].iloc[-1] * (1 + g) * (1 - loss.tax_rate) / (rate - g)
+    got = dcf(loss, f, rate, g)
+    assert got.terminal_share * got.enterprise_value == pytest.approx(want * disc[-1])
+
+
 def test_reverse_dcf_reproduces_the_price():
     f = company(price=120.0)
     base = Assumptions.from_financials(f, years=5)
@@ -110,6 +142,57 @@ def test_peer_comparison_premium_and_norms():
     norms = peer_norms(cmp)
     assert norms["pe"] == pytest.approx(cmp.table.loc["peer median", "pe"])
     assert "6 peers" in norms["source"]
+
+
+def test_fundamental_view_scores_the_memo_numbers_against_peer_medians():
+    target = company(price=150.0, ticker="T")
+    dear = {f"P{i}": company(price=400.0 + 20 * i, ticker=f"P{i}") for i in range(6)}     # same business, dearer
+    cmp = compare(target, dear, "4-digit SIC 7372")
+    snap = memo_mod.fundamental_snapshot(target, "Technology")
+    r = target.ratios()
+    assert snap.pe_trailing == pytest.approx(r["pe"]) and snap.ev_ebitda == pytest.approx(r["ev_ebitda"])
+    assert snap.pe_forward is None and snap.peg is None                  # no estimates in free data
+    view = memo_mod.fundamental_view(target, cmp, "Technology")
+    assert view.peer_based and "6 peers (4-digit SIC 7372)" in view.source
+    pe = next(b for b in view.beacons if b.key == "valuation:pe")
+    assert "vs peer median" in pe.value and "6 peers" in pe.rationale
+    assert view.score > view.sector_score                               # cheap against its peers, not the sector
+    none = memo_mod.fundamental_view(target, None, "Technology", why_no_peers="peer search off")
+    assert not none.peer_based and "peer search off" in none.source and none.score == none.sector_score
+    loss = memo_mod.fundamental_snapshot(company(ni=-1e9))
+    assert loss.pe_trailing == -1.0                                     # the snapshot's "negative earnings"
+
+
+def test_memo_peer_norms_are_opt_in(msft, monkeypatch):
+    from lighthouse.report import _fundamental_view_lines
+    kw = dict(as_of="2016-11-15", source="sample", risk_free=0.005, equity_premium=0.06)
+    plain = memo_mod.build("MSFT", peers=False, **kw)
+    assert plain.fundamental_view is None and "## Fundamental beacons" not in plain.markdown()
+    off = memo_mod.build("MSFT", peers=False, peer_norms=True, **kw)
+    assert not off.fundamental_view.peer_based and "peer search off" in off.fundamental_view.source
+    text = off.markdown()
+    assert "## Fundamental beacons against the sector norms" in text
+    # the section is added; nothing else in the memo changes
+    assert text.replace("\n".join(_fundamental_view_lines(off.fundamental_view)) + "\n", "") == plain.markdown()
+    assert (off.stance, off.thesis, off.criteria) == (plain.stance, plain.thesis, plain.criteria)
+    # with peers (the offline sample pack has no filing lists to find them, so the search is stood in for)
+    peers = {f"P{i}": company(price=400.0 + 20 * i, ticker=f"P{i}") for i in range(6)}
+    monkeypatch.setattr(memo_mod, "find_peers", lambda t, f, sic, cands, source="auto", n=8:
+                        compare(f, peers, "4-digit SIC 7372"))
+    m = memo_mod.build("MSFT", peers=True, peer_norms=True, **kw)
+    assert m.fundamental_view.peer_based and m.fundamental_view.sector == "Technology"
+    md = m.markdown()
+    assert "## Fundamental beacons against the peer medians" in md and "vs peer median" in md
+    assert "against the sector norms for Technology" in md
+    assert m.rule_verdict == plain.rule_verdict
+
+
+def test_memo_cli_peer_norms_flag(capsys):
+    from lighthouse.__main__ import main
+    assert main(["memo", "MSFT", "--source", "sample", "--as-of", "2016-11-15", "--no-signals", "--no-peers",
+                 "--peer-norms"]) == 0
+    out, err = capsys.readouterr()
+    assert "## Fundamental beacons against the sector norms" in out and "--peer-norms needs the peer search" in err
 
 
 def test_red_flags():
@@ -202,6 +285,14 @@ def test_msft_memo_end_to_end_offline(msft, tmp_path):
     assert cov.loc[tid, "filings_since"] == 1 and cov.loc[tid, "stale"]
     lines = thesis.close_thesis(tid, "test", book, source="sample", date="2017-11-10")
     assert any("Revenue grew" in x for x in lines) and any("P/E" in x for x in lines)
+    # growth per year of reported quarters: the trailing sums known on the two dates, over their quarter ends
+    f_close = financials_as_of("MSFT", st, px, acts, "2017-11-10")
+    q = f_close.quarterly
+    end0 = q.index[pd.to_datetime(q["filed"]) <= "2016-11-15"].max()
+    end1 = q.index.max()
+    g = (f_close.get("revenue") / m.financials.get("revenue")) ** (365.25 / (end1 - end0).days) - 1.0
+    rev_line = next(x for x in lines if x.startswith("Revenue grew"))
+    assert f"Revenue grew {g:+.1%} a year (trailing twelve months to {pd.Timestamp(end0).date()}" in rev_line
     assert thesis.coverage(book, date="2017-11-10", prices_now=False).loc[tid, "status"] == "closed"
     assert book.open_ids() == []
     with pytest.raises(Exception):                                  # append-only

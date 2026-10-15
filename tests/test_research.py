@@ -196,3 +196,24 @@ def test_experiment_log_columns_stay_aligned(tmp_path):
     (tmp_path / "experiments.csv").write_text("other,columns\n1,2\n")
     with pytest.raises(RuntimeError, match="misalign"):
         log.append(base, {"signal": "x"}, {"v": 1})
+
+
+def test_trial_sharpe_dispersion_comes_from_every_logged_configuration(tmp_path):
+    """The deflated Sharpe ratio's variance of trials: a run that evaluates one signal is judged against every
+    configuration in the log (latest tuning row of each configuration and rule), not against itself."""
+    log = H.ExperimentLog(tmp_path)
+    assert log.trial_sharpe_std(default=0.1) == 0.1                      # nothing logged yet
+    sharpes = {"a": (0.6, 0.3), "b": (-1.2, -0.4), "c": (0.1, 0.9)}
+    for name, (ls, lo) in sharpes.items():
+        for rule in ("exclude", "pessimistic"):
+            log.append({"signal": name, "rule": rule, "spread_net_sharpe": ls, "long_only_net_sharpe": lo},
+                       {"signal": name}, {"v": 1}, rule=rule, period="tuning")
+    # a re-run of "a" with corrected data replaces its earlier rows; a hold-out row never counts
+    for rule in ("exclude", "pessimistic"):
+        log.append({"signal": "a", "rule": rule, "spread_net_sharpe": 2.0, "long_only_net_sharpe": 1.0},
+                   {"signal": "a"}, {"v": 2}, rule=rule, period="tuning")
+    log.append({"signal": "c", "rule": "exclude", "spread_net_sharpe": 50.0, "long_only_net_sharpe": 50.0,
+                "trials": 3}, {"signal": "c"}, {"v": 1}, holdout=True, rule="exclude", period="holdout",
+               holdout_id="h")
+    want = pd.Series([2.0, 1.0, -1.2, -0.4, 0.1, 0.9] * 2) / np.sqrt(12)
+    assert log.trial_sharpe_std() == pytest.approx(want.std(ddof=1))

@@ -1,7 +1,8 @@
 """
 The investment memo: everything the toolkit knows about one stock on one date, and a recommendation built from it.
 
-Sections   the company (SIC industry, fiscal year, filings used); the numbers (TTM, growth, margins, returns); the
+Sections   the company (SIC industry, fiscal year, filings used); the numbers (TTM, growth, margins, returns); for
+           banks, REITs, software companies and insurers the industry's own metrics (`analyst.industry`); the
            valuation (bull / base / bear DCF, probability-weighted target, upside-to-downside, reverse DCF, the stock's
            own valuation bands, peers); quality and risk (earnings-quality flags, balance sheet, debt coming due);
            capital allocation; catalysts; the variant view (where the base case differs from what the price implies);
@@ -19,9 +20,12 @@ from typing import Dict, Iterable, List, Optional
 import numpy as np
 import pandas as pd
 
+from ..fundamentals import FundamentalSnapshot, fundamental_beacons, fundamental_score, sector_norms
+from ..technicals import Beacon
 from .checks import Flag, balance_sheet, capital_allocation, catalysts, earnings_quality
 from .financials import Financials, financials_as_of
-from .peers import PeerComparison, choose_peers, compare
+from .industry import SECTOR_OF_INDUSTRY, IndustryView, industry_for_sic, industry_metrics
+from .peers import PeerComparison, choose_peers, compare, peer_norms as _peer_norms
 from .valuation import Valuation, value
 
 
@@ -50,6 +54,21 @@ class Criterion:
 
 
 @dataclass
+class FundamentalView:
+    """The fundamental beacons on the memo's own point-in-time numbers (`fundamental_snapshot`), scored against the
+    peer medians when the memo found peers, next to the same numbers against the sector norms. Opt-in
+    (`build(peer_norms=True)`, CLI `--peer-norms`); the rule-based verdict keeps the sector norms it was tested with."""
+    beacons: List[Beacon]                 # against `norms`
+    score: Optional[float]
+    sector_beacons: List[Beacon]          # the same numbers against fundamentals.SECTOR_NORMS
+    sector_score: Optional[float]
+    norms: Dict[str, object]              # what the beacons were scored against (peer_norms, or the sector norms)
+    source: str                           # which norms: the peers' source string, or why the sector norms were used
+    sector: Optional[str] = None
+    peer_based: bool = False
+
+
+@dataclass
 class Memo:
     ticker: str
     as_of: pd.Timestamp
@@ -72,6 +91,9 @@ class Memo:
     rule_score: Optional[float] = None
     sources: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    fundamental_view: Optional[FundamentalView] = None   # opt-in: beacons against peer medians (build(peer_norms=True))
+    industry: Optional[IndustryView] = None              # bank / REIT / software / insurer metrics, by SIC code
+    segments: Optional[object] = None                    # segments.SegmentReport, when the latest 10-K tags segments
 
     def markdown(self) -> str:
         from ..report import build_memo
@@ -130,6 +152,79 @@ def find_peers(ticker: str, f: Financials, sic: Optional[str], candidates: Itera
 
 
 # --------------------------------------------------------------------------- #
+# Fundamental beacons on the memo's numbers (opt-in: against the peer medians)
+# --------------------------------------------------------------------------- #
+def _finite(x) -> Optional[float]:
+    return float(x) if x is not None and np.isfinite(x) else None
+
+
+def fundamental_snapshot(f: Financials, sector: Optional[str] = None) -> FundamentalSnapshot:
+    """The beacons' inputs from the memo's point-in-time numbers (TTM flows, latest balance sheet, the price that day):
+    the same definitions `Financials.ratios` gives the peers, so a peer median compares like with like. A loss gives
+    P/E -1 (the snapshot's "negative earnings"); forward P/E and PEG need estimates, which free data lacks (None)."""
+    r = f.ratios()
+    pe = _finite(r["pe"])
+    if pe is None and np.isfinite(f.get("net_income")) and f.get("net_income") <= 0 and f.market_cap > 0:
+        pe = -1.0
+    eq, debt = f.get("equity"), f.bs.get("total_debt")
+    de = float(debt / eq) if debt is not None and np.isfinite(debt) and eq > 0 else None
+    return FundamentalSnapshot(ticker=f.ticker, sector=sector, price=f.price, market_cap=_finite(f.market_cap),
+                               pe_trailing=pe, pb=_finite(r["pb"]), ev_ebitda=_finite(r["ev_ebitda"]),
+                               roe=_finite(r["roe"]), operating_margin=_finite(r["operating_margin"]),
+                               profit_margin=_finite(r["net_margin"]), debt_to_equity=de,
+                               current_ratio=_finite(r["current_ratio"]), fcf=_finite(f.fcf),
+                               fcf_yield=_finite(r["fcf_yield"]), revenue_growth=_finite(r["revenue_growth"]),
+                               eps_growth=_finite(r["eps_growth"]), as_of=str(f.as_of.date()),
+                               source="SEC EDGAR XBRL, point in time")
+
+
+def fundamental_view(f: Financials, peer_cmp: Optional[PeerComparison], sector: Optional[str] = None,
+                     why_no_peers: str = "no peers found") -> FundamentalView:
+    """The beacons on the memo's numbers against the peer medians (`peers.peer_norms`) when there are peers, else
+    against the sector norms with the reason. The earnings-stability beacon is left out: EDGAR's annual EPS is as
+    reported, so a share split between two years would read as an earnings collapse."""
+    snap = fundamental_snapshot(f, sector)
+    base = fundamental_beacons(snap)
+    if peer_cmp is not None and peer_cmp.peers:
+        norms = _peer_norms(peer_cmp)
+        beacons = fundamental_beacons(snap, norms=norms)
+        return FundamentalView(beacons, fundamental_score(beacons), base, fundamental_score(base), norms,
+                               str(norms["source"]), sector, True)
+    norms = dict(sector_norms(sector))
+    return FundamentalView(base, fundamental_score(base), base, fundamental_score(base), norms,
+                           f"sector norms for {sector or 'the overall market'} ({why_no_peers})", sector, False)
+
+
+def _memo_sector(ticker: str, result, sic=None) -> Optional[str]:
+    """The sector label the beacons use: the analysis snapshot's, else the curated list's, else the one the SIC code
+    implies for a bank, insurer, REIT or software company; None (the default norms) when unknown."""
+    from ..universe import UNKNOWN_SECTOR, sector_of
+    s = getattr(getattr(result, "fundamentals", None), "sector", None) or sector_of(ticker, None)
+    if not s or s == UNKNOWN_SECTOR:
+        s = SECTOR_OF_INDUSTRY.get(industry_for_sic(sic) or "")
+    return None if not s or s == UNKNOWN_SECTOR else s
+
+
+def industry_view(ticker: str, sic, f: Financials, source: str = "auto",
+                  notes: Optional[List[str]] = None) -> Optional[IndustryView]:
+    """The industry metrics (`analyst.industry`) on the memo's date when the SIC code is a bank, REIT, software or
+    insurer code; None otherwise or when the facts cannot be read (a note says why). The facts come from the same
+    cache as the statements, and only those filed before the memo's date are used."""
+    from ..data import DataUnavailable
+    from ..edgar import company_facts
+    if industry_for_sic(sic) is None:
+        return None
+    try:
+        facts = company_facts(ticker=ticker, source=source)
+    except Exception as exc:  # noqa: BLE001 - unreachable EDGAR, no SEC contact e-mail: the memo goes on without them
+        if notes is not None:
+            kind = "unavailable" if isinstance(exc, DataUnavailable) else type(exc).__name__
+            notes.append(f"no industry metrics (facts {kind}: {str(exc)[:120]})")
+        return None
+    return industry_metrics(facts, sic, f.as_of, market_cap=f.market_cap if np.isfinite(f.market_cap) else None)
+
+
+# --------------------------------------------------------------------------- #
 # The memo
 # --------------------------------------------------------------------------- #
 def _pct(x: Optional[float], digits: int = 1) -> str:
@@ -138,9 +233,13 @@ def _pct(x: Optional[float], digits: int = 1) -> str:
 
 def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: bool = True,
           candidates: Optional[Iterable[str]] = None, factors: Optional[pd.DataFrame] = None,
-          risk_free: Optional[float] = None, equity_premium: Optional[float] = None) -> Memo:
+          risk_free: Optional[float] = None, equity_premium: Optional[float] = None,
+          peer_norms: bool = False) -> Memo:
     """The memo for `ticker` on `as_of` (default: the last close). `result` (an `engine.AnalysisResult`) adds the
-    rule-based verdict; `peers=False` skips the peer search (it reads every same-industry candidate's filings)."""
+    rule-based verdict; `peers=False` skips the peer search (it reads every same-industry candidate's filings).
+    `peer_norms=True` adds the fundamental beacons on the memo's numbers scored against the peer medians (needs the
+    peer search; without peers they are scored against the sector norms and say why). Nothing else changes: the
+    stance, the rule-based verdict and the decision keep the sector norms."""
     from ..data import load_prices
     from ..edgar import company_filings
     from ..pit import load_statements
@@ -192,12 +291,39 @@ def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: boo
     b_flags = balance_sheet(f)
     cap = capital_allocation(f)
     cats = catalysts(filings, f.as_of, profile.get("fiscalYearEnd"))
+    view = None
+    if peer_norms:
+        view = fundamental_view(f, peer_cmp, _memo_sector(t, result, profile.get("sic")),
+                                why_no_peers="peer search off" if not peers else "no peers found")
+    ind = industry_view(t, profile.get("sic"), f, source=source, notes=notes)
+    seg = _segments(t, f.as_of, source, profile, filings, notes)
     memo = Memo(ticker=t, as_of=f.as_of, profile=profile, financials=f, valuation=val, peers=peer_cmp,
                 quality=q_flags, balance=b_flags, capital=cap, catalysts=cats, stance="hold", thesis="",
-                rule_verdict=getattr(result, "verdict", None), rule_score=getattr(result, "score", None), notes=notes)
+                rule_verdict=getattr(result, "verdict", None), rule_score=getattr(result, "score", None), notes=notes,
+                fundamental_view=view, industry=ind, segments=seg)
     _write_argument(memo)
     memo.sources = _sources(memo, prices)
     return memo
+
+
+# --------------------------------------------------------------------------- #
+# Business segments (an optional section: no segment data, no section)
+# --------------------------------------------------------------------------- #
+def _segments(ticker: str, as_of: pd.Timestamp, source: str, profile: dict, filings, notes: List[str]):
+    """The segment tables of the latest 10-K usable on the memo's date (`segments.segments_for`), or None. Never
+    raises: a company without segment facts, the sample pack (it holds no XBRL instances), an offline run without a
+    cached table or an unreachable EDGAR all leave the section out; an unexpected failure adds a note."""
+    from ..data import DataUnavailable
+    if filings is None or not (profile or {}).get("cik"):
+        return None
+    try:
+        from .segments import segments_for
+        return segments_for(ticker, as_of, source=source, filings=filings, cik=profile.get("cik"))
+    except DataUnavailable:
+        return None
+    except Exception as exc:  # noqa: BLE001 - an odd instance must not stop the memo
+        notes.append(f"no segment table: {type(exc).__name__}: {str(exc)[:120]}")
+        return None
 
 
 def _rate(f, close, risk_free, equity_premium, factors):
@@ -329,4 +455,5 @@ def _sources(m: Memo, prices: pd.DataFrame) -> List[str]:
     return out
 
 
-__all__ = ["Criterion", "Memo", "STANCE_RULE", "build", "find_peers", "peer_candidates"]
+__all__ = ["Criterion", "Memo", "FundamentalView", "STANCE_RULE", "build", "find_peers", "peer_candidates",
+           "fundamental_snapshot", "fundamental_view", "industry_view"]

@@ -1,0 +1,17 @@
+{
+ "cik": 21344,
+ "name": "COCA COLA CO",
+ "sic": "2080",
+ "sicDescription": "Beverages",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "KO"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}

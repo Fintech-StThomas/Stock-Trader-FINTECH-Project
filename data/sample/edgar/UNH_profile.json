@@ -1,0 +1,19 @@
+{
+ "cik": 731766,
+ "name": "UNITEDHEALTH GROUP INC",
+ "sic": "6324",
+ "sicDescription": "Hospital & Medical Service Plans",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "UNH"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "UNITED HEALTHCARE CORP"
+ ]
+}

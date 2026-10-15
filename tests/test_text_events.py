@@ -116,6 +116,50 @@ def test_event_values_are_causal_and_expire():
     assert np.isnan(full.loc[close.index[52] + pd.Timedelta(days=ev.EAR_MAX_AGE_DAYS + 3):close.index[149]]).all()
 
 
+def test_text_workers_split_this_runs_sec_rate(monkeypatch, tmp_path):
+    """LIGHTHOUSE_SEC_RATE gives a run a share of the SEC's 10 requests a second (other processes download at the same
+    time); the 10-K text workers must split that share, not 8 a second, between them."""
+    from types import SimpleNamespace
+
+    from lighthouse import data, http
+    from lighthouse.research import harness as H
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(http, "SEC_RATE", 1.0)                     # as with LIGHTHOUSE_SEC_RATE=1
+    monkeypatch.setattr(http.POLICIES["sec.gov"], "rate", 1.0)
+    seen = {}
+
+    class Pool:                                                     # records what the workers would be given
+        def __init__(self, max_workers, initializer, initargs):
+            seen.update(workers=max_workers, initializer=initializer, initargs=initargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def map(self, fn, jobs, chunksize=1):
+            return [(t, None, None) for t, _, _ in jobs]
+
+    monkeypatch.setattr(ev, "ProcessPoolExecutor", Pool)
+    monkeypatch.setattr(text, "lm_dictionary", lambda: None)
+    idx = pd.bdate_range("2020-01-01", periods=60)
+    frames = {"AAA": pd.DataFrame({"Close": 1.0}, index=idx), "BBB": pd.DataFrame({"Close": 2.0}, index=idx)}
+    ev.text_monthly(frames, SimpleNamespace(dates=H.month_ends(idx)), refresh=True, processes=3)
+    assert seen["workers"] == 3 and seen["initializer"] is ev._worker_init
+    assert seen["workers"] * seen["initargs"][0] == pytest.approx(1.0)       # 1 request a second in total, not 8
+    # without LIGHTHOUSE_SEC_RATE the run has 8 a second, split the same way
+    monkeypatch.setattr(http, "SEC_RATE", 8.0)
+    monkeypatch.setattr(http.POLICIES["sec.gov"], "rate", 8.0)
+    assert 4 * ev.worker_sec_rate(4) == pytest.approx(8.0) and ev.worker_sec_rate(0) == pytest.approx(8.0)
+    # a policy lowered at run time is respected too
+    monkeypatch.setattr(http.POLICIES["sec.gov"], "rate", 2.0)
+    assert ev.worker_sec_rate(2) == pytest.approx(1.0)
+    # the initializer installs the share as the worker's SEC policy
+    ev._worker_init(0.25)
+    assert http.POLICIES["sec.gov"].rate == 0.25
+
+
 # --------------------------------------------------------------------------- #
 # 13F breadth (recorded excerpts of the SEC's 13F data sets and fails-to-deliver files, October 2026)
 # --------------------------------------------------------------------------- #
@@ -207,3 +251,75 @@ def test_prompt_and_passage_selection_are_deterministic():
     assert sel == [ps[1]]
     p1 = llm.build_prompt("Q?", sel, {"price": "$10"})
     assert p1 == llm.build_prompt("Q?", sel, {"price": "$10"}) and "[1] Litigation" in p1
+
+
+# --------------------------------------------------------------------------- #
+# Earnings press releases (8-K Item 2.02): real excerpts of Microsoft's releases filed 29 April and 29 July 2026
+# (tests/fixtures/edgar/msft_8k_2026q1_* and _2026q2_*: the filing indexes, and the first ~3,000 characters of each
+# EX-99.1 as extracted text)
+# --------------------------------------------------------------------------- #
+EDGAR_FIX = Path(__file__).parent / "fixtures" / "edgar"
+RELEASES = {"0001193125-26-191457": ("2026q1", "2026-04-29"), "0001193125-26-323632": ("2026q2", "2026-07-29")}
+
+
+def _index(tag):
+    import json
+    return pd.DataFrame(json.loads((EDGAR_FIX / f"msft_8k_{tag}_index.json").read_text())["directory"]["item"])
+
+
+def test_release_document_is_the_ex99_exhibit():
+    for tag in ("2026q1", "2026q2"):
+        assert ev.release_document(_index(tag)) == "msft-ex99_1.htm"            # not the 8-K cover or the XBRL
+    assert ev.release_document(pd.DataFrame({"name": ["d1ex992.htm", "d1ex991.htm", "d1.htm"]})) == "d1ex991.htm"
+    assert ev.release_document(pd.DataFrame({"name": ["form8-k.htm", "ex99_1.jpg"]})) is None
+    assert ev.release_document(pd.DataFrame()) is None
+
+
+def test_release_tone_on_a_real_release(lm):
+    raw = (EDGAR_FIX / "msft_8k_2026q2_ex99_1_excerpt.txt").read_text()
+    t = ev.release_tone(raw, lm)
+    words = text.tokens(text.html_to_text(raw))
+    c = Counter(words)
+    assert t["words"] == len(words) > 300
+    assert t["net_tone"] == pytest.approx((c["GAIN"] - c["LOSS"]) / len(words))
+    assert np.isnan(ev.release_tone("", lm)["net_tone"])
+
+
+def test_eightk_tone_is_the_change_known_the_day_after_and_causal(lm, monkeypatch):
+    from lighthouse import edgar
+    filings = pd.DataFrame({"accn": list(RELEASES) + ["0000000000-26-000001"],
+                            "filed": pd.to_datetime([v[1] for v in RELEASES.values()] + ["2026-05-15"]),
+                            "form": ["8-K", "8-K", "8-K"], "items": ["2.02,9.01", "2.02,9.01", "5.02"]})
+    monkeypatch.setattr(edgar, "cik_for", lambda t: 789019)
+    monkeypatch.setattr(edgar, "company_filings", lambda t, source="auto", refresh=False: ({}, filings))
+    monkeypatch.setattr(edgar, "filing_documents", lambda cik, accn: _index(RELEASES[accn][0]))
+    served = []
+    monkeypatch.setattr(edgar, "fetch_document", lambda cik, accn, doc, cache=True: served.append((accn, doc, cache)) or
+                        (EDGAR_FIX / f"msft_8k_{RELEASES[accn][0]}_ex99_1_excerpt.txt").read_text())
+    monkeypatch.setattr(ev.store, "read_frame", lambda kind, key: None)
+    monkeypatch.setattr(ev.store, "write_frame", lambda kind, key, df: None)
+    h = ev.eightk_history("MSFT", lm)
+    assert list(h.index) == [pd.Timestamp("2026-04-29"), pd.Timestamp("2026-07-29")]    # the Item 5.02 8-K is not one
+    assert all(doc == "msft-ex99_1.htm" and cache is False for _, doc, cache in served)  # documents are not stored
+    idx = pd.bdate_range("2026-04-01", "2026-12-31")
+    d = ev.eightk_tone_daily(h, idx)
+    change = h["net_tone"].iloc[1] - h["net_tone"].iloc[0]
+    assert np.isnan(d.loc["2026-07-29"]) and d.loc["2026-07-30"] == pytest.approx(change)   # from the day after
+    assert d.loc["2026-04-30":"2026-07-29"].isna().all()                   # the first release has nothing to compare to
+    assert d.loc["2026-11-02"] == pytest.approx(change) and np.isnan(d.loc["2026-11-03"])   # kept 95 days
+    # truncation: the history known on 29 July (before the release counted) gives the same values up to then
+    part = ev.eightk_tone_daily(h[h.index <= "2026-07-28"], idx)
+    pd.testing.assert_series_equal(d.loc[:"2026-07-29"], part.loc[:"2026-07-29"])
+    # a stub release (a few words pointing to a web page) is skipped
+    stub = pd.concat([h, pd.DataFrame({"accn": ["x"], "doc": ["ex99.htm"], "words": [40.0], "net_tone": [0.5]},
+                                      index=pd.DatetimeIndex(["2026-10-01"], name="filed"))])
+    pd.testing.assert_series_equal(ev.eightk_tone_daily(stub, idx), d)
+
+
+def test_eightk_sample_is_a_fixed_half():
+    names = [f"T{k:04d}" for k in range(2000)]
+    picked = [t for t in names if ev.in_eightk_sample(t)]
+    assert 0.45 < len(picked) / len(names) < 0.55
+    assert picked == [t for t in names if ev.in_eightk_sample(t)]           # the same every run
+    assert ev.in_eightk_sample("msft") == ev.in_eightk_sample("MSFT")
+    assert not any(ev.in_eightk_sample(t, 0.0) for t in names) and all(ev.in_eightk_sample(t, 1.0) for t in names)

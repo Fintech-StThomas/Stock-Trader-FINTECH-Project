@@ -1,0 +1,17 @@
+{
+ "cik": 2488,
+ "name": "ADVANCED MICRO DEVICES INC",
+ "sic": "3674",
+ "sicDescription": "Semiconductors & Related Devices",
+ "fiscalYearEnd": "1226",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "AMD"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}

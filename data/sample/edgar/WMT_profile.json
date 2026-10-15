@@ -1,0 +1,20 @@
+{
+ "cik": 104169,
+ "name": "Walmart Inc.",
+ "sic": "5331",
+ "sicDescription": "Retail-Variety Stores",
+ "fiscalYearEnd": "0131",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "WMT"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "Walmart Inc.",
+  "WAL MART STORES INC"
+ ]
+}
