@@ -4,7 +4,7 @@ edited. Forward results cannot contain look-ahead, cost nothing and become more 
 primary evidence for (or against) the rules.
 
 Storage: one SQLite file (default data/journal/lighthouse_journal.sqlite, gitignored; LIGHTHOUSE_JOURNAL moves it) with
-two tables, both append-only (SQLite triggers abort any UPDATE or DELETE):
+these tables, all append-only (SQLite triggers abort any UPDATE or DELETE):
 
   decisions  one row per (ticker, side) per run: the verdict, the scores, the ticket's levels (entry, stop, targets or
              trend exit, time stop), size, the forecast it implies (`p_win`: the ticket rules' historical win rate on
@@ -12,6 +12,14 @@ two tables, both append-only (SQLite triggers abort any UPDATE or DELETE):
              last bar, a hash of the closes, the latest filing used, the code commit)
   events     what happened afterwards: a virtual position opened at the next session's open, an exit fired (stop,
              target, trend or signal review, time stop), an alert, a paper-trading order or fill, a reconciliation
+  watch_signals   (schema 2) the watch-only research signals (lighthouse/research/watch.py): one row per (signal,
+             ticker, month end) for every point-in-time S&P 500 member, with its value, cross-sectional rank and
+             percentile, the configuration hash of the logged research trial, the data and code version
+  watch_outcomes  (schema 2) each member's total return from a month end to the next, under both delisting rules,
+             recorded once the next month end has closed (what the watch signals are scored against)
+
+The watch tables are read only by the scorecard (lighthouse/scorecard.py, `score_watch`); no verdict or ticket uses
+them.
 
 A decision is a *virtual position* when its ticket was actionable with shares: the journal replays it from the session
 after its signal with the ticket's own rules (tradeplan.monitor_position), exactly as the backtest would, and records
@@ -35,7 +43,9 @@ import pandas as pd
 from .data import REPO_DIR
 
 DEFAULT_PATH = REPO_DIR / "data" / "journal" / "lighthouse_journal.sqlite"
-SCHEMA_VERSION = 1
+# 1: decisions and events. 2 (October 2026): + watch_signals and watch_outcomes. A file written by an older version is
+# upgraded when opened (the new tables are created; no existing row is touched) and its meta row says so.
+SCHEMA_VERSION = 2
 HORIZON_DAYS = {"long": 252, "short": 21}          # the window a verdict is scored over (sessions)
 # A stock's own setup history is a handful of trades (3-20): its raw win rate is a poor probability (3 wins in 3 trades
 # is not certainty). The forecast shrinks it toward the pooled win rate of the same exit plan on the 20 sample stocks,
@@ -57,6 +67,10 @@ DECISION_COLUMNS = [
     "signal_exit", "exit_style", "time_stop", "shares", "notional", "risk_usd", "account", "cash", "p_win",
     "hist_trades", "horizon_days", "inputs", "data_version", "code_version", "run_id", "note"]
 EVENT_COLUMNS = ["recorded_at", "decision_id", "ticker", "kind", "date", "price", "shares", "detail", "run_id"]
+WATCH_COLUMNS = ["recorded_at", "as_of", "signal", "ticker", "value", "rank", "pct", "quintile", "n_ranked", "tradable",
+                 "cost", "config_hash", "data_version", "code_version", "run_id"]
+OUTCOME_COLUMNS = ["recorded_at", "as_of", "end_date", "ticker", "ret_exclude", "ret_pessimistic", "data_version",
+                   "code_version", "run_id"]
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -81,6 +95,32 @@ CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events
 CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
   BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END;
 """
+# Schema 2: the watch-only signals and their outcomes. One row per (signal, configuration, month end, ticker) and per
+# (month end, ticker): a second recording of the same thing is refused by the UNIQUE constraints.
+_SCHEMA_WATCH = """
+CREATE TABLE IF NOT EXISTS watch_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, as_of TEXT NOT NULL, signal TEXT NOT NULL,
+  ticker TEXT NOT NULL, value REAL, rank REAL, pct REAL, quintile INTEGER, n_ranked INTEGER, tradable INTEGER,
+  cost REAL, config_hash TEXT NOT NULL, data_version TEXT, code_version TEXT, run_id TEXT,
+  UNIQUE (signal, config_hash, as_of, ticker));
+CREATE TABLE IF NOT EXISTS watch_outcomes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, as_of TEXT NOT NULL, end_date TEXT NOT NULL,
+  ticker TEXT NOT NULL, ret_exclude REAL, ret_pessimistic REAL, data_version TEXT, code_version TEXT, run_id TEXT,
+  UNIQUE (as_of, ticker));
+CREATE INDEX IF NOT EXISTS watch_signals_date ON watch_signals (signal, as_of);
+CREATE TRIGGER IF NOT EXISTS watch_signals_no_update BEFORE UPDATE ON watch_signals
+  BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS watch_signals_no_delete BEFORE DELETE ON watch_signals
+  BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS watch_outcomes_no_update BEFORE UPDATE ON watch_outcomes
+  BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS watch_outcomes_no_delete BEFORE DELETE ON watch_outcomes
+  BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END;
+"""
+
+
+class JournalVersionError(RuntimeError):
+    """The journal file was written by a newer version of Lighthouse than this one."""
 
 
 def journal_path(path=None) -> Path:
@@ -111,9 +151,24 @@ class Journal:
         self.path = journal_path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as c:
+            found = _stored_schema_version(c)
+            if found is not None and found > SCHEMA_VERSION:
+                raise JournalVersionError(f"{self.path} has journal schema {found}; this version of Lighthouse knows "
+                                          f"schema {SCHEMA_VERSION} at most: update Lighthouse before writing to it")
             c.executescript(_SCHEMA)
-            c.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+            c.executescript(_SCHEMA_WATCH)                 # schema 2; creating tables never touches existing rows
             c.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('created_at', ?)", (_now(),))
+            if found is None:
+                c.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+            elif found < SCHEMA_VERSION:
+                # meta is the one table that is not append-only: it describes the file, not what was recorded
+                c.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
+                c.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)",
+                          (f"upgraded_{found}_to_{SCHEMA_VERSION}", _now()))
+
+    def schema_version(self) -> int:
+        with self._conn() as c:
+            return int(_stored_schema_version(c) or 0)
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -141,6 +196,22 @@ class Journal:
                              _sql(price), _sql(shares), json.dumps(detail or {}, default=str), run_id))
             return int(cur.lastrowid)
 
+    def append_watch_rows(self, rows: Sequence[Dict[str, object]]) -> int:
+        """One watch-signal snapshot (lighthouse/research/watch.py), written in one transaction: all its rows or none."""
+        return self._append_many("watch_signals", WATCH_COLUMNS, rows)
+
+    def append_watch_outcomes(self, rows: Sequence[Dict[str, object]]) -> int:
+        """The month's outcomes of one snapshot date, in one transaction."""
+        return self._append_many("watch_outcomes", OUTCOME_COLUMNS, rows)
+
+    def _append_many(self, table: str, columns: Sequence[str], rows: Sequence[Dict[str, object]]) -> int:
+        if not rows:
+            return 0
+        with self._conn() as c:
+            c.executemany(f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})",
+                          [[_sql(r.get(k)) for k in columns] for r in rows])
+        return len(rows)
+
     # ------------------------------------------------------------------ reading
     def decisions(self) -> pd.DataFrame:
         with self._conn() as c:
@@ -150,12 +221,21 @@ class Journal:
         with self._conn() as c:
             return pd.read_sql_query("SELECT * FROM events ORDER BY id", c)
 
+    def watch_signals(self) -> pd.DataFrame:
+        with self._conn() as c:
+            return pd.read_sql_query("SELECT * FROM watch_signals ORDER BY id", c)
+
+    def watch_outcomes(self) -> pd.DataFrame:
+        with self._conn() as c:
+            return pd.read_sql_query("SELECT * FROM watch_outcomes ORDER BY id", c)
+
     def export(self, out_dir, fmt: str = "csv") -> List[Path]:
-        """Write both tables (CSV or JSON lines) to `out_dir`. Returns the paths."""
+        """Write every table (CSV or JSON lines) to `out_dir`. Returns the paths."""
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         paths = []
-        for name, df in (("decisions", self.decisions()), ("events", self.events())):
+        for name, df in (("decisions", self.decisions()), ("events", self.events()),
+                         ("watch_signals", self.watch_signals()), ("watch_outcomes", self.watch_outcomes())):
             p = out / f"journal_{name}.{'csv' if fmt == 'csv' else 'jsonl'}"
             if fmt == "csv":
                 df.to_csv(p, index=False)
@@ -172,6 +252,14 @@ class Journal:
         opened = set(e.loc[e["kind"] == "opened", "decision_id"].dropna().astype(int))
         closed = set(e.loc[e["kind"] == "exit", "decision_id"].dropna().astype(int))
         return d[d["id"].isin(opened - closed)]
+
+
+def _stored_schema_version(c: sqlite3.Connection) -> Optional[int]:
+    """The schema version a journal file records (None for a new file)."""
+    if not c.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").fetchone():
+        return None
+    row = c.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+    return int(row[0]) if row and str(row[0]).isdigit() else None
 
 
 def _sql(v):
@@ -346,4 +434,4 @@ def _next_session(index: pd.DatetimeIndex, day: pd.Timestamp) -> Optional[pd.Tim
 
 
 __all__ = ["Journal", "decision_row", "data_version", "record_run", "check_positions", "RunReport", "journal_path",
-           "HORIZON_DAYS", "code_version"]
+           "HORIZON_DAYS", "code_version", "SCHEMA_VERSION", "WATCH_COLUMNS", "OUTCOME_COLUMNS", "JournalVersionError"]

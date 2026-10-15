@@ -162,6 +162,26 @@ session, so a position bought today can be replayed and a stop hit today shows u
 Add `--as-of 2020-03-20` to `analyze` to ask what Lighthouse would have said on a past day. `--portfolio` still works and
 means "this much cash, nothing else held".
 
+### Forward watch list (watch-only research signals)
+
+```bash
+LIGHTHOUSE_SEC_EMAIL=you@example.com python -m lighthouse journal watch   # month ends only: record the snapshot
+python -m lighthouse journal watch --due      # prints true when the last finished session is the month's last
+python -m lighthouse journal score --out reports/journal                  # verdicts, tickets, then the watch list
+python -m lighthouse journal export --out reports/journal                 # every journal table as CSV
+```
+
+Three research signals that came close but did not survive the pre-registered test (FCF yield, short-sale volume,
+risk-factor similarity; `docs/METHODOLOGY.md` §8b-8c) are recorded for every S&P 500 member after the close of each
+month's last NYSE session, so they can be judged on data that did not exist when they were tested. They are
+**watch-only**: they never change a verdict, a ticket or a position size. `journal watch` takes no date: on any other
+day it prints that nothing is due and writes nothing, and a snapshot written after the next session's open is kept but
+not scored. It needs live data (Yahoo prices, SEC EDGAR with your contact e-mail, FINRA) and takes up to an hour with
+an empty cache. `journal score` adds a watch-only section once the next month's returns are recorded (rank IC with its
+Newey-West t, the top fifth against the average stock before and after costs, turnover, the forward rule's status and
+how many months a convincing result would take); the app's Journal tab shows the same. The scheduled workflow
+`.github/workflows/watch.yml` does this every month on GitHub, appending to the same journal as the daily run.
+
 ## Changing the rules without programming
 
 All settings are in `lighthouse/config.py`: risk presets, horizon weights, beacon weights, verdict bands and the

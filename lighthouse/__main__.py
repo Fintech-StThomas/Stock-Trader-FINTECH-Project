@@ -12,6 +12,7 @@
   python -m lighthouse memo MSFT --out reports/memos --open-thesis                      # investment memo, thesis saved
   python -m lighthouse memo MSFT --peer-norms                                            # + beacons vs peer medians
   python -m lighthouse thesis check | list | close ID --reason "..."                    # follow the saved theses
+  python -m lighthouse journal watch                         # month ends only: the watch-only research signals
 """
 from __future__ import annotations
 
@@ -43,8 +44,45 @@ def _params(a) -> StrategyParams:
     return p
 
 
+def _journal_watch(a) -> int:
+    """`journal watch`: the month-end snapshot of the watch-only research signals (lighthouse/research/watch.py). Takes
+    no date: it records only when the last finished session is the month's last, so it cannot backdate."""
+    from .research.watch import is_due, record_watch
+    if a.due:
+        print("true" if is_due() else "false")
+        return 0
+    if a.tickers or getattr(a, "universe", None):
+        print("journal watch takes no tickers: it records every point-in-time S&P 500 member", file=sys.stderr)
+        return 1
+    rep = record_watch(a.journal, source=a.source)
+    print("\n".join(rep.lines()))
+    if a.summary:
+        with open(a.summary, "a") as fh:
+            fh.write(rep.markdown() + "\n")
+    return 1 if rep.errors else 0
+
+
+def _journal_watch_score(j, out) -> None:
+    """The watch-only section of `journal score`: printed after the verdicts; its failure never stops them."""
+    from .scorecard import score_watch
+    try:
+        wc = score_watch(j)
+    except Exception as exc:  # noqa: BLE001 - the daily journal must not fail because of the watch list
+        print(f"\nwatch-only signals: not scored ({type(exc).__name__}: {str(exc)[:200]})")
+        return
+    print("\n" + wc.text())
+    if out:
+        from pathlib import Path
+        Path(out).mkdir(parents=True, exist_ok=True)
+        for name, df in (("watch_scorecard", wc.table), ("watch_monthly", wc.monthly),
+                         ("watch_snapshots", wc.snapshots), ("watch_status", wc.status)):
+            df.to_csv(Path(out) / f"{name}.csv", index=False)
+
+
 def _journal(a) -> int:
-    """`journal run | score | export` (see lighthouse/journal.py)."""
+    """`journal run | score | export | watch` (see lighthouse/journal.py, lighthouse/research/watch.py)."""
+    if a.action == "watch":
+        return _journal_watch(a)
     from .journal import Journal, check_positions, record_run
     from .tradeplan import TradeSettings
     j = Journal(a.journal)
@@ -66,6 +104,7 @@ def _journal(a) -> int:
             sc.verdicts.to_csv(Path(a.out) / "scored_verdicts.csv", index=False)
             sc.tickets.to_csv(Path(a.out) / "scored_tickets.csv", index=False)
             cal.to_csv(Path(a.out) / "calibration.csv", index=False)
+        _journal_watch_score(j, a.out)
         return 0
     if not a.tickers and not getattr(a, "universe", None):
         print("give tickers, or --universe NAME", file=sys.stderr); return 1
@@ -150,12 +189,12 @@ def _memo(a) -> int:
         print(f"wrote {pth}", file=sys.stderr)
     if a.red_team:
         from . import llm
-        from .edgar import cik_for, company_filings, fetch_document
+        from .edgar import cik_for, company_filings, fetch_document, registrant_cik
         from .text import html_to_text
         try:
             _, filings = company_filings(m.ticker, source=a.source)
             k = filings[(filings["form"] == "10-K") & (filings["filed"] <= m.as_of)].iloc[-1]
-            doc = html_to_text(fetch_document(cik_for(m.ticker), k["accn"], k["doc"]))
+            doc = html_to_text(fetch_document(registrant_cik(k, cik_for(m.ticker)), k["accn"], k["doc"]))
             ans = llm.red_team(m, doc)
             print(f"\n## Red team ({ans.model}, 10-K filed {k['filed'].date()})\n\n{ans.text}\n")
             print("Checks: " + ("every sentence cited, every number sourced." if ans.verified else
@@ -265,9 +304,12 @@ def main(argv=None) -> int:
 
     sub.add_parser("universes", help="list the pre-built universes")
 
-    a7 = sub.add_parser("journal", help="forward decision journal: record today's calls, check positions, score, export")
+    a7 = sub.add_parser("journal", help="forward decision journal: record today's calls, check positions, score, export; "
+                        "watch: the month-end snapshot of the watch-only research signals")
     common(a7); trade_opts(a7); universe_opt(a7)
-    a7.add_argument("action", choices=["run", "score", "export"])
+    a7.add_argument("action", choices=["run", "score", "export", "watch"])
+    a7.add_argument("--due", action="store_true", help="watch: print true when the last finished session is the "
+                    "month's last NYSE session (a snapshot is due), false otherwise; records nothing")
     a7.add_argument("tickers", nargs="*")
     a7.add_argument("--sides", nargs="+", default=["long"], choices=["long", "short"])
     a7.add_argument("--journal", help="journal file (default data/journal/lighthouse_journal.sqlite or LIGHTHOUSE_JOURNAL)")

@@ -231,8 +231,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     dv = data_version(uni, frames, missing, panel)
     rows, tune_by = [], {}
     for name, sig in sigs.items():
-        cfg = {"signal": name, "universe": "sp500_pit", "quantiles": 5, "costs": "cs_spread+sqrt_impact@1m/100",
-               "borrow": 0.005, "description": S.DESCRIPTIONS.get(name, "")}
+        cfg = H.signal_config(name, S.DESCRIPTIONS.get(name, ""))
         tune_by[name] = {}
         for rule in DELISTING_RULES:
             res = H.evaluate(panel, sig, name, rule, H.TUNING, costs, factors)
@@ -256,8 +255,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     n_trials = log.trials()
     hrows, verdicts = [], []
     for name, sig in sigs.items():
-        cfg = {"signal": name, "universe": "sp500_pit", "quantiles": 5, "costs": "cs_spread+sqrt_impact@1m/100",
-               "borrow": 0.005, "description": S.DESCRIPTIONS.get(name, "")}
+        cfg = H.signal_config(name, S.DESCRIPTIONS.get(name, ""))
         try:
             res = H.evaluate_holdout(panel, sig, name, cfg, log, dv, costs, factors, allow_repeat=a.allow_repeat,
                                      n_trials=n_trials, sr_std=sr_std)

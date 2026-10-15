@@ -145,6 +145,12 @@ its filing list held only the new holding company's filings); and possibly pre-2
 without a facility whose download failed (not countable: the run's cache was not kept). Whether any verdict would
 change is not known without that new trial.
 
+The three near misses (FCF yield, short-sale volume, risk-factor similarity) are now collecting forward data as a
+watch-only list (`METHODOLOGY` §8c): recorded at every month end for every point-in-time member with the logged trial's
+configuration, scored only on snapshots written before the next open. It will be slow: at their hold-out ICs a
+Newey-West t of 2 is about 7 years away for risk-factor similarity, 10 for short volume and decades for FCF yield, and
+even then the result only argues for a new pre-registered test.
+
 ## 6. What free data can and cannot prove
 
 What it can prove:
