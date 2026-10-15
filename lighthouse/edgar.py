@@ -176,7 +176,7 @@ def company_filings(ticker: str, source: str = "auto", refresh: bool = False) ->
         if fp.exists() and pp.exists():
             f = pd.read_parquet(fp)
             for c in ("filed", "report_date"):
-                f[c] = pd.to_datetime(f[c], errors="coerce")
+                f[c] = _ns(f[c])
             f["items"] = f["items"].fillna("").astype(str)
             return json.loads(pp.read_text()), f
         raise DataUnavailable(f"{ticker}: no EDGAR filing list in the sample pack")
@@ -225,6 +225,13 @@ def flatten_company_facts(payload: dict, concepts: Optional[Iterable[str]] = Non
     return _typed_facts(df)
 
 
+def _ns(s) -> pd.Series:
+    """Dates at nanosecond resolution. Parquet written by pandas 3 stores microseconds, which pandas 2 keeps on reading
+    and then refuses to merge with nanosecond dates (`merge_asof`: "incompatible merge keys"); the sample pack is read
+    by both (CI runs Python 3.10, where pandas 3 is not available)."""
+    return pd.to_datetime(s, errors="coerce").astype("datetime64[ns]")
+
+
 def _typed_facts(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=FACT_COLUMNS)
@@ -233,7 +240,7 @@ def _typed_facts(df: pd.DataFrame) -> pd.DataFrame:
         if c not in df.columns:
             df[c] = None
     for c in ("start", "end", "filed"):
-        df[c] = pd.to_datetime(df[c], errors="coerce")
+        df[c] = _ns(df[c])
     df["val"] = pd.to_numeric(df["val"], errors="coerce")
     df["fy"] = pd.to_numeric(df["fy"], errors="coerce")
     for c in ("taxonomy", "concept", "unit", "accn", "fp", "form", "frame"):

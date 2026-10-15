@@ -285,3 +285,12 @@ def test_facts_cache_is_used_as_it_is_offline_or_when_edgar_is_unreachable(facts
     monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "1")           # offline: no attempt at all
     got = edgar.company_facts(cik=789019, concepts=["NetIncomeLoss", "Assets"])
     assert srv.calls == 0 and set(got.concept) == {"NetIncomeLoss"}
+
+
+def test_sample_pack_dates_are_nanoseconds_whichever_pandas_wrote_them():
+    # the pack is re-recorded with pandas 3 (microsecond dates in Parquet) and read by pandas 2 on Python 3.10, which
+    # refuses to merge microsecond with nanosecond dates
+    facts = edgar.company_facts(ticker="MSFT", source="sample")
+    _, filings = edgar.company_filings("MSFT", source="sample")
+    for col in (facts["start"], facts["end"], facts["filed"], filings["filed"], filings["report_date"]):
+        assert str(col.dtype) == "datetime64[ns]"
