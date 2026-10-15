@@ -45,3 +45,4 @@ lm_litigious,long_short,False,False,False
 lm_negative,long_only,False,False,False
 fog,long_only,False,False,False
 inst_breadth,long_only,False,False,False
+eightk_tone,long_only,False,False,False
