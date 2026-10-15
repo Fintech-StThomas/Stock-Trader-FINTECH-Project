@@ -116,6 +116,50 @@ def test_event_values_are_causal_and_expire():
     assert np.isnan(full.loc[close.index[52] + pd.Timedelta(days=ev.EAR_MAX_AGE_DAYS + 3):close.index[149]]).all()
 
 
+def test_text_workers_split_this_runs_sec_rate(monkeypatch, tmp_path):
+    """LIGHTHOUSE_SEC_RATE gives a run a share of the SEC's 10 requests a second (other processes download at the same
+    time); the 10-K text workers must split that share, not 8 a second, between them."""
+    from types import SimpleNamespace
+
+    from lighthouse import data, http
+    from lighthouse.research import harness as H
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(http, "SEC_RATE", 1.0)                     # as with LIGHTHOUSE_SEC_RATE=1
+    monkeypatch.setattr(http.POLICIES["sec.gov"], "rate", 1.0)
+    seen = {}
+
+    class Pool:                                                     # records what the workers would be given
+        def __init__(self, max_workers, initializer, initargs):
+            seen.update(workers=max_workers, initializer=initializer, initargs=initargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def map(self, fn, jobs, chunksize=1):
+            return [(t, None, None) for t, _, _ in jobs]
+
+    monkeypatch.setattr(ev, "ProcessPoolExecutor", Pool)
+    monkeypatch.setattr(text, "lm_dictionary", lambda: None)
+    idx = pd.bdate_range("2020-01-01", periods=60)
+    frames = {"AAA": pd.DataFrame({"Close": 1.0}, index=idx), "BBB": pd.DataFrame({"Close": 2.0}, index=idx)}
+    ev.text_monthly(frames, SimpleNamespace(dates=H.month_ends(idx)), refresh=True, processes=3)
+    assert seen["workers"] == 3 and seen["initializer"] is ev._worker_init
+    assert seen["workers"] * seen["initargs"][0] == pytest.approx(1.0)       # 1 request a second in total, not 8
+    # without LIGHTHOUSE_SEC_RATE the run has 8 a second, split the same way
+    monkeypatch.setattr(http, "SEC_RATE", 8.0)
+    monkeypatch.setattr(http.POLICIES["sec.gov"], "rate", 8.0)
+    assert 4 * ev.worker_sec_rate(4) == pytest.approx(8.0) and ev.worker_sec_rate(0) == pytest.approx(8.0)
+    # a policy lowered at run time is respected too
+    monkeypatch.setattr(http.POLICIES["sec.gov"], "rate", 2.0)
+    assert ev.worker_sec_rate(2) == pytest.approx(1.0)
+    # the initializer installs the share as the worker's SEC policy
+    ev._worker_init(0.25)
+    assert http.POLICIES["sec.gov"].rate == 0.25
+
+
 # --------------------------------------------------------------------------- #
 # 13F breadth (recorded excerpts of the SEC's 13F data sets and fails-to-deliver files, October 2026)
 # --------------------------------------------------------------------------- #
