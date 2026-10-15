@@ -146,6 +146,38 @@ def test_app_analyst_coverage_journal_research_tabs_offline(tmp_path, monkeypatc
     assert any("Thesis 1 saved" in str(x.value) for x in at.success)
 
 
+def test_app_journal_tab_shows_the_watch_list_as_watch_only(tmp_path, monkeypatch):
+    """A journal with three scored month ends of a watch signal: the Journal tab shows its forward score, labelled
+    watch-only (not a survivor, no weight)."""
+    import numpy as np
+    import pandas as pd
+    from lighthouse.journal import Journal
+    from lighthouse.research import watch as W
+    path = tmp_path / "journal.sqlite"
+    j = Journal(path)
+    rng = np.random.default_rng(1)
+    names = [f"T{k:02d}" for k in range(35)]
+    for d in ("2026-07-31", "2026-08-31", "2026-09-30", "2026-10-30"):
+        at = (pd.Timestamp(d) + pd.Timedelta(hours=22)).tz_localize("UTC").isoformat(timespec="seconds")
+        j.append_watch_rows([{"recorded_at": at, "as_of": d, "signal": "fcf_yield", "ticker": t, "value": float(v),
+                              "tradable": 1, "cost": 0.002, "config_hash": W.WATCH_SIGNALS["fcf_yield"].config_hash,
+                              "data_version": "{}", "code_version": "test", "run_id": "r"}
+                             for t, v in zip(names, rng.normal(size=len(names)))])
+        if d != "2026-10-30":
+            j.append_watch_outcomes([{"recorded_at": at, "as_of": d, "end_date": "x", "ticker": t, "ret_exclude": float(r),
+                                      "ret_pessimistic": float(r), "data_version": "{}", "code_version": "test",
+                                      "run_id": "r"} for t, r in zip(names, rng.normal(0.01, 0.05, len(names)))])
+    monkeypatch.setenv("LIGHTHOUSE_JOURNAL", str(path))
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    assert not at.exception, at.exception
+    md = " ".join(str(m.value) for m in at.markdown)
+    assert "Watch-only research signals (not survivors, no weight)" in md
+    assert "**fcf_yield** (forward rule): collecting: 3 forward month(s)" in md
+    shown = [df.value for df in at.dataframe if {"rule", "months", "ic_nw_t"} <= set(getattr(df.value, "columns", []))]
+    assert len(shown) == 1 and set(shown[0]["months"]) == {3} and set(shown[0]["signal"]) == {"fcf_yield"}
+
+
 def _lighthouse_modules() -> dict:
     return {n: m for n, m in sys.modules.items() if n == "lighthouse" or n.startswith("lighthouse.")}
 

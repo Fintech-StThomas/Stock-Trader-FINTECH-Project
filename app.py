@@ -1302,6 +1302,52 @@ def journal_tab() -> None:
     st.dataframe(e.tail(200).iloc[::-1], width="stretch")
     st.download_button("Download decisions (CSV)", d.to_csv(index=False), file_name="journal_decisions.csv", key="jr_d")
     st.download_button("Download events (CSV)", e.to_csv(index=False), file_name="journal_events.csv", key="jr_e")
+    watch_section(j)
+
+
+def watch_section(j) -> None:
+    """The watch-only research signals: scored from the journal alone (no download), clearly not part of any verdict."""
+    from lighthouse.scorecard import FORWARD_MIN_MONTHS, score_watch
+    st.markdown("---")
+    st.markdown("### Watch-only research signals (not survivors, no weight)")
+    st.caption("FCF yield, short-sale volume and risk-factor similarity came close in the research harness but did not "
+               "pass its pre-registered rule (METHODOLOGY §8b). They carry **no weight** in any verdict, ticket or "
+               "decision. `python -m lighthouse journal watch` (scheduled after the close of each month's last NYSE "
+               "session) records them for every point-in-time S&P 500 member; a snapshot is scored only if it was "
+               "written before the next session's open, and only once the next month's returns are known "
+               "(METHODOLOGY §8c). A good forward score can only make the case for a new pre-registered test.")
+    try:
+        wc = score_watch(j)
+    except Exception as exc:  # noqa: BLE001 - the decision journal above must stay usable
+        st.warning(f"The watch list could not be scored: {type(exc).__name__}: {exc}")
+        return
+    if wc.snapshots.empty:
+        st.info("No watch snapshots yet: the first is recorded after the close of the month's last session.")
+        return
+    on = int(wc.snapshots["on_time"].astype(bool).sum())
+    w1, w2, w3 = st.columns(3)
+    kpi(w1, "Watch snapshots", f"{len(wc.snapshots):,}", f"{on} on time, {len(wc.snapshots) - on} late (not scored)")
+    months = int(wc.table["months"].max()) if len(wc.table) and "months" in wc.table else 0
+    kpi(w2, "Forward months scored", f"{months}", f"the forward rule needs {FORWARD_MIN_MONTHS} at a December look")
+    kpi(w3, "Signals watched", f"{wc.snapshots['signal'].nunique()}", "watch-only")
+    if len(wc.table):
+        cols = [c for c in ("signal", "rule", "months", "coverage", "ic_mean", "ic_nw_t", "ic_hit", "long_only_gross_ann",
+                            "long_only_net_ann", "long_only_net_ann_10bps", "long_short_net_ann", "top_turnover")
+                if c in wc.table]
+        st.dataframe(wc.table[cols], hide_index=True, width="stretch")
+        st.caption("Monthly Spearman rank IC with its Newey-West t; ic_hit = share of months with IC > 0; the top "
+                   "quintile minus the equal-weight universe (long-only) before and after the research cost model, and "
+                   "at a flat 10 bps a side; top-quintile one-way turnover. Both delisting rules.")
+    for _, r in wc.status.iterrows():
+        st.markdown(esc(f"**{r['signal']}** (forward rule): {r['status']}"))
+    late = wc.late()
+    if len(late):
+        st.markdown("**Late snapshots** (kept in the journal, not scored)")
+        st.dataframe(late, hide_index=True, width="stretch")
+    if len(wc.power):
+        st.markdown("**How long the forward test takes**: months until the expected Newey-West t reaches 2 if the "
+                    "true IC were the logged one (`months_t2`), and for an 80% chance (`months_80`)")
+        st.dataframe(wc.power, hide_index=True, width="stretch")
 
 
 with tab_journal:
