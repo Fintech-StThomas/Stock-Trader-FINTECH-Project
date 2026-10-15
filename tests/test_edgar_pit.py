@@ -214,8 +214,9 @@ class _FactsServer:
 
 @pytest.fixture
 def facts_server(monkeypatch, tmp_path):
-    from lighthouse import data
-    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    # the data module that this `edgar` writes through (after an in-run package reload, `lighthouse.data` may be a
+    # newer one, and patching that would let the test write into the real cache)
+    monkeypatch.setattr(edgar.store._data, "CACHE_DIR", tmp_path)
     monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")          # the fetch is replaced below: nothing reaches the network
     srv = _FactsServer()
     monkeypatch.setattr(edgar, "_get", srv)
