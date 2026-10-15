@@ -1,7 +1,7 @@
 """Plain-English report generation (Markdown)."""
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -236,6 +236,9 @@ def build_memo(memo) -> str:
             ("Net debt", f"${f.net_debt / 1e9:,.2f}bn", _x(r["net_debt_ebitda"]) + " EBITDA"),
             ("Stock-based pay", _p(r["sbc_revenue"]) + " of revenue", "")]
     L.append(_md_table(pd.DataFrame(rows, columns=["line", "value", "note"]).set_index("line")) + "\n")
+    ind = getattr(m, "industry", None)
+    if ind is not None:
+        L += _industry_lines(ind, m.profile.get("sicDescription"))
 
     L.append("## Valuation")
     if v is not None:
@@ -305,6 +308,19 @@ def build_memo(memo) -> str:
     L.append("- The text is generated from the numbers by fixed rules; it cannot be backtested as judgment, and it is not "
              "investment advice.")
     return "\n".join(L)
+
+
+def _industry_lines(ind, sic_description: Optional[str] = None) -> List[str]:
+    """The memo's industry section: the metrics the generic ratios misread for this kind of company, each with the
+    period it covers and the filing that made it public."""
+    L = [f"## Industry metrics: {ind.label} (SIC {ind.sic}{' ' + sic_description if sic_description else ''})",
+         f"*From the filings public before {ind.as_of.date()}: a value is used from the session after its filing date. "
+         "n/a means the company did not tag an input under the standard us-gaap concept for that period (the note "
+         "names it); nothing is estimated.*\n",
+         _md_table(ind.table()) + "\n"]
+    if ind.notes:
+        L += [f"- Note: {x}" for x in ind.notes] + [""]
+    return L
 
 
 def _fundamental_view_lines(fv) -> List[str]:

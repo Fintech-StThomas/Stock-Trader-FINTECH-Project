@@ -99,8 +99,50 @@ LINE_ITEMS: List[LineItem] = [
     LineItem("debt_due_later", ("LongTermDebtMaturitiesRepaymentsOfPrincipalAfterYearFive",), "stock"),
 ]
 ITEMS: Dict[str, LineItem] = {li.key: li for li in LINE_ITEMS}
+
+# Industry line items, read by `lighthouse.analyst.industry` for the companies whose SIC code calls for them (banks,
+# REITs, software / subscription, insurers). They are not columns of `build_statements` (the generic statements, the
+# fundamental score and the research signals never see them) but they are in CONCEPTS, so the facts cache downloads
+# them. Concepts chosen from what large filers actually tag (JPM, BAC, WFC, USB; O, PLD, SPG; CRM, ADBE, NOW; TRV, ALL,
+# PGR, MET, UNH; companyfacts read in October 2026). Loans list the gross concepts first; the net-of-allowance ones
+# only fill periods a bank tagged no gross total.
+INDUSTRY_ITEMS: List[LineItem] = [
+    # banks
+    LineItem("net_interest_income", ("InterestIncomeExpenseNet",), "flow"),
+    LineItem("noninterest_income", ("NoninterestIncome",), "flow"),
+    LineItem("noninterest_expense", ("NoninterestExpense",), "flow"),
+    LineItem("revenue_net_of_interest", ("RevenuesNetOfInterestExpense",), "flow"),
+    LineItem("loans", ("FinancingReceivableExcludingAccruedInterestBeforeAllowanceForCreditLoss",
+                       "LoansAndLeasesReceivableNetOfDeferredIncome", "LoansAndLeasesReceivableGrossCarryingAmount",
+                       "FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLoss",
+                       "LoansAndLeasesReceivableNetReportedAmount"), "stock"),
+    LineItem("deposits", ("Deposits",), "stock"),
+    LineItem("preferred_equity", ("PreferredStockValue", "PreferredStockIncludingAdditionalPaidInCapitalNetOfDiscount",
+                                  "PreferredStockIncludingAdditionalPaidInCapital", "PreferredStockValueOutstanding"),
+             "stock"),
+    LineItem("intangibles", ("IntangibleAssetsNetExcludingGoodwill", "OtherIntangibleAssetsNet"), "stock"),
+    LineItem("finite_intangibles", ("FiniteLivedIntangibleAssetsNet",), "stock"),
+    LineItem("indefinite_intangibles", ("IndefiniteLivedIntangibleAssetsExcludingGoodwill",), "stock"),
+    LineItem("goodwill_and_intangibles", ("IntangibleAssetsNetIncludingGoodwill",), "stock"),
+    # REITs
+    LineItem("real_estate_gains", ("GainLossOnSaleOfProperties", "GainsLossesOnSalesOfInvestmentRealEstate"), "flow"),
+    LineItem("real_estate_impairment", ("ImpairmentOfRealEstate",), "flow"),
+    LineItem("common_dividends", ("PaymentsOfDividendsCommonStock", "PaymentsOfDividends", "DividendsCommonStockCash"),
+             "flow"),
+    # software / subscription
+    LineItem("rpo", ("RevenueRemainingPerformanceObligation",), "stock"),
+    LineItem("deferred_revenue", ("ContractWithCustomerLiability", "DeferredRevenue"), "stock"),
+    LineItem("deferred_revenue_current", ("ContractWithCustomerLiabilityCurrent", "DeferredRevenueCurrent"), "stock"),
+    LineItem("deferred_revenue_noncurrent", ("ContractWithCustomerLiabilityNoncurrent", "DeferredRevenueNoncurrent"),
+             "stock"),
+    # insurers (property & casualty, life, health)
+    LineItem("premiums_earned", ("PremiumsEarnedNet", "PremiumsEarnedNetPropertyAndCasualty"), "flow"),
+    LineItem("losses_and_benefits", ("PolicyholderBenefitsAndClaimsIncurredNet", "IncurredClaimsPropertyCasualtyAndLiability",
+                                     "PolicyholderBenefitsAndClaimsIncurredHealthCare"), "flow"),
+]
+INDUSTRY: Dict[str, LineItem] = {li.key: li for li in INDUSTRY_ITEMS}
 COVER_CONCEPTS = ("EntityCommonStockSharesOutstanding", "EntityPublicFloat")    # dei: cover page of each filing
-CONCEPTS: List[str] = sorted({c for li in LINE_ITEMS for c in li.concepts} | set(COVER_CONCEPTS))
+CONCEPTS: List[str] = sorted({c for li in LINE_ITEMS + INDUSTRY_ITEMS for c in li.concepts} | set(COVER_CONCEPTS))
 
 QUARTER_DAYS = (70, 110)
 YEAR_DAYS = (340, 390)
@@ -177,6 +219,14 @@ def _item_values(orig: pd.DataFrame, item: LineItem) -> Tuple[pd.DataFrame, pd.D
         allp = allp.sort_values(["filed", "rank"]).drop_duplicates("end", keep="first")
         return allp.set_index("end")[["val", "filed"]].sort_index()
     return merge(q_parts), merge(a_parts)
+
+
+def item_values(orig: pd.DataFrame, item: LineItem) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """(quarterly, annual) values of one line item, each indexed by period end with `val` and `filed` (the filing
+    that first made the value public; for a quarter derived from two year-to-date values, the later of the two).
+    `orig` is `original_facts(...)`. The public form of the per-item step of `build_statements`, for metrics that
+    need each value's own filing date (`lighthouse.analyst.industry`)."""
+    return _item_values(orig, item)
 
 
 def _period_table(values: Dict[str, pd.DataFrame], ends: pd.DatetimeIndex) -> pd.DataFrame:

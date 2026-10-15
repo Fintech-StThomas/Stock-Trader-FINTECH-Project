@@ -9,6 +9,8 @@ The single-stock analyst toolkit: what an equity analyst builds before writing a
   peers       real peers by SIC code and market value, a comparison table and the premium or discount explained
   checks      earnings-quality red flags, balance-sheet risk (debt coming due, interest cover, liquidity),
               the capital-allocation record, a catalyst calendar from past filing dates
+  industry    the metrics the generic ratios misread, by SIC code: banks (net interest income, efficiency, loans /
+              deposits, tangible book), REITs (FFO, payout), software (RPO, deferred revenue), insurers (loss ratio)
   memo        the investment memo: thesis, supporting points, valuation, risks, what would prove it wrong, pre-mortem
 
 Numbers come from SEC filings (dated by filing), prices from the price feed, rates from FRED, the equity premium from
