@@ -224,10 +224,13 @@ def test_repeated_amendments_and_typing_errors(trades):
     hobson = t[(t["symbol"] == "JPM") & (t["code"] == "P")]
     again = hobson.assign(doc="4/A", filed=pd.Timestamp("2020-02-20"))           # a 4/A restating the whole form
     fixed = hobson.assign(doc="4/A", filed=pd.Timestamp("2020-02-21"), shares=14_700.0, value=14_700 * 136.39)
-    both = pd.concat([t, again, fixed], ignore_index=True)
+    # real rows can lack fields (an owner without a CIK, a missing price): they must not break the comparison
+    gap = t.iloc[[0]].assign(owner=np.nan, price=np.nan, value=np.nan)
+    both = pd.concat([t, again, fixed, gap, gap.assign(doc="4/A")], ignore_index=True)
     kept = P.drop_repeated_amendments(both)
-    assert len(kept) == len(t) + 1                                              # the repeat goes, the correction stays
+    assert len(kept) == len(t) + 2                                 # the repeats go; the correction and the gap stay
     assert (kept["doc"] == "4/A").sum() == 1 and kept.loc[kept["doc"] == "4/A", "shares"].iloc[0] == 14_700
+    assert kept["owner"].isna().sum() == 1
     # a row worth more than MAX_TRADE_VALUE (the total typed into the price field) keeps its buyer, not its value
     import io
     import zipfile

@@ -178,16 +178,17 @@ def test_a_filing_is_used_from_the_next_session(jpm):
 
 
 def test_memo_shows_the_industry_metrics(monkeypatch, jpm):
-    """JPM from the sample pack (prices to 2022-12-28), with its SIC code and the bank concepts of the fixture (the
-    recorded sample pack predates them): the memo carries the bank section; a company outside the four industries
-    (or without a SIC code, as the offline sample pack's MSFT) gets none."""
+    """JPM from the sample pack (prices to 2022-12-28): the pack records its profile (SIC 6021) and the bank concepts
+    since October 2026, so the memo carries the bank section offline; adding the fixture's facts changes neither the
+    section's inputs nor the generic numbers; a company outside the four industries gets none."""
     # the modules memo.build imports from at call time: the app tests reload the package when a source file changed
     # during the run, so the ones bound when this file was collected may no longer be the live ones
     edgar_now = importlib.import_module("lighthouse.edgar")
     memo_now = importlib.import_module("lighthouse.analyst.memo")
     real_facts = edgar_now.company_facts
     plain = memo_now.build("JPM", source="sample", peers=False, risk_free=0.03, equity_premium=0.06)
-    assert plain.industry is None                                 # the sample pack has no profile (no SIC code)
+    assert plain.industry is not None and plain.industry.industry == "bank" and plain.industry.sic == "6021"
+    assert "## Industry metrics: bank (SIC 6021 National Commercial Banks)" in plain.markdown()
 
     def with_bank_concepts(cik=None, ticker=None, concepts=None, refresh=False, source="auto"):
         f = real_facts(cik=cik, ticker=ticker, concepts=concepts, refresh=refresh, source=source)
@@ -218,9 +219,18 @@ def test_memo_shows_the_industry_metrics(monkeypatch, jpm):
     assert memo_now.build("JPM", source="sample", peers=False, risk_free=0.03, equity_premium=0.06).industry is None
 
 
-def test_memo_without_a_sic_code_has_no_industry_section():
+def test_memo_without_a_sic_code_has_no_industry_section(monkeypatch):
+    # MSFT's recorded profile (SIC 7372) makes it a software company: RPO and deferred revenue are shown
     m = memo_mod.build("MSFT", as_of="2016-11-15", source="sample", peers=False, risk_free=0.005, equity_premium=0.06)
-    assert m.industry is None and "## Industry metrics" not in m.markdown()
+    assert m.industry is not None and m.industry.industry == "software"
+    assert "## Industry metrics: software" in m.markdown()
+    # the same company with a profile that has no SIC code gets no section, and no error
+    edgar_now = importlib.import_module("lighthouse.edgar")
+    memo_now = importlib.import_module("lighthouse.analyst.memo")
+    monkeypatch.setattr(edgar_now, "company_filings", lambda t, source="auto", refresh=False: ({"name": t}, None))
+    bare = memo_now.build("MSFT", as_of="2016-11-15", source="sample", peers=False, risk_free=0.005,
+                          equity_premium=0.06)
+    assert bare.industry is None and "## Industry metrics" not in bare.markdown()
 
 
 def test_metric_text_formats():

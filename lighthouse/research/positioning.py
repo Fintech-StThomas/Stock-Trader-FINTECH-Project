@@ -139,7 +139,7 @@ def drop_repeated_amendments(trades: pd.DataFrame) -> pd.DataFrame:
     that differs (a corrected number) is kept; the original it corrects stays too, as it was public first."""
     if not set(AMENDMENT_KEY + ["doc"]) <= set(trades.columns) or trades.empty:
         return trades
-    keys = trades[AMENDMENT_KEY].astype(str).agg("|".join, axis=1)
+    keys = pd.util.hash_pandas_object(trades[AMENDMENT_KEY], index=False)     # missing values hash alike
     seen = set(keys[trades["doc"] == "4"])
     repeat = (trades["doc"] == "4/A") & keys.isin(seen)
     return trades[~repeat].reset_index(drop=True)
