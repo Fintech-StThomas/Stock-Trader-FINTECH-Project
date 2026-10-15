@@ -72,6 +72,7 @@ class Memo:
     rule_score: Optional[float] = None
     sources: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    segments: Optional[object] = None               # segments.SegmentReport, when the latest 10-K tags segments
 
     def markdown(self) -> str:
         from ..report import build_memo
@@ -192,12 +193,34 @@ def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: boo
     b_flags = balance_sheet(f)
     cap = capital_allocation(f)
     cats = catalysts(filings, f.as_of, profile.get("fiscalYearEnd"))
+    seg = _segments(t, f.as_of, source, profile, filings, notes)
     memo = Memo(ticker=t, as_of=f.as_of, profile=profile, financials=f, valuation=val, peers=peer_cmp,
                 quality=q_flags, balance=b_flags, capital=cap, catalysts=cats, stance="hold", thesis="",
-                rule_verdict=getattr(result, "verdict", None), rule_score=getattr(result, "score", None), notes=notes)
+                rule_verdict=getattr(result, "verdict", None), rule_score=getattr(result, "score", None), notes=notes,
+                segments=seg)
     _write_argument(memo)
     memo.sources = _sources(memo, prices)
     return memo
+
+
+# --------------------------------------------------------------------------- #
+# Business segments (an optional section: no segment data, no section)
+# --------------------------------------------------------------------------- #
+def _segments(ticker: str, as_of: pd.Timestamp, source: str, profile: dict, filings, notes: List[str]):
+    """The segment tables of the latest 10-K usable on the memo's date (`segments.segments_for`), or None. Never
+    raises: a company without segment facts, the sample pack (it holds no XBRL instances), an offline run without a
+    cached table or an unreachable EDGAR all leave the section out; an unexpected failure adds a note."""
+    from ..data import DataUnavailable
+    if filings is None or not (profile or {}).get("cik"):
+        return None
+    try:
+        from .segments import segments_for
+        return segments_for(ticker, as_of, source=source, filings=filings, cik=profile.get("cik"))
+    except DataUnavailable:
+        return None
+    except Exception as exc:  # noqa: BLE001 - an odd instance must not stop the memo
+        notes.append(f"no segment table: {type(exc).__name__}: {str(exc)[:120]}")
+        return None
 
 
 def _rate(f, close, risk_free, equity_premium, factors):

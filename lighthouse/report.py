@@ -236,6 +236,8 @@ def build_memo(memo) -> str:
             ("Net debt", f"${f.net_debt / 1e9:,.2f}bn", _x(r["net_debt_ebitda"]) + " EBITDA"),
             ("Stock-based pay", _p(r["sbc_revenue"]) + " of revenue", "")]
     L.append(_md_table(pd.DataFrame(rows, columns=["line", "value", "note"]).set_index("line")) + "\n")
+    from .analyst.segments import memo_lines                     # optional: only when the 10-K tags segments
+    L += memo_lines(getattr(m, "segments", None))
 
     L.append("## Valuation")
     if v is not None:

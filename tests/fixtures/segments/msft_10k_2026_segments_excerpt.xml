@@ -1,0 +1,739 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xbrl xmlns="http://www.xbrl.org/2003/instance" xmlns:country="http://xbrl.sec.gov/country/2025" xmlns:cyd="http://xbrl.sec.gov/cyd/2025" xmlns:dei="http://xbrl.sec.gov/dei/2025" xmlns:ecd="http://xbrl.sec.gov/ecd/2025" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:msft="http://www.microsoft.com/20260630" xmlns:srt="http://fasb.org/srt/2025" xmlns:us-gaap="http://fasb.org/us-gaap/2025" xmlns:xbrldi="http://xbrl.org/2006/xbrldi" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <link:schemaRef xlink:href="msft-20260630.xsd" xlink:type="simple"/>
+  <context id="C_979ecc11-493f-43e5-9ff1-bca7f8931fbe">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:ServerProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_999991d0-bcf6-4d24-b173-234184bcf5b4">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:IntelligentCloudMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_9a0b6c86-4e46-451e-bceb-e90796c2b3cd">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:SearchAdvertisingMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_9ac76154-17c4-4faf-9103-a6d45d850f47">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:WindowsAndDevicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_a39225c1-1598-4ed9-89df-2c2ee51ec961">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:ServerProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_a3ad6fc8-9442-4077-bc9b-0655ddf1d229">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:ProductivityAndBusinessProcessesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_a4a1448d-9abf-4ef8-99d2-d632d9f3d97d">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:OtherProductsAndServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_ad572921-0328-46e0-a837-96116611f339">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:XBOXMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_ae21455a-0dcc-4220-8490-732287c0d55c">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">country:US</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_b34d4d7a-158b-4413-904e-3c32c15ed50f">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:EnterpriseAndPartnerServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_b373eea1-ccad-4ba1-a878-38cb5be28175">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:EnterpriseAndPartnerServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_bbdfdc9b-8974-4595-a833-1a79001b6023">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:IntelligentCloudMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_c4b4c258-8b46-4318-86c1-218c3d731d53">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:IntelligentCloudMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_c60068d1-9882-41a1-9410-39a2619d023a">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:XBOXMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_c631092b-29b7-41ff-b1a7-ac614147877c">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ServiceOtherMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_ced25e7f-242c-4bdd-b63f-a339ea0c1cab">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:SearchAdvertisingMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_d7f5887b-f307-40a0-83a0-a9d3f508ad20">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_da2823da-65a7-4105-80c3-85a7a9988739">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:OtherProductsAndServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_dea1eb85-57ec-415a-b1e9-eb18c1f2071e">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:MorePersonalComputingMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_df20ae2e-3297-414d-955f-6dc5b0400ed1">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:LinkedInCorporationMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_e53e3860-d02f-4eba-8208-7998a6c8a46c">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_f2e14946-de11-4a9d-a07d-8b47aae20bd1">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:LinkedInCorporationMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_f4e594de-10df-4d23-ab59-221f02a4f2ef">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:DynamicsProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_f63f724c-c342-4ba7-9af0-52f561d94013">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_fdde6895-22ec-4517-ac10-00a4af777c48">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ServiceOtherMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_007d085b-16be-487c-b22c-4e0afdd5cc58">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:ProductivityAndBusinessProcessesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_0f0ae254-b2e9-4ab6-a6d0-d4a55544d9e1">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:ServerProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_18f4f316-a111-462d-9ec2-ef0aa9fe359a">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ProductMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_1913f71c-3f61-49a6-87c8-0dff7114a175">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:SearchAdvertisingMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_20b11fc7-870d-4e96-bacc-3ab952207329">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:OtherProductsAndServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_25944adb-69cf-428f-9d7f-004f76811e84">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_2981b859-eac8-42a9-baf5-b56b287b3681">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ProductMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_29985a27-1d12-4b7e-9a06-156523f6e71e">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_2a3f7495-56da-49b0-8095-4459ec5fae64">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:MorePersonalComputingMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_2b6c8fe3-56ce-4473-851c-0ca9e3642706">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_2e47d51b-4236-4fdd-8d3d-d3c303729cfa">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">us-gaap:NonUsMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_3109fb5c-3d27-4d0c-a99c-89b80f5eaa64">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">us-gaap:NonUsMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_346d4f8a-f09b-4341-9a95-0294de433bc9">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">country:US</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_3f1557ca-e25a-45cb-970a-727c829da022">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ServiceOtherMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_42e8507e-316a-47fa-8c5e-2c0560a8de33">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:MorePersonalComputingMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_43489efc-6193-4daf-953c-68541a9c2227">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:DynamicsProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_44dd1fef-4b93-4df1-8c95-ae0927347ae9">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">country:US</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_45fc623a-266c-4a6f-938d-b46f580024a4">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">us-gaap:NonUsMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_5a70e151-6c87-45be-82d4-19d32fff955e">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_5cb0dd61-09b2-45d5-9e75-45ce0f75c065">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">msft:ProductivityAndBusinessProcessesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_640f5381-e738-4982-9ae0-2353f784fa0c">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ProductMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_65da5ff6-d093-458b-b9c0-1c180ab2da7f">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:DynamicsProductsAndCloudServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_6a3cfbc1-b1cf-409d-ae44-9fe2e5e066de">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:WindowsAndDevicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_6eff9f34-cb09-48c9-8509-bda353947399">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:WindowsAndDevicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_6f66514e-d273-4f61-98ce-d9ef6ce254f5">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:LinkedInCorporationMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_7575f467-7692-4974-a3da-f27e7e8e1c47">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_7608c41a-8c5e-49dd-a28d-8d1f64043e06">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:XBOXMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2024-07-01</startDate>
+      <endDate>2025-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_7f83b284-3c69-4779-90ec-f0c89f19f47e">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+    </entity>
+    <period>
+      <startDate>2023-07-01</startDate>
+      <endDate>2024-06-30</endDate>
+    </period>
+  </context>
+  <context id="C_7fcc7781-7501-4bdc-a5d2-4af2680a0289">
+    <entity>
+      <identifier scheme="http://www.sec.gov/CIK">0000789019</identifier>
+      <segment>
+        <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">msft:EnterpriseAndPartnerServicesMember</xbrldi:explicitMember>
+      </segment>
+    </entity>
+    <period>
+      <startDate>2025-07-01</startDate>
+      <endDate>2026-06-30</endDate>
+    </period>
+  </context>
+  <unit id="U_shares">
+    <measure>shares</measure>
+  </unit>
+  <unit id="U_USD">
+    <measure>iso4217:USD</measure>
+  </unit>
+  <dei:DocumentType contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" id="F_bff863b5-8e59-4584-a041-0e943a307239">10-K</dei:DocumentType>
+  <dei:DocumentPeriodEndDate contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" id="F_6351fb3a-b839-45d5-a799-854be7c1cb82">2026-06-30</dei:DocumentPeriodEndDate>
+  <dei:DocumentFiscalYearFocus contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" id="F_e31091ce-367b-4e83-afb4-b5837c51dc10">2026</dei:DocumentFiscalYearFocus>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_2981b859-eac8-42a9-baf5-b56b287b3681" decimals="-6" id="F_95e1b4cd-6f75-4ffb-ac00-1988ac590988" unitRef="U_USD">64696000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_640f5381-e738-4982-9ae0-2353f784fa0c" decimals="-6" id="F_8eb2afe8-7f47-424f-b820-b04ad05e5919" unitRef="U_USD">63946000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_18f4f316-a111-462d-9ec2-ef0aa9fe359a" decimals="-6" id="F_50e7b28b-a9d5-4188-9da8-83ce2a8d22c8" unitRef="U_USD">64773000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_c631092b-29b7-41ff-b1a7-ac614147877c" decimals="-6" id="F_0480e168-a874-422d-a978-b608bb552c4c" unitRef="U_USD">267143000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_3f1557ca-e25a-45cb-970a-727c829da022" decimals="-6" id="F_75feb985-ce88-46a8-b959-e783510265be" unitRef="U_USD">217778000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_fdde6895-22ec-4517-ac10-00a4af777c48" decimals="-6" id="F_3b2a2ce7-88e4-4fcd-b351-5fb604144772" unitRef="U_USD">180349000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_a62216e4-4826-4209-89af-643bc5c2df10" unitRef="U_USD">331839000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_d3febf44-5717-45d3-a565-dab944f2f096" unitRef="U_USD">281724000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_cd4db431-dd7e-4467-8995-65f47ac8d6d5" unitRef="U_USD">245122000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:OperatingIncomeLoss contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_606d36b1-9131-48c7-bcf9-e3c31061fd5c" unitRef="U_USD">155237000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_554afe61-f689-44e4-bf4a-bf7729f12fbb" unitRef="U_USD">128528000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_218d9485-03ac-48fc-b3b6-470b88d98822" unitRef="U_USD">109433000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:WeightedAverageNumberOfSharesOutstandingBasic contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_7b9dc2df-8c85-410f-a36f-7efea6edd316" unitRef="U_shares">7429000000</us-gaap:WeightedAverageNumberOfSharesOutstandingBasic>
+  <us-gaap:WeightedAverageNumberOfSharesOutstandingBasic contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_b11ac30b-c27a-492f-a288-2fc401b2972e" unitRef="U_shares">7433000000</us-gaap:WeightedAverageNumberOfSharesOutstandingBasic>
+  <us-gaap:WeightedAverageNumberOfSharesOutstandingBasic contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_5ccc3971-3081-461e-a08d-284826876fac" unitRef="U_shares">7431000000</us-gaap:WeightedAverageNumberOfSharesOutstandingBasic>
+  <us-gaap:WeightedAverageNumberOfSharesOutstandingBasic contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_a136d263-5244-4694-bdd6-6fe11c868c7a" unitRef="U_shares">7429000000</us-gaap:WeightedAverageNumberOfSharesOutstandingBasic>
+  <us-gaap:WeightedAverageNumberOfSharesOutstandingBasic contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_ee269dc3-0956-4eb2-a7b9-71597b69cc21" unitRef="U_shares">7433000000</us-gaap:WeightedAverageNumberOfSharesOutstandingBasic>
+  <us-gaap:WeightedAverageNumberOfSharesOutstandingBasic contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_c9b24f1b-7ef4-47ac-892b-c8e86d0a665c" unitRef="U_shares">7431000000</us-gaap:WeightedAverageNumberOfSharesOutstandingBasic>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_007d085b-16be-487c-b22c-4e0afdd5cc58" decimals="-6" id="F_ac0ce5dd-e6a4-4ea0-b444-c8be614d09dc" unitRef="U_USD">139996000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_a3ad6fc8-9442-4077-bc9b-0655ddf1d229" decimals="-6" id="F_93258a8b-60c3-47ad-8e5c-dc2959f1e09f" unitRef="U_USD">120810000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_5cb0dd61-09b2-45d5-9e75-45ce0f75c065" decimals="-6" id="F_5f1b36a7-d3e9-4e5b-baa8-a349e683b19e" unitRef="U_USD">106820000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:CostOfGoodsAndServicesSold contextRef="C_007d085b-16be-487c-b22c-4e0afdd5cc58" decimals="-6" id="F_43ee75ef-d608-47ae-9987-f44175fb6eef" unitRef="U_USD">25017000000</us-gaap:CostOfGoodsAndServicesSold>
+  <us-gaap:OperatingIncomeLoss contextRef="C_007d085b-16be-487c-b22c-4e0afdd5cc58" decimals="-6" id="F_746d67eb-c119-4d82-879e-bd440af87931" unitRef="U_USD">83879000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_a3ad6fc8-9442-4077-bc9b-0655ddf1d229" decimals="-6" id="F_f1f2ff9a-dfc1-4fd9-9d5c-182bd8ab8bf0" unitRef="U_USD">69773000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_5cb0dd61-09b2-45d5-9e75-45ce0f75c065" decimals="-6" id="F_87d12a6f-7757-4f35-adff-722c3ac038cd" unitRef="U_USD">59661000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_c4b4c258-8b46-4318-86c1-218c3d731d53" decimals="-6" id="F_a06acec4-abed-4c4a-8bc2-57409c2d1093" unitRef="U_USD">137791000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_bbdfdc9b-8974-4595-a833-1a79001b6023" decimals="-6" id="F_549c1ffb-385e-4200-a6c1-2df6e915c11a" unitRef="U_USD">106265000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_999991d0-bcf6-4d24-b173-234184bcf5b4" decimals="-6" id="F_6a0e4750-e038-497c-bab3-008bd93e023e" unitRef="U_USD">87464000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:CostOfGoodsAndServicesSold contextRef="C_c4b4c258-8b46-4318-86c1-218c3d731d53" decimals="-6" id="F_0f8c0615-51b2-4471-b100-411c248758b0" unitRef="U_USD">57876000000</us-gaap:CostOfGoodsAndServicesSold>
+  <us-gaap:OperatingIncomeLoss contextRef="C_c4b4c258-8b46-4318-86c1-218c3d731d53" decimals="-6" id="F_9b8b4fa4-c572-4ce0-aee7-74cae3b40bda" unitRef="U_USD">56972000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_bbdfdc9b-8974-4595-a833-1a79001b6023" decimals="-6" id="F_47bcc1ac-8829-4466-a8d4-46edd96e84a3" unitRef="U_USD">44589000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_999991d0-bcf6-4d24-b173-234184bcf5b4" decimals="-6" id="F_7a31d3e1-eabd-48ac-a4d3-10c6b4c1c45e" unitRef="U_USD">37813000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_2a3f7495-56da-49b0-8095-4459ec5fae64" decimals="-6" id="F_b172b8cc-466d-4448-803b-ec73bcc8673d" unitRef="U_USD">54052000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_dea1eb85-57ec-415a-b1e9-eb18c1f2071e" decimals="-6" id="F_bd133dde-0418-4c08-8564-ec526fc4e010" unitRef="U_USD">54649000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_42e8507e-316a-47fa-8c5e-2c0560a8de33" decimals="-6" id="F_9c404475-3ca9-4f7a-9c7b-778377c026aa" unitRef="U_USD">50838000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:CostOfGoodsAndServicesSold contextRef="C_2a3f7495-56da-49b0-8095-4459ec5fae64" decimals="-6" id="F_3f4857bc-ca9c-49aa-9a1c-83911c6b200d" unitRef="U_USD">23481000000</us-gaap:CostOfGoodsAndServicesSold>
+  <us-gaap:OperatingIncomeLoss contextRef="C_2a3f7495-56da-49b0-8095-4459ec5fae64" decimals="-6" id="F_48542f1f-9e4d-4e36-9d5d-fc0eefdf03a1" unitRef="U_USD">14386000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_dea1eb85-57ec-415a-b1e9-eb18c1f2071e" decimals="-6" id="F_8adf57a5-1d2c-4da2-abe7-b622ae25de82" unitRef="U_USD">14166000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_42e8507e-316a-47fa-8c5e-2c0560a8de33" decimals="-6" id="F_60e4074a-9ba2-4edd-811c-d9dfa22017ce" unitRef="U_USD">11959000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_0316687c-ee9f-4f70-b690-d7ba528fa116" unitRef="U_USD">331839000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_2178941a-2586-4318-9637-457675acd227" unitRef="U_USD">281724000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_61a685e8-44f5-40a9-8dec-7a800544bd88" unitRef="U_USD">245122000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:OperatingIncomeLoss contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_b6fef9ec-64a6-4e7a-9638-4acea8948423" unitRef="U_USD">155237000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_71bd8e0b-9a5c-43dc-b90e-8af284e3b3ee" unitRef="U_USD">128528000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_0f684079-a162-44f4-8e52-ffea959471df" unitRef="U_USD">109433000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_346d4f8a-f09b-4341-9a95-0294de433bc9" decimals="-6" id="F_d1664d85-267f-4f2b-9ad1-455903641d72" unitRef="U_USD">170794000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_ae21455a-0dcc-4220-8490-732287c0d55c" decimals="-6" id="F_455ecfb6-3833-4689-868e-73ee7fcb7373" unitRef="U_USD">144546000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_44dd1fef-4b93-4df1-8c95-ae0927347ae9" decimals="-6" id="F_57a731a8-76df-460f-b605-32f5da4e5d0d" unitRef="U_USD">124704000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_2e47d51b-4236-4fdd-8d3d-d3c303729cfa" decimals="-6" id="F_822eae74-974a-46c8-9a81-50c15ca1a718" unitRef="U_USD">161045000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_3109fb5c-3d27-4d0c-a99c-89b80f5eaa64" decimals="-6" id="F_d0dfbc26-0a8e-4e5b-ada5-c53ec6f95a47" unitRef="U_USD">137178000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_45fc623a-266c-4a6f-938d-b46f580024a4" decimals="-6" id="F_23c6ae29-6776-4df4-b4fd-b66af3df5066" unitRef="U_USD">120418000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_5c7ea880-e5ab-4cba-9a0c-a735a6aba422" unitRef="U_USD">331839000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_bc7a0b1c-86f2-4851-8e66-113631b0b501" unitRef="U_USD">281724000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_47ca92b3-743d-436e-8dc8-f0434b75d745" unitRef="U_USD">245122000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_0f0ae254-b2e9-4ab6-a6d0-d4a55544d9e1" decimals="-6" id="F_f3b24ba6-022f-4500-abc7-8bb91f5defee" unitRef="U_USD">129425000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_a39225c1-1598-4ed9-89df-2c2ee51ec961" decimals="-6" id="F_f34ecc3b-a3b0-48ce-8601-baa92029b7cc" unitRef="U_USD">98435000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_979ecc11-493f-43e5-9ff1-bca7f8931fbe" decimals="-6" id="F_6e8f9aeb-c0c5-4e05-8029-e4fb1b9c3205" unitRef="U_USD">79828000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_25944adb-69cf-428f-9d7f-004f76811e84" decimals="-6" id="F_8ef6a6e7-1880-4a9f-9fa0-19ae1e399f5a" unitRef="U_USD">101997000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_d7f5887b-f307-40a0-83a0-a9d3f508ad20" decimals="-6" id="F_55e2d229-30e2-44e8-933c-9a980ed2a0c5" unitRef="U_USD">87767000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_5a70e151-6c87-45be-82d4-19d32fff955e" decimals="-6" id="F_b83780c9-d313-42d0-ac99-cf116f129c4f" unitRef="U_USD">76969000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_ad572921-0328-46e0-a837-96116611f339" decimals="-6" id="F_a677034c-dce7-49e0-9970-2474e310b36e" unitRef="U_USD">21790000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7608c41a-8c5e-49dd-a28d-8d1f64043e06" decimals="-6" id="F_92e376de-056a-43ef-b95d-040cd30bda8a" unitRef="U_USD">23455000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_c60068d1-9882-41a1-9410-39a2619d023a" decimals="-6" id="F_b980ac20-9851-4502-a4b8-f09fe752e737" unitRef="U_USD">21503000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_f2e14946-de11-4a9d-a07d-8b47aae20bd1" decimals="-6" id="F_aeb7f76d-87a2-4784-a372-7629a34edb40" unitRef="U_USD">19817000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_df20ae2e-3297-414d-955f-6dc5b0400ed1" decimals="-6" id="F_cd7f7adb-8893-4559-b5ee-22d407e34c9f" unitRef="U_USD">17812000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_6f66514e-d273-4f61-98ce-d9ef6ce254f5" decimals="-6" id="F_7810be0f-a76a-4f29-8ca6-4b9a79ae9c0a" unitRef="U_USD">16372000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_6eff9f34-cb09-48c9-8509-bda353947399" decimals="-6" id="F_58d162f5-76cd-4490-a511-9f6e5fb8defc" unitRef="U_USD">17084000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_6a3cfbc1-b1cf-409d-ae44-9fe2e5e066de" decimals="-6" id="F_b49307e4-6ce6-4afe-8d24-f982dd55b836" unitRef="U_USD">17314000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_9ac76154-17c4-4faf-9103-a6d45d850f47" decimals="-6" id="F_e2cb08f2-7661-4afc-aaaf-8551d81e6e74" unitRef="U_USD">17026000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_ced25e7f-242c-4bdd-b63f-a339ea0c1cab" decimals="-6" id="F_4c411582-1fa0-445d-878f-f2a307a76afd" unitRef="U_USD">15176000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_1913f71c-3f61-49a6-87c8-0dff7114a175" decimals="-6" id="F_8f27b46d-980e-406c-9294-cc1f0672d787" unitRef="U_USD">13878000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_9a0b6c86-4e46-451e-bceb-e90796c2b3cd" decimals="-6" id="F_787b122c-75c3-4dd6-9144-d075db5e1719" unitRef="U_USD">12306000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_2b6c8fe3-56ce-4473-851c-0ca9e3642706" decimals="-6" id="F_77279e29-d1a3-42c2-a032-d45c5cd23c9f" unitRef="U_USD">9175000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_e53e3860-d02f-4eba-8208-7998a6c8a46c" decimals="-6" id="F_21517b50-ae0f-470b-b1fc-97cad91984f4" unitRef="U_USD">7404000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_f63f724c-c342-4ba7-9af0-52f561d94013" decimals="-6" id="F_1dc5e2bf-abb4-4cd1-a670-ef23e8425d9b" unitRef="U_USD">6648000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_f4e594de-10df-4d23-ab59-221f02a4f2ef" decimals="-6" id="F_dc8c8c44-cd2e-4daa-9324-0be523f88d68" unitRef="U_USD">9006000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_43489efc-6193-4daf-953c-68541a9c2227" decimals="-6" id="F_117b1159-492c-414b-a0f0-ba8b84f540e7" unitRef="U_USD">7827000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_65da5ff6-d093-458b-b9c0-1c180ab2da7f" decimals="-6" id="F_5722abe4-38db-47c0-9609-de5d3e85cf99" unitRef="U_USD">6831000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7fcc7781-7501-4bdc-a5d2-4af2680a0289" decimals="-6" id="F_0dc92384-0f33-4ba8-8fb1-7025fd6eb46c" unitRef="U_USD">8260000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_b373eea1-ccad-4ba1-a878-38cb5be28175" decimals="-6" id="F_78d45222-9596-448a-bff7-a3559273a250" unitRef="U_USD">7760000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_b34d4d7a-158b-4413-904e-3c32c15ed50f" decimals="-6" id="F_6737a765-1bc6-4094-85a8-ad692a5e9c45" unitRef="U_USD">7594000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_a4a1448d-9abf-4ef8-99d2-d632d9f3d97d" decimals="-6" id="F_4b8ec381-0bbf-4d64-8a6c-31712b94b710" unitRef="U_USD">109000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_20b11fc7-870d-4e96-bacc-3ab952207329" decimals="-6" id="F_f9efc2e9-03c8-431a-b6a2-f78137df0d70" unitRef="U_USD">72000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_da2823da-65a7-4105-80c3-85a7a9988739" decimals="-6" id="F_20962bc7-a767-4250-9ec9-7623c23d127b" unitRef="U_USD">45000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_29985a27-1d12-4b7e-9a06-156523f6e71e" decimals="-6" id="F_34a1ffe1-c1f2-4d1c-92fd-fc404c274dcd" unitRef="U_USD">331839000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7575f467-7692-4974-a3da-f27e7e8e1c47" decimals="-6" id="F_2d76f27b-ea07-44dc-bf63-3e186e258a8a" unitRef="U_USD">281724000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="C_7f83b284-3c69-4779-90ec-f0c89f19f47e" decimals="-6" id="F_31243e9d-385e-4d00-910b-f0631c8936ce" unitRef="U_USD">245122000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+</xbrl>

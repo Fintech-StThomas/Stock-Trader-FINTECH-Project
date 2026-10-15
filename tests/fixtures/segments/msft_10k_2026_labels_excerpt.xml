@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='utf-8'?>
+<link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <link:labelLink xlink:role="http://www.xbrl.org/2003/role/link" xlink:title="labelLink" xlink:type="extended">
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_DynamicsProductsAndCloudServicesMember" xlink:label="msft_DynamicsProductsAndCloudServicesMember"/>
+    <link:loc xlink:type="locator" xlink:href="https://xbrl.fasb.org/us-gaap/2025/elts/us-gaap-2025.xsd#us-gaap_ServiceOtherMember" xlink:label="us-gaap_ServiceOtherMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_MorePersonalComputingMember" xlink:label="msft_MorePersonalComputingMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_XBOXMember" xlink:label="msft_XBOXMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember" xlink:label="msft_MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember"/>
+    <link:loc xlink:type="locator" xlink:href="https://xbrl.fasb.org/us-gaap/2025/elts/us-gaap-2025.xsd#us-gaap_ProductMember" xlink:label="us-gaap_ProductMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_WindowsAndDevicesMember" xlink:label="msft_WindowsAndDevicesMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember" xlink:label="msft_MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember"/>
+    <link:loc xlink:type="locator" xlink:href="https://xbrl.sec.gov/country/2025/country-2025.xsd#country_US" xlink:label="country_US"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_SearchAdvertisingMember" xlink:label="msft_SearchAdvertisingMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_LinkedInCorporationMember" xlink:label="msft_LinkedInCorporationMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_EnterpriseAndPartnerServicesMember" xlink:label="msft_EnterpriseAndPartnerServicesMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_OtherProductsAndServicesMember" xlink:label="msft_OtherProductsAndServicesMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_IntelligentCloudMember" xlink:label="msft_IntelligentCloudMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_ProductivityAndBusinessProcessesMember" xlink:label="msft_ProductivityAndBusinessProcessesMember"/>
+    <link:loc xlink:type="locator" xlink:href="https://xbrl.fasb.org/us-gaap/2025/elts/us-gaap-2025.xsd#us-gaap_NonUsMember" xlink:label="us-gaap_NonUsMember"/>
+    <link:loc xlink:type="locator" xlink:href="msft-20260630.xsd#msft_ServerProductsAndCloudServicesMember" xlink:label="msft_ServerProductsAndCloudServicesMember"/>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_DynamicsProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Dynamics Products And Cloud Services [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_DynamicsProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Dynamics products and cloud services</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="us-gaap_ServiceOtherMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Service, Other [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="us-gaap_ServiceOtherMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Service and Other</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_MorePersonalComputingMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">More Personal Computing [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_MorePersonalComputingMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">More Personal Computing</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_XBOXMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">XBOX [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_XBOXMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">XBOX</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Microsoft Three Six Five Consumer Products and Cloud Services [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Microsoft 365 Consumer products and cloud services</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="us-gaap_ProductMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Product [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="us-gaap_ProductMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Product</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_WindowsAndDevicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Windows and Devices [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_WindowsAndDevicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Windows and Devices</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Microsoft Three Six Five Commercial Products And Cloud Services [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Microsoft 365 Commercial Products and Cloud Services</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="country_US_lbl" xlink:role="http://www.xbrl.org/2003/role/label">UNITED STATES</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="country_US_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">United States</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_SearchAdvertisingMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Search Advertising [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_SearchAdvertisingMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Search advertising</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_LinkedInCorporationMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Linked In Corporation [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_LinkedInCorporationMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">LinkedIn</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_EnterpriseAndPartnerServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Enterprise and Partner Services [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_EnterpriseAndPartnerServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Enterprise and partner services</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_OtherProductsAndServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Other Products And Services [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_OtherProductsAndServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Other</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_IntelligentCloudMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Intelligent Cloud [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_IntelligentCloudMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Intelligent Cloud</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_ProductivityAndBusinessProcessesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Productivity And Business Processes [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_ProductivityAndBusinessProcessesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Productivity and Business Processes</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="us-gaap_NonUsMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Non-US [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="us-gaap_NonUsMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Other Countries</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_ServerProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/label">Server Products And Cloud Services [Member]</link:label>
+    <link:label xml:lang="en-US" xlink:type="resource" xlink:label="msft_ServerProductsAndCloudServicesMember_lbl" xlink:role="http://www.xbrl.org/2003/role/terseLabel">Server Products and Cloud Services</link:label>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_DynamicsProductsAndCloudServicesMember" xlink:to="msft_DynamicsProductsAndCloudServicesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="us-gaap_ServiceOtherMember" xlink:to="us-gaap_ServiceOtherMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_MorePersonalComputingMember" xlink:to="msft_MorePersonalComputingMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_XBOXMember" xlink:to="msft_XBOXMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember" xlink:to="msft_MicrosoftThreeSixFiveConsumerProductsAndCloudServicesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="us-gaap_ProductMember" xlink:to="us-gaap_ProductMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_WindowsAndDevicesMember" xlink:to="msft_WindowsAndDevicesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember" xlink:to="msft_MicrosoftThreeSixFiveCommercialProductsAndCloudServicesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="country_US" xlink:to="country_US_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_SearchAdvertisingMember" xlink:to="msft_SearchAdvertisingMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_LinkedInCorporationMember" xlink:to="msft_LinkedInCorporationMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_EnterpriseAndPartnerServicesMember" xlink:to="msft_EnterpriseAndPartnerServicesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_OtherProductsAndServicesMember" xlink:to="msft_OtherProductsAndServicesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_IntelligentCloudMember" xlink:to="msft_IntelligentCloudMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_ProductivityAndBusinessProcessesMember" xlink:to="msft_ProductivityAndBusinessProcessesMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="us-gaap_NonUsMember" xlink:to="us-gaap_NonUsMember_lbl"/>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="msft_ServerProductsAndCloudServicesMember" xlink:to="msft_ServerProductsAndCloudServicesMember_lbl"/>
+  </link:labelLink>
+</link:linkbase>
