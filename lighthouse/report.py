@@ -239,6 +239,8 @@ def build_memo(memo) -> str:
     ind = getattr(m, "industry", None)
     if ind is not None:
         L += _industry_lines(ind, m.profile.get("sicDescription"))
+    from .analyst.segments import memo_lines                     # optional: only when the 10-K tags segments
+    L += memo_lines(getattr(m, "segments", None))
 
     L.append("## Valuation")
     if v is not None:
