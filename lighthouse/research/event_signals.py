@@ -151,7 +151,7 @@ def eightk_history(ticker: str, lm, start: str = EIGHTK_START, refresh: bool = F
                    source: str = "auto") -> pd.DataFrame:
     """Every earnings release the company filed since `start`, oldest first, indexed by filing date: accession,
     document, words, net tone (cached; the documents themselves are not stored)."""
-    from ..edgar import cik_for, company_filings, fetch_document, filing_documents
+    from ..edgar import cik_for, company_filings, fetch_document, filing_documents, registrant_cik
     hit = None if refresh else store.read_frame("research_8k", ticker)
     if hit is not None:
         return hit
@@ -162,11 +162,12 @@ def eightk_history(ticker: str, lm, start: str = EIGHTK_START, refresh: bool = F
         m = (filings["form"].isin(["8-K"]) & filings["items"].fillna("").str.contains(r"\b2\.02\b", regex=True)
              & (filings["filed"] >= start))
         for _, f in filings[m].sort_values("filed").iterrows():
-            doc = release_document(filing_documents(cik, f["accn"]))
+            filer = registrant_cik(f, cik)
+            doc = release_document(filing_documents(filer, f["accn"]))
             if doc is None:
                 continue
             rows.append({"filed": f["filed"], "accn": f["accn"], "doc": doc,
-                         **release_tone(fetch_document(cik, f["accn"], doc, cache=False), lm)})
+                         **release_tone(fetch_document(filer, f["accn"], doc, cache=False), lm)})
     out = (pd.DataFrame(rows).set_index("filed") if rows else
            pd.DataFrame(columns=["accn", "doc", "words", "net_tone"]).rename_axis("filed"))
     store.write_frame("research_8k", ticker, out)
@@ -211,7 +212,7 @@ def eightk_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False
 # --------------------------------------------------------------------------- #
 def text_history(ticker: str, lm, start: str = "2006-01-01", refresh: bool = False, source: str = "auto") -> pd.DataFrame:
     """Text features of every 10-K the company filed since `start`, oldest first, indexed by filing date (cached)."""
-    from ..edgar import cik_for, company_filings, fetch_document
+    from ..edgar import cik_for, company_filings, fetch_document, registrant_cik
     from ..text import features
     hit = None if refresh else store.read_frame("research_text", ticker)
     if hit is not None:
@@ -223,7 +224,7 @@ def text_history(ticker: str, lm, start: str = "2006-01-01", refresh: bool = Fal
     for _, f in tenk.iterrows():
         if not f.get("doc"):
             continue
-        doc = fetch_document(cik, f["accn"], f["doc"], cache=False)
+        doc = fetch_document(registrant_cik(f, cik), f["accn"], f["doc"], cache=False)
         feats, counts = features(doc, lm, prev)
         prev = counts
         rows.append({"filed": f["filed"], "accn": f["accn"], **feats})
