@@ -1,51 +1,74 @@
-# Handoff: where the research-grade Lighthouse work stopped (15 October 2026)
+# Handoff: where the Lighthouse work stopped (15 October 2026, second session of the day)
 
-Branch `claude/focused-bohr-klq8zc` (started from `main` at 2ec89f2, after the Phase 1-3 work was merged as pull
-request #5) carries Phases 4-8. Its pull request is #6, opened at the user's request on 15 October 2026; ask again
-before merging it once CI passes. The eight-phase plan in `docs/ROADMAP_STATUS.md` is done; what follows is optional next
-work.
+Branch `claude/ecstatic-wright-3w8w59`, started from `main` at 9c98e9a after pull request #6 (Phases 4-8) was merged.
+It carries open items 1-3 of the previous handoff; no pull request is open for it yet (ask the user before opening
+one, and again before merging once CI passes). **The watch workflow only runs once this branch is on `main`**: GitHub
+runs scheduled workflows from the default branch only, and the first forward snapshot is due after the close of
+30 October 2026.
 
-## What this session found (details: METHODOLOGY §8b and §11, DATA_AND_ML §5-6, ROADMAP_STATUS)
+## What this session did (details: METHODOLOGY §8c and §11 "Seventh October 2026 session", DATA_AND_ML §5-6)
 
-* **No signal survives the pre-registered rule.** The 37 library signals went through tuning (2009-2017) and the
-  hold-out (2018-2026, evaluated once; 47 trials with the product's own ten). Three passed tuning (FCF yield, FCF yield
-  after SBC, size); in the hold-out the FCF yields kept a positive, insignificant IC (t 0.7) and size reversed. The
-  sector/size-neutral blend is built (`lighthouse/research/blend.py`, `research_signals.py --blend`) but there is
-  nothing to blend, and `lighthouse/decision.py` is unchanged (`cross_ticker_evaluation.py --check` unchanged).
-  The earnings-release tone (`eightk_tone`, half the members) was evaluated last and failed both tests (hold-out IC
-  0.000).
-* **Near misses worth forward-testing, not weighting**: short-sale volume (IC t 3.5 / 1.9, but 60-66% monthly turnover
-  makes it lose after costs) and risk-factor similarity (significant only in the hold-out, t 2.3).
-* **Analyst toolkit on live data** (MSFT): peers, peer-median beacons, industry metrics, XBRL segments, thesis tracker
-  on a real new 10-K, post-mortem. Two fixes came from it: the DCF's terminal value (value-driver formula; MSFT base
-  case $94 -> $199) and the post-mortem's growth rate (annualised over quarter ends).
-* **Fixed before the hold-out**: positioning parser bugs (class shares, preferred-stock rows, free-text symbols, FINRA's
-  floored days to cover, cached empty answers), same-session look-ahead in the Form 4 and short-volume timing, repeated
-  4/A amendments and a typing error, headerless 2010 FINRA files, the text workers' SEC rate (METHODOLOGY §11).
+* **Item 1, forward evidence: the watch list is built** (`lighthouse/research/watch.py`, `python -m lighthouse journal
+  watch`, `.github/workflows/watch.yml`, the Journal tab). The three near misses (`fcf_yield`, `short_volume`,
+  `risk_similarity`) are recorded at each month end for every point-in-time member under their logged configuration
+  hashes (the same trials, not new ones), in two new append-only journal tables (schema 2; older files upgrade in
+  place). A snapshot counts only if written before the next open; the recorder takes no date. The forward rule is
+  written down before any data exists (METHODOLOGY §8c): an annual look, at least 36 months, Newey-West t >= 2, positive
+  net return for the tuning use; meeting it only makes the case for a new pre-registered test. Honest power: at their
+  hold-out ICs a t of 2 needs about 7 years (risk similarity), 10 (short volume) and decades (FCF yield). Watch-only:
+  a test proves no verdict or ticket reads it.
+* **Item 2, the user's decisions, implemented**: the DCF's equity premium is the geometric mean of the Ken French
+  market factor since 1963 (6.2% in data to August 2026; the arithmetic 7.2% is shown as a sensitivity on the base
+  case); RONIC = WACC in the bear case; REIT FFO per NAREIT (impairments added back); a bank that never tagged preferred
+  stock counts it as 0, flagged. The MSFT live memo was not re-run (no SEC contact e-mail approved this session), so
+  the $199 base case in the docs is from before these changes.
+* **Item 3, the five data limits, fixed** (METHODOLOGY §11, seventh session): class shares take their issuer's Form 4s
+  by CIK (BRK-B, BF-B; both classes of GOOGL/GOOG, FOXA/FOX, NWSA/NWS share them); the NYSE calendar knows the one-off
+  closures since 1990; a pre-2018 FINRA day is cached only when every facility answered; `edgar.bulk_quarter` records
+  its tags and refetches for more; a successor's filing list merges its predecessors' (XOM), and documents are fetched
+  under the registrant that filed them. The §8b results predate these fixes and were not re-run (a re-run is a new
+  trial); DATA_AND_ML §5 counts the member-months they touch (a few names a month).
+* **Item 4** (local LLM red team) skipped: no local model in this environment.
+* **Found on the way and fixed: the memo's market value after a split.** The price is as traded on the memo's date,
+  the cover-page share count as of its filing; a split in between (AAPL on 15 September 2020) put market value, EV
+  and every per-share DCF value off by the split ratio ($0.49tn instead of $1.97tn). `financials_as_of` now adjusts the
+  count (METHODOLOGY §11). The research signals have the same flaw and keep it (open item 2).
+* Also: both journal workflows now stop when the `journal-data` branch exists but its journal cannot be read (before,
+  `|| true` would have started an empty journal and saved it over the real one); the signal-library table in §8b has
+  its header row back.
 
 ## Kickoff prompt for the next session
 
 > Continue Lighthouse in lotainc0/Stock-Trader-FINTECH-Project. Read `docs/NEXT_SESSION.md`, `docs/ROADMAP_STATUS.md`
-> and METHODOLOGY §8b and §11 first. If pull request #6 (`claude/focused-bohr-klq8zc`) was merged, start a new branch
-> from `main`. The research plan is done and no signal survived; do not add weight to any signal in `decision.py`
-> without a new pre-registered test. Pick from "Open items" below in the order I ask. Keep every rule in "Rules that
-> stay in force". Ask me before deleting anything, and before opening or merging a PR.
+> and METHODOLOGY §8b, §8c and §11 first. If the pull request for `claude/ecstatic-wright-3w8w59` was merged, start a
+> new branch from `main`. No signal survived; do not add weight to any signal in `decision.py` without a new
+> pre-registered test, and never let the watch list reach a verdict or ticket. Pick from "Open items" below in the
+> order I ask. Keep every rule in "Rules that stay in force". Ask me before deleting anything, and before opening or
+> merging a PR.
 
 ## Open items (the user's choice; none started)
 
-1. **Forward evidence instead of more backtests.** Record the near misses (risk-factor similarity, FCF yield, short
-   volume) in the forward journal as *watch-only* signals, scored by `lighthouse/scorecard.py` on new data. Any
-   variant (for example short volume rebalanced quarterly to cut turnover) is a new configuration and counts as a new
-   trial in `reports/research/experiments.csv`.
-2. **Decisions the code leaves strict, for the user**: the DCF's equity premium (the Ken French arithmetic mean since
-   1963, 7.2%; a 5-5.5% premium is common in practice) and RONIC (today's ROIC floored at the WACC); FFO without adding
-   back real-estate impairments (NAREIT adds them back); a bank that never tags preferred stock gets no tangible book.
-3. **Known data limits** (documented, not fixed): Berkshire's and Brown-Forman's Form 4 symbols (`BRK.A`, `BFA, BFB`)
-   do not map to the class in the index; one-off market closures shorten the 5-session short-volume window; a
-   transient error on one pre-2018 FINRA facility caches a partial day; `edgar.bulk_quarter` filters concepts at
-   download like the facts cache once did; XOM's filing list holds only the new holding company's filings (the facts
-   merge the predecessor CIK, the submissions do not).
-4. **Local LLM red team** (`memo --red-team`, Ollama): untested live; only if the user runs a local model.
+1. **Get the watch list running before 30 October 2026**: open and merge the pull request for this branch (the user
+   decides), check that the repository secret `LIGHTHOUSE_SEC_EMAIL` exists (without it only short volume is
+   recorded), and look at the first run's summary (Actions -> watch). Nothing in `watch.yml` has run yet; the first run
+   with an empty cache should take about an hour (an estimate).
+2. **A split flaw in the research signals' market value, for the user**: `fundamental_signals.daily_values` multiplies
+   the as-traded price by the latest filing's cover-page share count, so between a split's ex-date and the next filing
+   it uses the pre-split count (AAPL, 31 August to 30 October 2020: $550bn instead of $2.1tn; FCF yield four times too
+   high). It touches `size`, `fcf_yield`, `fcf_sbc_yield`, `earnings_yield`, `book_to_market`, `ebitda_ev`,
+   `shareholder_yield`, `altman_z` and `insider_net` in the months after a split. The watch list keeps the flaw
+   because it records the logged trial (METHODOLOGY §8c). Fixing it (as `analyst.financials_as_of` now does for the
+   memo) changes those signals: their results then need a new trial, and the watch list a new configuration.
+3. **The forward rule's thresholds** (36 months, t >= 2, one annual look, at most one month end in six missing or
+   late) were proposed by this session, before any forward data: the user may change them now, never after seeing
+   forward results.
+4. **Live checks not run here**: the MSFT memo after the item 2 changes (how far the geometric premium and the bear
+   case's RONIC move the $199 base case); XOM's merged filing list against EDGAR; re-recording the sample pack
+   (`scripts/build_edgar_sample.py`) so its filing lists carry the new `cik` column (the old pack still reads).
+   Each needs the user's approval of an SEC contact e-mail for that session.
+5. **A quarterly short-volume variant** (to cut its 60-66% monthly turnover) would be a new trial: log it in
+   `reports/research/experiments.csv` first, then add it to the watch list under its own name.
+6. **Local LLM red team** (`memo --red-team`, Ollama): untested live; only if the user runs a local model.
 
 ## Rules that stay in force
 
@@ -53,7 +76,7 @@ work.
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on the branch the session is given;
   never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12; 285 tests),
+* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12; 330 tests),
   with an empty `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. CI's 3.10 job runs
   pandas 2 (pandas 3 needs Python 3.11): after re-recording data or touching dates, run the suite once under pandas 2
   as well (a virtualenv with `pandas>=2.3,<3`), which is how the microsecond-date failure was found.
@@ -105,6 +128,8 @@ python -m lighthouse memo MSFT --source sample --no-peers          # offline mem
 python -m lighthouse memo MSFT --open-thesis --peer-norms          # live: peers, peer-median beacons, thesis saved
 python -m lighthouse thesis check | list | close ID --reason "..."
 python -m lighthouse journal run --universe "Sample pack (offline)" --allow-stale-data
+python -m lighthouse journal watch [--due]                         # record the month-end watch snapshot (only then)
+python -m lighthouse journal score                                 # verdicts, tickets and the watch-only section
 streamlit run app.py                                               # tabs: Analyst memo, Coverage, Journal, Research
 LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/research_signals.py --no-text --no-8k   # tuning (cached signals)
 LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/research_signals.py --signals NAME --holdout --allow-repeat  # a new trial

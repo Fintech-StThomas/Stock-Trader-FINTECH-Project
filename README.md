@@ -140,7 +140,7 @@ lighthouse/            the product (pure Python, pandas/numpy/matplotlib)
   research/            the cross-sectional harness (point-in-time S&P 500 panel, ICs, quintiles after costs,
                        factor alphas, hold-out guard, experiment log) and the signal library: fundamental, price,
                        panel, positioning, 13F, earnings-reaction, 8-K release tone, 10-K text; blend.py neutralises
-                       survivors to sector and size
+                       survivors to sector and size; watch.py records the near misses at each month end, watch-only
   analyst/             single-stock toolkit: point-in-time financials, linked model, DCF / reverse DCF, peers,
                        industry metrics (banks, REITs, software, insurers), XBRL segments, checks, memo, thesis tracker
   text.py · llm.py     deterministic text features (Loughran-McDonald) · optional local LLM (off by default)
@@ -160,7 +160,7 @@ data/sample/           bundled real historical data: prices, SEC filings (facts,
 reports/examples/      example report, charts and the cross-ticker evaluation
 reports/research/      the research harness's experiment log, hold-out log, results and verdicts
 docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · ROADMAP_STATUS.md
-tests/                 285 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
+tests/                 330 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
                        and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 

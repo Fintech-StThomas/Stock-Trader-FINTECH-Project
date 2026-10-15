@@ -6,7 +6,7 @@ phases; the budget is $0 (free data, free libraries, free hosting).
 | Phase | Status | What exists |
 |---|---|---|
 | 1. Free data foundations | **done** | SEC EDGAR client and point-in-time statements by filing date; historical S&P 500 membership with coverage; dividends, splits, total returns and delisting rules; live-mode rule for tickets; survivorship-aware cohort evaluation |
-| 2. Forward journal and paper trading | **done** (paper fills untested against a live account: no keys here) | Append-only SQLite journal (`lighthouse/journal.py`, triggers refuse UPDATE/DELETE) with inputs, data version and code commit; virtual positions replayed with each ticket's rules; scorecard (`lighthouse/scorecard.py`: hit rate vs SPY, follow-the-verdict vs buy-and-hold vs SPY, calibration, Brier and Brier skill); Alpaca paper adapter (`lighthouse/broker.py`: OTO / bracket orders, review exits at the open, reconciliation of fills vs the backtest's open fills); `python -m lighthouse journal run / score / export`; `.github/workflows/journal.yml` after every close, journal kept on the `journal-data` branch, an issue opened when an exit fires |
+| 2. Forward journal and paper trading | **done** (paper fills untested against a live account: no keys here) | Append-only SQLite journal (`lighthouse/journal.py`, triggers refuse UPDATE/DELETE; schema 2 adds the watch-only research signals and their outcomes, METHODOLOGY §8c) with inputs, data version and code commit; virtual positions replayed with each ticket's rules; scorecard (`lighthouse/scorecard.py`: hit rate vs SPY, follow-the-verdict vs buy-and-hold vs SPY, calibration, Brier and Brier skill); Alpaca paper adapter (`lighthouse/broker.py`: OTO / bracket orders, review exits at the open, reconciliation of fills vs the backtest's open fills); `python -m lighthouse journal run / score / export`; `.github/workflows/journal.yml` after every close, journal kept on the `journal-data` branch, an issue opened when an exit fires |
 | 3. Research harness | **done** | `lighthouse/research/`: month-end point-in-time S&P 500 panel (volume screen, coverage against every member), rank IC with Newey-West t, quintiles, long-short and long-only returns after per-stock costs and borrow, turnover, Fama-French 5 + momentum alphas, both delisting rules, tuning 2009-2017 / hold-out 2018+ evaluated once (guarded and logged), deflated Sharpe from the trial count, append-only experiment log (`reports/research/`). Realistic costs in the strategy backtest (liquidity spread and impact, resting stops with gap fills, borrow fee, cash at the T-bill). Product signals tested: **none survives** (METHODOLOGY §8b). Exit plans re-run on the 2009 cohort |
 | 4. Signal library | **done** | Fundamental (SUE, GP/A, ROIC and trend, accruals, Piotroski, Altman, Beneish, cash conversion, value vs peers and own history, net issuance, shareholder yield, FCF after SBC), panel (industry and residual momentum), price (12-1 momentum, low volatility, 1-month reversal, 52-week high, size), positioning (insider Form 4, FINRA short volume, days to cover), events (3-day earnings reaction, earnings-release tone on half the members), 10-K text (Lazy Prices, risk-factor similarity, Loughran-McDonald tone, fog), 13F breadth; parsers tested on recorded FINRA and SEC excerpts. Tuning and the hold-out run once (15 October 2026): **none survives**; the sector/size-neutral blend (`research/blend.py`) is built and tested but has no survivors to blend; `decision.py` unchanged (METHODOLOGY §8b) |
 | 5. Single-stock analyst toolkit | **done** | `lighthouse/analyst/`: point-in-time financials, linked 3-statement model, WACC (FRED + Ken French), bull/base/bear DCF after SBC with a value-driver terminal value, reverse DCF, own-history valuation bands, SIC + market-value peers, peer medians in the beacons (opt-in, `memo --peer-norms`), industry metrics (banks, REITs, software, insurers), business segments from the 10-K's XBRL, red flags, balance-sheet risk incl. debt maturities, capital allocation, catalyst calendar, investment memo. Run end to end on MSFT with live data; the facts cache refetches when the concept list grows; sample pack re-recorded |
@@ -99,6 +99,23 @@ phases; the budget is $0 (free data, free libraries, free hosting).
   SPG have no gains-on-sale tag (no FFO), ALL stopped tagging losses in 2024.
 * The local LLM red team (`memo --red-team`, Ollama) was not run: no local model in this environment; nothing it writes
   feeds a score.
+
+## Seventh session notes (15 October 2026, branch `claude/ecstatic-wright-3w8w59`)
+
+* **Forward watch list** (open item 1; METHODOLOGY §8c): `fcf_yield`, `short_volume` and `risk_similarity` are recorded
+  at each month end for every point-in-time member under their logged configuration hashes, in two append-only journal
+  tables (schema 2), scored by the harness's own code on snapshots written before the next open only; `journal watch`,
+  `.github/workflows/watch.yml` (needs `main`; first snapshot after the close of 30 October 2026) and the Journal tab.
+  Watch-only: no verdict or ticket reads it (tested). At their hold-out ICs a Newey-West t of 2 is about 7 years away
+  for risk-factor similarity, 10 for short volume and decades for FCF yield.
+* **The user's valuation decisions** (open item 2): equity premium = the geometric mean of the Ken French market factor
+  since 1963 (6.2%; arithmetic 7.2% shown as a sensitivity); RONIC = WACC in the bear case; REIT FFO per NAREIT; a bank
+  that never tagged preferred stock counts it as 0, flagged. The live MSFT memo was not re-run.
+* **Five data limits fixed** (open item 3; METHODOLOGY §11, seventh session): class-share Form 4s by issuer CIK, the
+  NYSE one-off closures, FINRA days cached only when complete, the bulk data-set cache's tag record, predecessor filing
+  lists (XOM). The §8b results predate them and were not re-run (a re-run is a new trial).
+* **The memo's market value after a split** fixed (the cover-page count is split-adjusted to the memo's date); the
+  research signals keep the same flaw as part of their logged trials, a decision left to the user.
 
 ## Next
 
