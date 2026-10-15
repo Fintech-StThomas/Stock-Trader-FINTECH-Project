@@ -130,9 +130,19 @@ def text_history(ticker: str, lm, start: str = "2006-01-01", refresh: bool = Fal
     return out
 
 
+def worker_sec_rate(processes: int) -> float:
+    """Each text worker's share of this run's SEC budget, in requests a second. The budget is `http.SEC_RATE` (8, or
+    less when LIGHTHOUSE_SEC_RATE gave this run a smaller share of the SEC's 10 because other processes download at
+    the same time), or the SEC policy's current rate if something lowered it further. The workers have one rate
+    limiter each, so together they stay within the budget."""
+    from .. import http
+    budget = min(float(http.SEC_RATE), float(http.POLICIES["sec.gov"].rate))
+    return budget / max(int(processes), 1)
+
+
 def _worker_init(sec_rate: float) -> None:
     from .. import http
-    http.POLICIES["sec.gov"].rate = sec_rate          # this process's share of the SEC's 10 requests a second
+    http.POLICIES["sec.gov"].rate = sec_rate          # this process's share of the run's SEC budget
 
 
 def _text_one(args) -> tuple:
@@ -147,7 +157,8 @@ def _text_one(args) -> tuple:
 def text_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False, source: str = "auto",
                  processes: int = 3) -> Dict[str, pd.DataFrame]:
     """{signal: month-end x ticker} for the text signals. Parsing is CPU-bound: `processes` worker processes share
-    the SEC rate limit (8 requests a second in total)."""
+    this run's SEC rate limit (`http.SEC_RATE` in total: 8 requests a second, or LIGHTHOUSE_SEC_RATE; see
+    worker_sec_rate)."""
     from .harness import sample_at_month_ends
     cached = {n: store.read_frame("research_signals", n) for n in TEXT_FEATURES} if not refresh else {}
     if not refresh and all(v is not None and v.index.equals(panel.dates) for v in cached.values()):
@@ -157,7 +168,8 @@ def text_monthly(frames: Dict[str, pd.DataFrame], panel, refresh: bool = False, 
     hist: Dict[str, pd.DataFrame] = {}
     errors: Dict[str, str] = {}
     jobs = [(t, refresh, source) for t in frames]
-    with ProcessPoolExecutor(max_workers=processes, initializer=_worker_init, initargs=(8.0 / processes,)) as ex:
+    with ProcessPoolExecutor(max_workers=processes, initializer=_worker_init,
+                             initargs=(worker_sec_rate(processes),)) as ex:
         for t, h, err in ex.map(_text_one, jobs, chunksize=4):
             if err:
                 errors[t] = err
@@ -190,4 +202,4 @@ def monthly(frames, panel, refresh: bool = False, source: str = "auto", text: bo
 
 
 __all__ = ["announcement_returns", "hold_daily", "equal_weight_market", "earnings_monthly", "text_history",
-           "text_monthly", "monthly", "DESCRIPTIONS", "TEXT_FEATURES"]
+           "text_monthly", "worker_sec_rate", "monthly", "DESCRIPTIONS", "TEXT_FEATURES"]
