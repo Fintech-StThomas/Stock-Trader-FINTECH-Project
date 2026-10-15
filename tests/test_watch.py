@@ -621,7 +621,7 @@ def test_short_volume_snapshot_is_the_harness_value_and_causal(monkeypatch, tmp_
 # Watch-only: nothing reaches a verdict or a ticket
 # --------------------------------------------------------------------------- #
 DECISION_MODULES = ["decision", "engine", "tradeplan", "screener", "portfolio", "fundamentals", "technicals", "regime",
-                    "backtest", "broker", "config", "costs", "universe"]
+                    "backtest", "broker", "config", "costs", "universe", "journal"]   # journal.py writes the verdicts
 
 
 def _imports(path: Path) -> set:
