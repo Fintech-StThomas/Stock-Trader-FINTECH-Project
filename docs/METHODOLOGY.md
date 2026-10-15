@@ -480,6 +480,27 @@ drawdown, Sharpe and trade figure exactly; only the Sortino and profit-factor co
 | The strategy backtest computed liquidity costs itself, with no cap | On a series that barely trades (EP's cached 2014 data: $0.80, a few hundred shares a day) a sale filled at a negative price and the equity curve went below zero (5 cohort stocks: CPWR, EP, COMS, DIGI, MCIC) | Per-side cost capped at 300 bps in the backtest and in `costs.CostModel` (`costs.MAX_COST_BPS`); sample-pack results unchanged |
 | The DCF's free cash flow subtracted stock-based pay twice (once in the operating margin, once again) | Equity values understated by roughly the SBC share of cash flow (~15% for MSFT) | FCFF after SBC = EBIT x (1 - t) + D&A - capex - change in working capital; the cash view adds SBC back |
 
+### Sixth October 2026 session (signal library, analyst toolkit on live data)
+
+Every one of these was found before the library's hold-out was evaluated: by the parser tests recorded from real
+FINRA and SEC files, by the first live research runs, or by the first live MSFT memo.
+
+| Issue | Effect | Fix |
+|---|---|---|
+| FINRA writes class shares `BRK/B`; symbols were renamed after the daily sum | BRK-B and BF-B had no short volume; two raw symbols could share a label and the research run stopped ("duplicate labels") | Symbols normalised before summing; a session cached by the old code is normalised when read |
+| Form 4 purchases of preferred stock, notes and warrants counted as insider buys | A $5.1m purchase of JPMorgan Series HH preferred counted as a buy of the common (about 200 of 30,895 rows in 2020 Q1) | Non-common securities left out |
+| The Form 4 issuer symbol is free text (`LEN, LEN-B`, `(CALX)`, `NYSE: SCS`) | Those filings matched no ticker | Quotes, brackets and US exchange prefixes removed; lists split on commas and semicolons, never on spaces |
+| Days to cover used FINRA's published figure | It is floored at 1.00 (41% of rows in December 2023, 7% of liquid stocks tied) and is 999.99 at zero volume | Short interest / average daily volume from the two quantities; zero volume is missing |
+| An empty short-interest answer for a recent date was cached | A month still running asked for a future settlement date and stayed missing for good | Empty answers under 30 days old are not cached |
+| A Form 4 dated the month-end session, and that session's FINRA short volume, were used at its close | A few hours of look-ahead: EDGAR dates Forms 4 accepted until 10 pm, FINRA posts the file in the evening | A Form 4 counts from the day after its filing date (as filings do everywhere else); short volume reads the five sessions before the month's last |
+| 4/A amendments repeat whole forms; one 2020 Q1 row had the total typed into the price field ($1.56 trillion) | Trades double counted in `insider_net`; one row could dominate a stock's net purchases | 4/A rows that repeat a Form 4 transaction are dropped; a row above $5bn keeps its buyer, not its value |
+| Some 2010 FINRA files have no header line | The parser stopped the run | Such files are read with the columns of their field count |
+| The 10-K text workers took 8 SEC requests a second whatever share the run was given | Several processes together could exceed the SEC's 10 a second | The workers split `LIGHTHOUSE_SEC_RATE` |
+| A company's XBRL facts were cached filtered to the concepts of the day | When the concept list grew, the new concepts read as never reported | The cache records its concepts and is downloaded again when asked for more (offline it is used as it is) |
+| The sample pack predated the newer cash and short-term investment concepts | MSFT's offline net debt was +$70bn instead of net cash | Sample pack re-recorded (122 concepts, filing lists, profiles); MSFT offline net debt -$61bn; `cross_ticker --check` unchanged |
+| The DCF's terminal value capitalised the last projected year's free cash flow | A company in a build-out carried that year's capex forever: MSFT (capex 35% of revenue, D&A 10%) was worth $94 a share and no growth rate up to 60% a year reproduced its price | Value-driver terminal value, NOPAT x (1 - g / RONIC) / (WACC - g), RONIC = today's ROIC floored at the WACC (Koller, Goedhart & Wessels, *Valuation*): MSFT base case $199 at the same 11.5% WACC; the price implies 36.6% growth a year for five years |
+| The post-mortem annualised trailing revenue growth over calendar days | One quarter's change over 167 days read as +9.6% a year (MSFT, May to October 2026) instead of about +18% | Annualised over the quarter ends behind the two trailing sums |
+
 ## 12. Speed
 
 Measured offline with Streamlit's test harness on the sample pack (before → after this session's work): first page load
