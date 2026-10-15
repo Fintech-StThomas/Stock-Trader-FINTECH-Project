@@ -77,6 +77,8 @@ def insider_files() -> List[str]:
 # Non-derivative rows that are not the issuer's common equity: an officer buying a bank's preferred stock at par
 # (JPMorgan, January 2020: $5.1m of Series HH) says little about the common shares the signal ranks.
 NOT_COMMON = r"prefer|\bpfd\b|\bnotes?\b|debenture|\bbonds?\b|warrant"
+# No insider's open-market trade on one Form 4 line comes near this; a larger value is a typing error.
+MAX_TRADE_VALUE = 5e9
 # A US exchange name written in front of the symbol ('NYSE: SCS', 'NASDAQ:XYZ'); a foreign one ('ASX:CRN') is left
 # alone, so the row cannot match a US ticker by accident.
 _EXCHANGE_PREFIX = r"^(?:NYSE(?:\s*(?:AMERICAN|MKT|ARCA))?|NASDAQ(?:\s*[A-Z]{2})?|AMEX)\s*:\s*"
@@ -97,7 +99,10 @@ def parse_form345(blob: bytes) -> pd.DataFrame:
 
     Forms 4 and 4/A only (a Form 5 reports a year's exempt transactions months late). Rows in preferred stock, notes,
     debentures, bonds or warrants are dropped (NOT_COMMON). A joint filing counts once, under its first reporting
-    owner. A filing that names several share classes appears once per class symbol."""
+    owner. A filing that names several share classes appears once per class symbol. A row worth more than
+    MAX_TRADE_VALUE is a data-entry error (the total typed into the price field: one 2020 Q1 row came to $1.56
+    trillion); it keeps its buyer but its dollar value is missing. `doc` (4 or 4/A) and `trans_date` let
+    `insider_trades` drop amendments that repeat an original."""
     z = zipfile.ZipFile(io.BytesIO(blob))
     sub = pd.read_csv(z.open("SUBMISSION.tsv"), sep="\t", dtype=str,
                       usecols=["ACCESSION_NUMBER", "FILING_DATE", "DOCUMENT_TYPE", "ISSUERCIK", "ISSUERTRADINGSYMBOL"])
@@ -119,33 +124,55 @@ def parse_form345(blob: bytes) -> pd.DataFrame:
                         "issuer_cik": pd.to_numeric(df["ISSUERCIK"], errors="coerce"),
                         "symbol": _norm_symbols(df["_sym"].astype(object)),
                         "owner": df["RPTOWNERCIK"], "relationship": df["RPTOWNER_RELATIONSHIP"], "code": df["TRANS_CODE"],
-                        "shares": sh, "price": px, "value": sign * sh * px})
+                        "shares": sh, "price": px, "value": sign * sh * px, "doc": df["DOCUMENT_TYPE"],
+                        "trans_date": pd.to_datetime(df["TRANS_DATE"], format="%d-%b-%Y", errors="coerce")})
+    out["value"] = out["value"].where(out["value"].abs() <= MAX_TRADE_VALUE)
     return out.dropna(subset=["filed"]).reset_index(drop=True)
 
 
+AMENDMENT_KEY = ["owner", "symbol", "trans_date", "code", "shares", "price"]
+
+
+def drop_repeated_amendments(trades: pd.DataFrame) -> pd.DataFrame:
+    """Leave out 4/A rows that repeat a transaction already reported on a Form 4 (same owner, symbol, trade date, code,
+    shares and price): an amendment often restates the whole form, and counting it again doubles the trade. A 4/A row
+    that differs (a corrected number) is kept; the original it corrects stays too, as it was public first."""
+    if not set(AMENDMENT_KEY + ["doc"]) <= set(trades.columns) or trades.empty:
+        return trades
+    keys = trades[AMENDMENT_KEY].astype(str).agg("|".join, axis=1)
+    seen = set(keys[trades["doc"] == "4"])
+    repeat = (trades["doc"] == "4/A") & keys.isin(seen)
+    return trades[~repeat].reset_index(drop=True)
+
+
 def insider_trades(refresh: bool = False) -> pd.DataFrame:
-    """Every open-market insider purchase and sale since 2006 (cached per quarter; past quarters never change)."""
+    """Every open-market insider purchase and sale since 2006 (cached per quarter; past quarters never change), with
+    repeated amendments left out. A quarter cached by an older parser (without the `doc` column, so without the
+    October 2026 fixes: preferred stock, free-text symbols, outliers) is downloaded and parsed again."""
     parts = []
     for url in insider_files():
         key = url.rsplit("/", 1)[-1].replace("_form345.zip", "")
         hit = None if refresh else store.read_frame("insider", key)
-        if hit is None:
+        if hit is None or "doc" not in hit.columns:
             hit = parse_form345(_get(url, timeout=180).content)
             store.write_frame("insider", key, hit)
         parts.append(hit)
-    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+    return drop_repeated_amendments(pd.concat(parts, ignore_index=True)) if parts else pd.DataFrame()
 
 
 def insider_signals(trades: pd.DataFrame, dates: pd.DatetimeIndex, tickers: Iterable[str],
                     market_cap: Optional[pd.DataFrame] = None, window_days: int = 90) -> Dict[str, pd.DataFrame]:
     """insider_buyers and insider_net at each month end, by the issuer's trading symbol as filed (which also covers
-    companies that no longer exist)."""
+    companies that no longer exist). A filing counts from the day after its filing date: EDGAR accepts Forms 4 until
+    10 pm and dates them that day, after the close at which the signal is read (as the fundamental and text signals
+    use a filing from the session after it). The window is the `window_days` days to the month end, by that date."""
     tickers = list(tickers)
     t = trades[trades["symbol"].isin(tickers)]
+    known = t["filed"] + pd.Timedelta(days=1)
     buyers = pd.DataFrame(0.0, index=dates, columns=tickers)
     net = pd.DataFrame(0.0, index=dates, columns=tickers)
     for d in dates:
-        w = t[(t["filed"] > d - pd.Timedelta(days=window_days)) & (t["filed"] <= d)]
+        w = t[(known > d - pd.Timedelta(days=window_days)) & (known <= d)]
         if w.empty:
             continue
         b = w[w["code"] == "P"].groupby("symbol")["owner"].nunique()
@@ -156,7 +183,7 @@ def insider_signals(trades: pd.DataFrame, dates: pd.DatetimeIndex, tickers: Iter
         net = (net / market_cap.reindex(index=dates, columns=tickers)).where(market_cap.reindex(index=dates, columns=tickers) > 0)
     else:
         net = net * np.nan
-    first = t["filed"].min() if len(t) else None
+    first = known.min() if len(t) else None
     if first is not None:
         buyers.loc[buyers.index < first] = np.nan
         net.loc[net.index < first] = np.nan
@@ -210,13 +237,15 @@ def short_volume_day(day) -> Optional[pd.DataFrame]:
 
 
 def short_volume_signal(dates: pd.DatetimeIndex, tickers: Iterable[str], sessions: int = 5) -> pd.DataFrame:
-    """Minus the short share of volume over the last `sessions` trading days of each month."""
+    """Minus the short share of volume over the `sessions` trading days before each month's last session. FINRA posts
+    a session's file in the evening, after the close at which the signal is read, so the month-end session itself is
+    not known yet."""
     tickers = list(tickers)
     out = pd.DataFrame(np.nan, index=dates, columns=tickers)
     for d in dates:
         if d < pd.Timestamp("2009-08-03"):
             continue
-        days, x = [], d
+        days, x = [], d - pd.Timedelta(days=1)
         while len(days) < sessions:
             if is_trading_day(x):
                 days.append(x)

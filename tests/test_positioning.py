@@ -111,17 +111,20 @@ def test_short_volume_signal_uses_the_last_five_sessions_and_is_causal(monkeypat
     calls = _serve(monkeypatch, tmp_path / "full")
     full = P.short_volume_signal(dates, TICKERS)
     days = sorted({c.rsplit("shvol", 1)[-1][:8] for c in calls})
-    # December's five sessions skip Christmas Day; January's last five (25-31) are not in the excerpt
-    assert days[:5] == ["20231222", "20231226", "20231227", "20231228", "20231229"]
-    assert "20231225" not in days and "20231221" not in days and "20240102" not in days
-    short = 6_472_070 + 3_852_742 + 6_315_121 + 3_891_667 + 4_914_869
-    total = 13_573_593 + 11_354_301 + 18_507_950 + 12_447_595 + 14_012_980
+    # December's signal reads the five sessions before the month's last (29 December: FINRA posts that file after
+    # the close), skipping Christmas Day; 21 December is not in the excerpt (403), so four sessions are summed.
+    # January's sessions (24-30) are not in the excerpt either.
+    assert days[:5] == ["20231221", "20231222", "20231226", "20231227", "20231228"]
+    assert "20231225" not in days and "20231220" not in days and "20231229" not in days and "20240102" not in days
+    short = 6_472_070 + 3_852_742 + 6_315_121 + 3_891_667
+    total = 13_573_593 + 11_354_301 + 18_507_950 + 12_447_595
     assert full.loc["2023-12-29", "AAPL"] == pytest.approx(-short / total)
     assert np.isfinite(full.loc["2023-12-29", "BRK-B"]) and np.isnan(full.loc["2023-12-29", "ZZZZ"])
     assert full.loc["2024-01-31"].isna().all()                                  # no file for those sessions
     assert (full.loc["2023-12-29"].dropna() < 0).all() and (full.loc["2023-12-29"].dropna() > -1).all()
-    # truncation: with nothing published after 29 December the December value is the same
-    _serve(monkeypatch, tmp_path / "cut", until="2023-12-29")
+    # truncation: with nothing published after 28 December (the month-end session's file not out yet) the December
+    # value is the same
+    _serve(monkeypatch, tmp_path / "cut", until="2023-12-28")
     part = P.short_volume_signal(dates, TICKERS)
     pd.testing.assert_series_equal(full.loc["2023-12-29"], part.loc["2023-12-29"])
     # before FINRA's files start (August 2009) the signal is missing, without a download
@@ -186,14 +189,17 @@ def test_insider_signals_count_distinct_buyers_by_filing_date_over_90_days(trade
     assert b.loc["2020-04-30"].tolist() == [4, 2, 0, 0]                         # Hobson (16 Jan) left the window
     assert b.loc["2020-05-29"].tolist() == [3, 2, 0, 0]                         # Woods (11 Feb) left it
     assert b.loc["2020-06-30"].tolist() == [0, 0, 0, 0]
-    # the window is (d - 90 days, d], by filing date: Woods filed on 11 February 2020
-    edge = pd.DatetimeIndex([pd.Timestamp("2020-02-11") + pd.Timedelta(days=89),
-                             pd.Timestamp("2020-02-11") + pd.Timedelta(days=90)])
+    # the window is the 90 days to d by the day after filing: Woods filed on 11 February 2020, so he is known from
+    # 12 February and leaves the window 90 days after that
+    edge = pd.DatetimeIndex([pd.Timestamp("2020-02-12") + pd.Timedelta(days=89),
+                             pd.Timestamp("2020-02-12") + pd.Timedelta(days=90)])
     e = P.insider_signals(trades, edge, ["XOM"])["insider_buyers"]["XOM"]
     assert e.iloc[0] == 3 + 1 and e.iloc[1] == 3
-    # Weldon bought on 6 and 9 March and filed on 13 March: he counts from the filing date, not the trade date
-    mid = P.insider_signals(trades, pd.DatetimeIndex(["2020-03-12", "2020-03-13"]), ["XOM"])["insider_buyers"]["XOM"]
-    assert mid.tolist() == [1, 2]
+    # Weldon bought on 6 and 9 March and filed on 13 March: he counts from the day after the filing (EDGAR dates a
+    # Form 4 accepted until 10 pm that day, after the close), never from the trade date
+    mid = P.insider_signals(trades, pd.DatetimeIndex(["2020-03-12", "2020-03-13", "2020-03-16"]),
+                            ["XOM"])["insider_buyers"]["XOM"]
+    assert mid.tolist() == [1, 1, 2]
     # without market values the net-purchase signal is missing rather than a raw dollar amount
     assert s["insider_net"].isna().all().all()
 
@@ -211,6 +217,51 @@ def test_insider_net_is_net_purchases_over_market_value(trades):
     assert net.loc["2020-03-31", "CVX"] == pytest.approx((cvx_buys - cvx_sales) / 1e9)
     assert np.isnan(net.loc["2020-03-31", "JPM"])
     assert net.loc["2020-01-31", "JPM"] == pytest.approx((14_600 * 136.39 - 62_085 * 131.94) / 1e9)
+
+
+def test_repeated_amendments_and_typing_errors(trades):
+    t = trades.copy()
+    hobson = t[(t["symbol"] == "JPM") & (t["code"] == "P")]
+    again = hobson.assign(doc="4/A", filed=pd.Timestamp("2020-02-20"))           # a 4/A restating the whole form
+    fixed = hobson.assign(doc="4/A", filed=pd.Timestamp("2020-02-21"), shares=14_700.0, value=14_700 * 136.39)
+    both = pd.concat([t, again, fixed], ignore_index=True)
+    kept = P.drop_repeated_amendments(both)
+    assert len(kept) == len(t) + 1                                              # the repeat goes, the correction stays
+    assert (kept["doc"] == "4/A").sum() == 1 and kept.loc[kept["doc"] == "4/A", "shares"].iloc[0] == 14_700
+    # a row worth more than MAX_TRADE_VALUE (the total typed into the price field) keeps its buyer, not its value
+    import io
+    import zipfile
+    src = zipfile.ZipFile(io.BytesIO((FIX / "form345_2020q1_excerpt.zip").read_bytes()))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name in src.namelist():
+            body = src.read(name)
+            if name == "NONDERIV_TRANS.tsv":
+                tab = pd.read_csv(io.BytesIO(body), sep="\t", dtype=str, keep_default_na=False)
+                tab.loc[tab["TRANS_CODE"] == "P", "TRANS_PRICEPERSHARE"] = "1000000000"   # every purchase: $1bn a share
+                body = tab.to_csv(sep="\t", index=False).encode("utf-8")
+            z.writestr(name, body)
+    bad = P.parse_form345(buf.getvalue())
+    assert len(bad) == len(trades)
+    assert bad.loc[bad["code"] == "P", "value"].isna().all() and bad.loc[bad["code"] == "S", "value"].notna().all()
+    b = P.insider_signals(bad, MONTH_ENDS, ["XOM", "CVX", "JPM"])["insider_buyers"]
+    pd.testing.assert_frame_equal(b, P.insider_signals(trades, MONTH_ENDS, ["XOM", "CVX", "JPM"])["insider_buyers"])
+
+
+def test_insider_quarters_cached_by_the_old_parser_are_parsed_again(monkeypatch, tmp_path, trades):
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    url = "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/2020q1_form345.zip"
+    monkeypatch.setattr(P, "insider_files", lambda: [url])
+    store.write_frame("insider", "2020q1", trades.drop(columns=["doc", "trans_date"]))   # an old-format cache
+    calls = []
+    blob = (FIX / "form345_2020q1_excerpt.zip").read_bytes()
+
+    class _Zip:
+        content = blob
+    monkeypatch.setattr(P, "_get", lambda u, **kw: calls.append(u) or _Zip())
+    got = P.insider_trades()
+    assert calls == [url] and "doc" in got.columns and len(got) == len(trades)
+    assert P.insider_trades() is not None and calls == [url]                    # the new cache is used next time
 
 
 @pytest.mark.parametrize("cut", ["2020-01-31", "2020-02-28", "2020-03-13"])
