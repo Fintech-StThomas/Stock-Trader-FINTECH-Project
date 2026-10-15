@@ -55,8 +55,10 @@ optional next work.
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on the branch the session is given;
   never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12; 283 tests),
-  with an empty `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests.
+* Before every push: `LIGHTHOUSE_OFFLINE=1 MPLBACKEND=Agg python -m pytest` (CI runs Python 3.10 and 3.12; 284 tests),
+  with an empty `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. CI's 3.10 job runs
+  pandas 2 (pandas 3 needs Python 3.11): after re-recording data or touching dates, run the suite once under pandas 2
+  as well (a virtualenv with `pandas>=2.3,<3`), which is how the microsecond-date failure was found.
 * After any scoring change: `python scripts/cross_ticker_evaluation.py --check`; if numbers change on purpose,
   regenerate and explain them in the docs (METHODOLOGY §8 and §11).
 * $0 budget: free sources and free keys only (FRED, Alpaca paper); paid providers only as stubs. Read terms, respect

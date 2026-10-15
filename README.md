@@ -160,7 +160,7 @@ data/sample/           bundled real historical data: prices, SEC filings (facts,
 reports/examples/      example report, charts and the cross-ticker evaluation
 reports/research/      the research harness's experiment log, hold-out log, results and verdicts
 docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · ROADMAP_STATUS.md
-tests/                 283 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
+tests/                 284 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
                        and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 
