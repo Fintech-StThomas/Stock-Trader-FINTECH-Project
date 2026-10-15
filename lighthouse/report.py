@@ -1,7 +1,7 @@
 """Plain-English report generation (Markdown)."""
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -236,6 +236,9 @@ def build_memo(memo) -> str:
             ("Net debt", f"${f.net_debt / 1e9:,.2f}bn", _x(r["net_debt_ebitda"]) + " EBITDA"),
             ("Stock-based pay", _p(r["sbc_revenue"]) + " of revenue", "")]
     L.append(_md_table(pd.DataFrame(rows, columns=["line", "value", "note"]).set_index("line")) + "\n")
+    ind = getattr(m, "industry", None)
+    if ind is not None:
+        L += _industry_lines(ind, m.profile.get("sicDescription"))
 
     L.append("## Valuation")
     if v is not None:
@@ -277,6 +280,9 @@ def build_memo(memo) -> str:
         L.append(_md_table(show) + "\n")
         L += [f"- {x}" for x in pc.explanation]
         L.append("")
+    fv = getattr(m, "fundamental_view", None)
+    if fv is not None:
+        L += _fundamental_view_lines(fv)
 
     L.append("## Quality and balance sheet")
     for x in m.quality + m.balance:
@@ -302,6 +308,34 @@ def build_memo(memo) -> str:
     L.append("- The text is generated from the numbers by fixed rules; it cannot be backtested as judgment, and it is not "
              "investment advice.")
     return "\n".join(L)
+
+
+def _industry_lines(ind, sic_description: Optional[str] = None) -> List[str]:
+    """The memo's industry section: the metrics the generic ratios misread for this kind of company, each with the
+    period it covers and the filing that made it public."""
+    L = [f"## Industry metrics: {ind.label} (SIC {ind.sic}{' ' + sic_description if sic_description else ''})",
+         f"*From the filings public before {ind.as_of.date()}: a value is used from the session after its filing date. "
+         "n/a means the company did not tag an input under the standard us-gaap concept for that period (the note "
+         "names it); nothing is estimated.*\n",
+         _md_table(ind.table()) + "\n"]
+    if ind.notes:
+        L += [f"- Note: {x}" for x in ind.notes] + [""]
+    return L
+
+
+def _fundamental_view_lines(fv) -> List[str]:
+    """The memo's opt-in section: its own numbers' fundamental beacons against the peer medians (or, without peers,
+    the sector norms and why), with the score both ways."""
+    score = lambda s: "n/a" if s is None else f"{s:.0f}/100"   # noqa: E731
+    head = "against the peer medians" if fv.peer_based else "against the sector norms"
+    L = [f"## Fundamental beacons {head}",
+         f"*Norms: {fv.source}. Fundamental score {score(fv.score)} {head}"
+         + (f" ({score(fv.sector_score)} against the sector norms for {fv.sector or 'the overall market'})"
+            if fv.peer_based else "")
+         + ". The rule-based verdict keeps the sector norms it was tested with; P/E, P/B, EV/EBITDA and operating "
+           "margin are scored against the norms, the other beacons against fixed bands.*\n",
+         beacon_table(fv.beacons) + "\n"]
+    return L
 
 
 LABELS_PEERS = {"pe": "P/E", "ev_ebitda": "EV/EBITDA", "ev_sales": "EV/sales", "pb": "P/B", "fcf_yield": "FCF yield",

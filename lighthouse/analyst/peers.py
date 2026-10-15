@@ -99,12 +99,15 @@ def compare(target: Financials, peers: Dict[str, Financials], level: str = "") -
     return PeerComparison(target.ticker, level, list(peers), tab, prem, text, pred)
 
 
-def peer_norms(cmp: PeerComparison) -> Dict[str, Optional[float]]:
-    """Peer medians in the shape of `fundamentals.SECTOR_NORMS` (P/E, P/B, EV/EBITDA, operating margin)."""
+def peer_norms(cmp: PeerComparison) -> Dict[str, object]:
+    """Peer medians in the shape of `fundamentals.SECTOR_NORMS` (P/E, P/B, EV/EBITDA, operating margin), plus the
+    `label` and `source` that `fundamentals.fundamental_beacons(norms=...)` writes into each beacon that used them.
+    A median that is missing or not positive (a multiple) is None: the beacon then keeps the sector norm."""
     med = cmp.table.loc["peer median"]
     clean = lambda v: float(v) if v is not None and np.isfinite(v) and v > 0 else None   # noqa: E731
     return {"pe": clean(med.get("pe")), "pb": clean(med.get("pb")), "ev_ebitda": clean(med.get("ev_ebitda")),
             "op_margin": float(med["operating_margin"]) if np.isfinite(med.get("operating_margin", np.nan)) else None,
+            "label": "peer median",
             "source": f"median of {len(cmp.peers)} peers ({cmp.level}): {', '.join(cmp.peers)}"}
 
 

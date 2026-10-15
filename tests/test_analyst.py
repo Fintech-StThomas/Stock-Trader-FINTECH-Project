@@ -112,6 +112,57 @@ def test_peer_comparison_premium_and_norms():
     assert "6 peers" in norms["source"]
 
 
+def test_fundamental_view_scores_the_memo_numbers_against_peer_medians():
+    target = company(price=150.0, ticker="T")
+    dear = {f"P{i}": company(price=400.0 + 20 * i, ticker=f"P{i}") for i in range(6)}     # same business, dearer
+    cmp = compare(target, dear, "4-digit SIC 7372")
+    snap = memo_mod.fundamental_snapshot(target, "Technology")
+    r = target.ratios()
+    assert snap.pe_trailing == pytest.approx(r["pe"]) and snap.ev_ebitda == pytest.approx(r["ev_ebitda"])
+    assert snap.pe_forward is None and snap.peg is None                  # no estimates in free data
+    view = memo_mod.fundamental_view(target, cmp, "Technology")
+    assert view.peer_based and "6 peers (4-digit SIC 7372)" in view.source
+    pe = next(b for b in view.beacons if b.key == "valuation:pe")
+    assert "vs peer median" in pe.value and "6 peers" in pe.rationale
+    assert view.score > view.sector_score                               # cheap against its peers, not the sector
+    none = memo_mod.fundamental_view(target, None, "Technology", why_no_peers="peer search off")
+    assert not none.peer_based and "peer search off" in none.source and none.score == none.sector_score
+    loss = memo_mod.fundamental_snapshot(company(ni=-1e9))
+    assert loss.pe_trailing == -1.0                                     # the snapshot's "negative earnings"
+
+
+def test_memo_peer_norms_are_opt_in(msft, monkeypatch):
+    from lighthouse.report import _fundamental_view_lines
+    kw = dict(as_of="2016-11-15", source="sample", risk_free=0.005, equity_premium=0.06)
+    plain = memo_mod.build("MSFT", peers=False, **kw)
+    assert plain.fundamental_view is None and "## Fundamental beacons" not in plain.markdown()
+    off = memo_mod.build("MSFT", peers=False, peer_norms=True, **kw)
+    assert not off.fundamental_view.peer_based and "peer search off" in off.fundamental_view.source
+    text = off.markdown()
+    assert "## Fundamental beacons against the sector norms" in text
+    # the section is added; nothing else in the memo changes
+    assert text.replace("\n".join(_fundamental_view_lines(off.fundamental_view)) + "\n", "") == plain.markdown()
+    assert (off.stance, off.thesis, off.criteria) == (plain.stance, plain.thesis, plain.criteria)
+    # with peers (the offline sample pack has no filing lists to find them, so the search is stood in for)
+    peers = {f"P{i}": company(price=400.0 + 20 * i, ticker=f"P{i}") for i in range(6)}
+    monkeypatch.setattr(memo_mod, "find_peers", lambda t, f, sic, cands, source="auto", n=8:
+                        compare(f, peers, "4-digit SIC 7372"))
+    m = memo_mod.build("MSFT", peers=True, peer_norms=True, **kw)
+    assert m.fundamental_view.peer_based and m.fundamental_view.sector == "Technology"
+    md = m.markdown()
+    assert "## Fundamental beacons against the peer medians" in md and "vs peer median" in md
+    assert "against the sector norms for Technology" in md
+    assert m.rule_verdict == plain.rule_verdict
+
+
+def test_memo_cli_peer_norms_flag(capsys):
+    from lighthouse.__main__ import main
+    assert main(["memo", "MSFT", "--source", "sample", "--as-of", "2016-11-15", "--no-signals", "--no-peers",
+                 "--peer-norms"]) == 0
+    out, err = capsys.readouterr()
+    assert "## Fundamental beacons against the sector norms" in out and "--peer-norms needs the peer search" in err
+
+
 def test_red_flags():
     # net income far above cash flow, thin interest cover, a big maturity against little cash
     f = company(ni=8e9, ocf=2e9, interest=6e9, debt_due_1y=20e9, cash=1e9)   # $10bn operating income
