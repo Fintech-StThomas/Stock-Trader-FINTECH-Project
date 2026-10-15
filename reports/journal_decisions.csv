@@ -1,0 +1,1 @@
+id,recorded_at,as_of,ticker,horizon,risk,side,verdict,status,composite,fundamental,technical,regime,price,priced_from,entry_limit,stop,target1,target2,trend_exit,signal_exit,exit_style,time_stop,shares,notional,risk_usd,account,cash,p_win,hist_trades,horizon_days,inputs,data_version,code_version,run_id,note
