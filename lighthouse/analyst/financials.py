@@ -126,6 +126,7 @@ def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataF
         t_now["gross_profit"] = t_now["revenue"] - t_now["cost_of_revenue"]
     last = q.iloc[-1]
     bs = {c: float(last[c]) for c in STOCKS if c in q and pd.notna(last[c])}
+    shares_filed = last.get("filed") if "cover_shares" in bs else None
     # balance-sheet items missing in the last quarter (e.g. debt maturities, which only the 10-K reports): the latest
     # annual value
     if len(a):
@@ -133,9 +134,12 @@ def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataF
         for c in STOCKS:
             if c not in bs and c in a and pd.notna(la[c]):
                 bs[c] = float(la[c])
+                if c == "cover_shares":
+                    shares_filed = la.get("filed")
     px = prices["Close"][prices.index <= d]
     if px.empty:
         raise ValueError(f"{ticker}: no price on or before {d.date()}")
+    acts = None
     if actions is not None and not actions.empty:
         acts = to_units_of(actions, prices.index[-1])
         po = price_only_close(prices["Close"], acts)
@@ -144,6 +148,14 @@ def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataF
         price = float(px.iloc[-1])
         notes.append("no dividend/split history: the price is the adjusted close (valuation ratios may be off)")
     shares = bs.get("cover_shares", float("nan"))
+    # the price is as traded on `d`, the cover-page count as of its filing: a split in between (AAPL's 4-for-1 on
+    # 31 August 2020, two months before the next 10-K) would put the two in different share units
+    if acts is not None and np.isfinite(shares) and shares_filed is not None and pd.notna(shares_filed):
+        k = float(split_factor_after([pd.Timestamp(shares_filed)], acts, d)[0])
+        if k != 1.0:
+            shares *= k
+            notes.append(f"cover-page share count x {k:g} for the split since the filing of "
+                         f"{pd.Timestamp(shares_filed).date()}")
     if not np.isfinite(shares) and "shares" in q:
         shares = float(q["shares"].dropna().iloc[-1])
         notes.append("shares outstanding from the weighted-average diluted count (no cover-page count)")

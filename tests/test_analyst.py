@@ -285,6 +285,23 @@ def msft():
     return px, pit.load_statements("MSFT", source="sample"), load_actions("MSFT", source="sample")
 
 
+def test_share_count_follows_a_split_made_after_the_filing():
+    """The price is as traded on the date and the cover-page count as of its filing: AAPL split 4-for-1 on 31 August
+    2020, a month after its 10-Q (4.28bn shares) and two before its 10-K. Recorded sample pack."""
+    px = load_prices("AAPL", start="2000-01-01", years=None, source="sample")
+    st, acts = pit.load_statements("AAPL", source="sample"), load_actions("AAPL", source="sample")
+    before = financials_as_of("AAPL", st, px, acts, "2020-08-28")
+    after = financials_as_of("AAPL", st, px, acts, "2020-09-15")
+    assert before.last_filed == after.last_filed == pd.Timestamp("2020-07-31")
+    assert after.shares == pytest.approx(4 * before.shares)
+    assert any("x 4" in n and "2020-07-31" in n for n in after.notes)
+    assert after.market_cap / before.market_cap == pytest.approx(after.price * 4 / before.price, rel=1e-9)
+    assert 1.5e12 < after.market_cap < 2.5e12                      # not a quarter of it ($0.49tn unadjusted)
+    later = financials_as_of("AAPL", st, px, acts, "2020-11-02")   # the 10-K's count is after the split already
+    assert later.last_filed == pd.Timestamp("2020-10-30") and not any("split" in n for n in later.notes)
+    assert later.shares == pytest.approx(after.shares, rel=0.02)
+
+
 def test_financials_use_only_filings_public_on_the_date(msft):
     """The numbers on date D are the same whether or not later filings exist (no look-ahead)."""
     px, st, acts = msft
