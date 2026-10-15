@@ -114,43 +114,65 @@ its prices stop (`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, 
 Cash earns the T-bill, stops rest as orders and costs scale with liquidity in these runs. We say it out loud: as a way to
 time single stocks, the rule has shown no edge. It delivers the risk profile you asked for (lower volatility and drawdown
 on nearly every stock), at a large cost in return. Nor do its scores pick stocks: on the point-in-time S&P 500 none of
-them ranked next month's returns, before or after costs (`docs/METHODOLOGY.md` §8b). §8 has the timing details, and
-`docs/ROADMAP_STATUS.md` the research that follows from it.
+them ranked next month's returns, before or after costs. Neither did any of 36 further signals built from free data
+(value, quality, earnings, momentum, insider and short-sale activity, 13F breadth, 10-K and earnings-release text): three
+passed the 2009-2017 test and none the 2018-2026 hold-out, so none carries weight in the verdict (`docs/METHODOLOGY.md`
+§8b, `docs/DATA_AND_ML.md` §5-6). §8 has the timing details, and `docs/ROADMAP_STATUS.md` the research behind it.
 
 ## Repository map
 
 ```
 lighthouse/            the product (pure Python, pandas/numpy/matplotlib)
   config.py            investor profiles, strategy parameters, verdict bands  <- all the numbers to defend
-  data.py              live/offline data loading, cleaning report, fundamentals parsing, caching
+  data.py              live/offline data loading, cleaning report, fundamentals parsing, caching, NYSE calendar
+  http.py · store.py   polite HTTP per host (SEC User-Agent and rate limit, retries, offline guard) · Parquet cache
+  edgar.py · pit.py    SEC EDGAR client (facts, filings, form indexes, bulk data sets) · point-in-time statements
+  membership.py        historical S&P 500 membership; total_return.py dividends, splits, delisting rules
+  costs.py · factors.py  liquidity-scaled trading costs · Ken French factors and industries
   indicators.py        causal SMA/EMA/WMA/Hull MA/Holt trend/RSI/MACD/low-lag price bands/ATR/OBV/volatility/drawdown
   technicals.py        technical beacons and score
-  fundamentals.py      fundamental beacons, sector norms, point-in-time scores
+  fundamentals.py      fundamental beacons, sector norms (or peer medians, opt-in), point-in-time scores
   regime.py            market weather
   decision.py          composite score, verdict, exit level, position sizing (cash-capped, long or short stops)
   tradeplan.py         long/short trade tickets, exit plan, stop-loss & take-profit management, historical setup test, idea allocation, position replay
   portfolio.py         Ledoit-Wolf / Bayes-Stein estimates, six allocation methods, caps, vol target, risk report, walk-forward test, goals
+  journal.py · scorecard.py · broker.py   append-only decision journal · forward scorecard · Alpaca paper adapter
+  research/            the cross-sectional harness (point-in-time S&P 500 panel, ICs, quintiles after costs,
+                       factor alphas, hold-out guard, experiment log) and the signal library: fundamental, price,
+                       panel, positioning, 13F, earnings-reaction, 8-K release tone, 10-K text; blend.py neutralises
+                       survivors to sector and size
+  analyst/             single-stock toolkit: point-in-time financials, linked model, DCF / reverse DCF, peers,
+                       industry metrics (banks, REITs, software, insurers), XBRL segments, checks, memo, thesis tracker
+  text.py · llm.py     deterministic text features (Loughran-McDonald) · optional local LLM (off by default)
   universe.py          pre-built universes, curated sector labels (fallback: the fundamentals snapshot's sector)
   backtest.py          point-in-time engine, metrics, layers, sensitivity, walk-forward, regime breakdown
   engine.py            analyze() pipeline and AnalysisResult
   screener.py          watchlist ranking
-  report.py            Markdown report
+  report.py · memo.py  Markdown report and investment memo
   charts.py            static charts (CLI, report, notebook)
   interactive.py       interactive Plotly charts (web app)
   __main__.py          CLI
 app.py                 the web app (Streamlit + Plotly)
 notebooks/Lighthouse.ipynb   end-to-end Colab/Jupyter deliverable (built by scripts/build_notebook.py)
-data/sample/           bundled real historical data + an offline fundamentals fixture
+scripts/               the evaluations behind every published number (cross_ticker, research_signals, exit plans,
+                       turnover, band lag) and the sample-pack recorders
+data/sample/           bundled real historical data: prices, SEC filings (facts, filing lists, profiles), dividends
 reports/examples/      example report, charts and the cross-ticker evaluation
-docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md
-tests/                 85 pytest tests (indicators, scoring, sizing, no-look-ahead, trade tickets, portfolios, pipeline, app)
+reports/research/      the research harness's experiment log, hold-out log, results and verdicts
+docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · ROADMAP_STATUS.md
+tests/                 283 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded SEC
+                       and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 
 ## Limitations
 
-Sector norms are assumptions, not live peer data; Yahoo supplies only ~5 years of statements; the backtests ignore
-taxes (and borrow fees for shorts); the strategy backtest checks stops at the close; stops are orders, not guaranteed
-prices; the evaluation universes are survivorship-biased. `docs/DATA_AND_ML.md` lists the data sources that would close
-these gaps and how machine learning could be added safely. Lighthouse is decision support, not investment advice.
+Free data drops the dead: Yahoo has no prices for most delisted S&P 500 members, so every cohort and cross-sectional
+result is a bound, not an estimate (coverage is published with each). Fundamentals start with XBRL in 2009; sector norms
+are assumptions (peer medians are opt-in in the memo); trading costs come from daily ranges, which overstate large-cap
+spreads; borrow fees are an assumption; the backtests ignore taxes; stops are orders, not guaranteed prices. The DCF is
+only as good as its inputs (a five-year fade to the long-run growth rate and a historical equity premium). Paper trading
+is tested against Alpaca's documented formats, not a live account. `docs/DATA_AND_ML.md` lists what free data can and
+cannot prove, the sources that would close these gaps and how machine learning could be added safely. Lighthouse is
+decision support, not investment advice.
 
 MIT licensed.

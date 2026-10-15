@@ -8,11 +8,11 @@ phases; the budget is $0 (free data, free libraries, free hosting).
 | 1. Free data foundations | **done** | SEC EDGAR client and point-in-time statements by filing date; historical S&P 500 membership with coverage; dividends, splits, total returns and delisting rules; live-mode rule for tickets; survivorship-aware cohort evaluation |
 | 2. Forward journal and paper trading | **done** (paper fills untested against a live account: no keys here) | Append-only SQLite journal (`lighthouse/journal.py`, triggers refuse UPDATE/DELETE) with inputs, data version and code commit; virtual positions replayed with each ticket's rules; scorecard (`lighthouse/scorecard.py`: hit rate vs SPY, follow-the-verdict vs buy-and-hold vs SPY, calibration, Brier and Brier skill); Alpaca paper adapter (`lighthouse/broker.py`: OTO / bracket orders, review exits at the open, reconciliation of fills vs the backtest's open fills); `python -m lighthouse journal run / score / export`; `.github/workflows/journal.yml` after every close, journal kept on the `journal-data` branch, an issue opened when an exit fires |
 | 3. Research harness | **done** | `lighthouse/research/`: month-end point-in-time S&P 500 panel (volume screen, coverage against every member), rank IC with Newey-West t, quintiles, long-short and long-only returns after per-stock costs and borrow, turnover, Fama-French 5 + momentum alphas, both delisting rules, tuning 2009-2017 / hold-out 2018+ evaluated once (guarded and logged), deflated Sharpe from the trial count, append-only experiment log (`reports/research/`). Realistic costs in the strategy backtest (liquidity spread and impact, resting stops with gap fills, borrow fee, cash at the T-bill). Product signals tested: **none survives** (METHODOLOGY §8b). Exit plans re-run on the 2009 cohort |
-| 4. Signal library | **code built and unit-tested, not yet evaluated** | Fundamental (SUE, GP/A, ROIC and trend, accruals, Piotroski, Altman, Beneish, cash conversion, value vs peers and own history, net issuance, shareholder yield, FCF after SBC), panel (industry and residual momentum), price (12-1 momentum, low volatility, 1-month reversal, 52-week high, size), positioning (insider Form 4, FINRA short volume, short interest / days to cover), events (3-day earnings reaction), 10-K text (Lazy Prices similarity, risk-factor similarity, Loughran-McDonald tone, fog), 13F breadth. Signals cached; the tuning and hold-out runs, the sector/size-neutral blend and any decision.py weights are next session's work |
-| 5. Single-stock analyst toolkit | **built, tested offline** | `lighthouse/analyst/`: point-in-time financials, linked 3-statement model, WACC (FRED + Ken French), bull/base/bear DCF after SBC, reverse DCF, own-history valuation bands, SIC + market-value peers, red flags, balance-sheet risk incl. debt maturities, capital allocation, catalyst calendar, investment memo (`python -m lighthouse memo`). Not yet: segments, industry metrics, peer norms in the beacons, MSFT end-to-end on live data |
-| 6. Senior-analyst layer | **built, tested offline** | Variant view (price-implied vs trend growth), thesis tracker with kill criteria checked on new filings, coverage monitor with journal calibration, conviction scale (never above the risk-rule size), post-mortems (`lighthouse/analyst/thesis.py`, `python -m lighthouse thesis`) |
-| 7. Text reading without a paid LLM | **built, tested offline** | `lighthouse/text.py` deterministic features; `lighthouse/llm.py` optional local Ollama (off by default, citations and number checks, red team); Anthropic adapter a refusing stub |
-| 8. App and docs | **partly** | App tabs Analyst memo, Coverage, Journal, Research (st.fragment). README / METHODOLOGY / DATA_AND_ML updates for Phases 4-7, the handoff page and the PR are pending |
+| 4. Signal library | **done** | Fundamental (SUE, GP/A, ROIC and trend, accruals, Piotroski, Altman, Beneish, cash conversion, value vs peers and own history, net issuance, shareholder yield, FCF after SBC), panel (industry and residual momentum), price (12-1 momentum, low volatility, 1-month reversal, 52-week high, size), positioning (insider Form 4, FINRA short volume, days to cover), events (3-day earnings reaction, earnings-release tone on half the members), 10-K text (Lazy Prices, risk-factor similarity, Loughran-McDonald tone, fog), 13F breadth; parsers tested on recorded FINRA and SEC excerpts. Tuning and the hold-out run once (15 October 2026): **none survives**; the sector/size-neutral blend (`research/blend.py`) is built and tested but has no survivors to blend; `decision.py` unchanged (METHODOLOGY §8b) |
+| 5. Single-stock analyst toolkit | **done** | `lighthouse/analyst/`: point-in-time financials, linked 3-statement model, WACC (FRED + Ken French), bull/base/bear DCF after SBC with a value-driver terminal value, reverse DCF, own-history valuation bands, SIC + market-value peers, peer medians in the beacons (opt-in, `memo --peer-norms`), industry metrics (banks, REITs, software, insurers), business segments from the 10-K's XBRL, red flags, balance-sheet risk incl. debt maturities, capital allocation, catalyst calendar, investment memo. Run end to end on MSFT with live data; the facts cache refetches when the concept list grows; sample pack re-recorded |
+| 6. Senior-analyst layer | **done** (live check on one new 10-K) | Variant view (price-implied vs trend growth), thesis tracker with kill criteria checked on new filings, coverage monitor with journal calibration, conviction scale (never above the risk-rule size), post-mortems (`lighthouse/analyst/thesis.py`, `python -m lighthouse thesis`) |
+| 7. Text reading without a paid LLM | **done** (the local LLM is untested live: no Ollama here) | `lighthouse/text.py` deterministic features (used by the 10-K and 8-K signals); `lighthouse/llm.py` optional local Ollama (off by default, citations and number checks, red team); Anthropic adapter a refusing stub |
+| 8. App and docs | **done** | App tabs Analyst memo, Coverage, Journal, Research; README, METHODOLOGY, DATA_AND_ML ("which signals survived", "what free data can and cannot prove"), this page and the handoff |
 
 ## Phase 1 findings
 
@@ -70,6 +70,34 @@ phases; the budget is $0 (free data, free libraries, free hosting).
   the user decided to keep targets for the short horizon, because a survivor-only cohort favours letting winners run;
   docs/NEXT_SESSION.md). Shorts lost
   under both (-0.29R targets, -0.52R trend): a survivor-only, mostly rising cohort is the worst case for shorts.
+
+## Phase 4 findings (15 October 2026)
+
+* **No library signal survives the pre-registered rule.** 36 signals, 46 trials with the product's own. Three passed
+  tuning (FCF yield, FCF yield after SBC, size); in the hold-out the FCF yields kept a positive but insignificant IC
+  (+0.009, t 0.7) and size reversed. Deflated Sharpe ratios about 0. No blend, no weights in `decision.py`. Full table:
+  METHODOLOGY §8b; files: `reports/research/`.
+* **Short-sale volume ranks stocks but cannot pay its costs** at monthly rebalancing (IC t 3.5 / 1.9; turnover 60-66% a
+  month; -6.5% a year net). **Risk-factor similarity** was significant only in the hold-out (t 2.3): a forward-journal
+  candidate, not a survivor.
+* **Fixed before the hold-out**: five positioning parser bugs found by tests on real FINRA and SEC excerpts, a few
+  hours of same-session look-ahead in the Form 4 and short-volume timing, repeated 4/A amendments, a $1.56 trillion
+  typing error, headerless 2010 FINRA files, and the text workers' share of the SEC rate (METHODOLOGY §11).
+* **Coverage**: 645 of 883 members since 2008 priced; 80-90% of member-months tested in the hold-out (Altman Z 46%,
+  GP/A 62%), 23-71% in tuning (fundamental signals lowest).
+
+## Phase 5-7 notes (15 October 2026)
+
+* MSFT memo end to end on live data: peers (SIC 7372), peer-median beacons, software metrics (RPO $684bn, 2.1x revenue,
+  +82% a year), segments from the FY2026 10-K (Intelligent Cloud $137.8bn, +29.7%), thesis saved and checked. It found a
+  DCF flaw: the terminal value carried the build-out capex (35% of revenue) forever; now a value-driver terminal value
+  (base case $94 -> $199 a share at an 11.5% WACC; the price implies 36.6% growth a year for five years).
+* Thesis tracker on a real new filing: a thesis opened as of 1 May 2026 saw the 29 July 10-K, no kill criterion broke,
+  and the post-mortem's revenue growth is now annualised over quarter ends (it read +9.6% instead of about +18%).
+* Industry metrics depend on standard us-gaap tags: WFC, BAC (2020-22) and JPM (2018-23) lack some bank lines, PLD and
+  SPG have no gains-on-sale tag (no FFO), ALL stopped tagging losses in 2024.
+* The local LLM red team (`memo --red-team`, Ollama) was not run: no local model in this environment; nothing it writes
+  feeds a score.
 
 ## Next
 

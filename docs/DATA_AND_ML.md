@@ -15,8 +15,8 @@ were checked in October 2026.
 | Daily bars only, and Yahoo's quote | Signals use finished sessions and "buy now" is priced from Yahoo's latest quote with its timestamp, which can lag by up to 15 minutes on some exchanges and is not your broker's market | A real-time quote from a broker API or a consolidated (SIP) feed |
 | ~~Only ~4–5 years of fundamentals, dated by fiscal period end~~ (done October 2026, free) | The backtest's fundamental gate only acted in recent years, and period end ≠ the date the numbers became public | SEC EDGAR XBRL facts keyed by **filing date** (`lighthouse/edgar.py`, `lighthouse/pit.py`), from 2009 |
 | Survivorship bias (partly addressed, free) | Testing only on companies that still exist (and won) flatters every strategy | Historical S&P 500 membership from free sources (`lighthouse/membership.py`) with coverage reported; prices for delisted stocks still need a paid source (Norgate, Sharadar, CRSP), so results are published as bounds |
-| ~~Fixed 2% risk-free rate~~ (done October 2026) | Sharpe ratios were overstated when T-bills paid ~4%, understated when they paid ~0% | Live analyses now use the 3-month T-bill (FRED `DTB3`) day by day; offline and sample data keep 2%. Backtest cash still earns 0% |
-| No earnings calendar, short interest or borrow cost | Stops can be gapped through on earnings; shorts can be expensive or recalled | Event and securities-lending data |
+| ~~Fixed 2% risk-free rate~~ (done October 2026) | Sharpe ratios were overstated when T-bills paid ~4%, understated when they paid ~0% | Live analyses use the 3-month T-bill (FRED `DTB3`) day by day, and uninvested backtest cash earns it; offline and sample data keep 2% |
+| No earnings calendar or borrow cost (short interest: partly free) | Stops can be gapped through on earnings; shorts can be expensive or recalled | Earnings dates come from 8-K Item 2.02 filing dates (free, after the fact: no forward calendar); FINRA short interest is free from 2018 and short-sale volume from 2009 (`lighthouse/research/positioning.py`); borrow fees and availability still need a broker or a paid source |
 
 ## 2. Recommended sources
 
@@ -114,3 +114,53 @@ A `lighthouse/ml.py` module that (1) builds the dataset from `setup_statistics` 
 k-fold CV with an embargo, (3) trains and calibrates a gradient-boosted classifier, and (4) adds an "ML confidence" line to
 each trade ticket next to its out-of-sample record. It should ship only if it beats the rules alone out of sample after
 costs. It needs `scikit-learn` (and optionally `lightgbm`) as dependencies.
+
+## 5. Which signals survived (October 2026)
+
+Every signal Lighthouse could build from free data went through the same test (`docs/METHODOLOGY.md` §8b): does it rank
+the point-in-time S&P 500 by next month's return, after costs, in 2009-2017 (tuning) and again in 2018-2026 (a hold-out
+evaluated once), under both delisting rules, with the deflated Sharpe ratio counting every configuration tried?
+
+| Group | Signals | Result |
+|---|---|---|
+| The product's own scores | six technical beacons, technical score, point-in-time fundamental score, composite | None survives; the technical beacons had negative ICs in 2009-2017 |
+| Fundamental (SEC XBRL, dated by filing) | SUE, GP/A, ROIC and its trend, accruals, Piotroski, Altman Z, Beneish, cash conversion, earnings / book / FCF / FCF-after-SBC / EBITDA yields, value vs own history, net issuance, shareholder yield | FCF yield and FCF yield after SBC passed tuning (IC t 2.3, 2.1) and kept their sign out of sample, too weakly to count (t 0.7) |
+| Price and size | 12-1 momentum, low volatility, 1-month reversal, 52-week high, size | Size passed tuning (t 2.0) and reversed out of sample |
+| Panel | industry momentum, residual momentum | None |
+| Positioning (Form 4, FINRA) | insider buyers, insider net purchases, short-sale volume, days to cover | Short-sale volume ranks stocks in both periods but turns over too fast to trade monthly after costs |
+| Events and text (8-K, 10-K) | 3-day earnings reaction, earnings-release tone, 10-K similarity, risk-factor similarity, Loughran-McDonald tone, fog | Risk-factor similarity was significant only in the hold-out; the tone hypotheses had the wrong sign |
+| Institutions (13F) | breadth of ownership | None |
+
+So **no signal carries weight in `lighthouse/decision.py`**, and the verdicts stay what they were: a risk-control rule,
+not a stock picker. The research harness, its experiment log and the hold-out guard stay in place for the next idea:
+a new signal is one more trial, and the forward journal (Phase 2) collects the out-of-sample data no backtest can.
+
+## 6. What free data can and cannot prove
+
+What it can prove:
+
+* **That a rule does not work.** A signal with negative or zero rank correlation over 17 years of the point-in-time
+  S&P 500, before any cost, does not work there; free data is enough to say no, and the harness said it 46 times.
+* **What a company reported, and when.** SEC XBRL facts carry the filing date of every number, so fundamentals are
+  point in time from 2009 (large filers), and the analyst toolkit's memo uses only what was public on its date.
+* **Risk.** Volatility, drawdowns and the effect of a regime filter or a stop are measured on prices, which are good
+  for the companies that still trade.
+
+What it cannot prove:
+
+* **That a rule works on the whole market.** Yahoo has no prices for most delisted members (238 of 883 S&P 500
+  members since 2008), and none of the priced ones stopped trading before today, so the dead are simply missing: every
+  cross-sectional and cohort result is a bound. Delisting returns (CRSP) or survivorship-free prices (Norgate,
+  Sharadar) would turn bounds into estimates.
+* **Small effects after costs in large caps.** Spreads come from daily highs and lows (Corwin-Schultz), which read
+  part of the day's volatility as spread (~35 bps for AAPL against a quoted 1-3 bps): a signal worth 1-2% a year after
+  realistic costs can look negative here. Every result also shows a flat 10 bps a side; quote or TAQ data would settle it.
+* **Anything before 2009 in fundamentals,** or for companies whose filings the ticker table no longer maps (most of the
+  dead), or for concepts a company tags under its own taxonomy (some banks' loans and intangibles, some REITs' gains).
+* **Borrow costs and short availability.** Assumed (0.5% a year), not measured.
+* **Forward-looking events.** Earnings dates are known from 8-K filings after the fact; there is no free forward
+  calendar or consensus estimate, so the reverse DCF stands in for expectations.
+
+The honest use of free data is therefore to reject ideas cheaply, to keep every number point in time, and to collect
+forward evidence in the journal. Paid data would be worth buying for one thing first: delisted prices and delisting
+returns, because the missing dead are the one bias no amount of free data can bound tightly.
