@@ -146,6 +146,33 @@ def test_short_volume_signal_uses_the_last_five_sessions_and_is_causal(monkeypat
     assert early.isna().all().all() and calls == []
 
 
+def test_the_short_volume_window_skips_one_off_closures(monkeypatch, tmp_path):
+    # Hurricane Sandy closed the market on 29 and 30 October 2012. October's signal reads the five sessions before
+    # the 31st: 22-26 October. Before October 2026 the calendar knew only the regular holidays, asked for the two
+    # closed days (no file: 403) and summed three sessions. Synthetic files (one facility, two symbols), one a day.
+    monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
+    vols = {"20121022": (100, 1_000), "20121023": (200, 1_000), "20121024": (300, 1_000), "20121025": (400, 1_000),
+            "20121026": (500, 1_000), "20121019": (900, 1_000)}
+    calls = []
+
+    def fake(url, **kw):
+        name = url.rsplit("/", 1)[-1]
+        calls.append(name)
+        day = name[-12:-4]
+        if not name.startswith("FNSQ") or day not in vols:
+            raise DataUnavailable(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>")
+        short, total = vols[day]
+        body = (f"Date|Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market\n{day}|AAA|{short}|0|{total}|Q\n"
+                f"{day}|BBB|1|0|10|Q\n2\n")
+        return _Resp(body.encode())
+    monkeypatch.setattr(P, "_get", fake)
+    assert not data.is_trading_day("2012-10-29") and not data.is_trading_day("2012-10-30")
+    sig = P.short_volume_signal(pd.DatetimeIndex(["2012-10-31"]), ["AAA", "BBB"])
+    asked = sorted({c[-12:-4] for c in calls})
+    assert asked == ["20121022", "20121023", "20121024", "20121025", "20121026"]   # five real sessions, no closure
+    assert sig.loc["2012-10-31", "AAA"] == pytest.approx(-(100 + 200 + 300 + 400 + 500) / 5_000)
+
+
 # --------------------------------------------------------------------------- #
 # SEC Form 4: insider transactions
 # --------------------------------------------------------------------------- #

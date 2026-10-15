@@ -159,12 +159,26 @@ def _now_et() -> pd.Timestamp:
     return pd.Timestamp.now(tz=EXCHANGE_TZ)
 
 
+# Full-day NYSE closures outside the holiday rules since 1990, the calendar's first year. Unplanned, so none can be
+# listed before it happens: one announced later is added here.
+NYSE_SPECIAL_CLOSURES: Dict[str, str] = {
+    "1994-04-27": "national day of mourning, President Nixon",
+    "2001-09-11": "terrorist attacks of 11 September", "2001-09-12": "terrorist attacks of 11 September",
+    "2001-09-13": "terrorist attacks of 11 September", "2001-09-14": "terrorist attacks of 11 September",
+    "2004-06-11": "national day of mourning, President Reagan",
+    "2007-01-02": "national day of mourning, President Ford",
+    "2012-10-29": "Hurricane Sandy", "2012-10-30": "Hurricane Sandy",
+    "2018-12-05": "national day of mourning, President George H. W. Bush",
+    "2025-01-09": "national day of mourning, President Carter",
+}
+
+
 def nyse_holidays(start_year: int = 1990, end_year: Optional[int] = None) -> pd.DatetimeIndex:
     """Full-day NYSE closures: New Year's Day, Martin Luther King Jr. Day (from 1998), Presidents' Day, Good Friday,
     Memorial Day, Juneteenth (from 2022), Independence Day, Labor Day, Thanksgiving and Christmas, with the exchange's
-    weekend rules (Saturday -> the Friday before, except New Year's Day; Sunday -> the Monday after). One-off closures
-    (national days of mourning, 9/11, Hurricane Sandy) are not listed. Early closes (13:00) come from the feed's
-    trading-period metadata when it has one."""
+    weekend rules (Saturday -> the Friday before, except New Year's Day; Sunday -> the Monday after), and the one-off
+    closures in NYSE_SPECIAL_CLOSURES (national days of mourning, 9/11, Hurricane Sandy). Early closes (13:00) come
+    from the feed's trading-period metadata when it has one."""
     from pandas.tseries.holiday import (AbstractHolidayCalendar, GoodFriday, Holiday, USLaborDay, USMartinLutherKingJr,
                                         USMemorialDay, USPresidentsDay, USThanksgivingDay, nearest_workday, sunday_to_monday)
 
@@ -179,7 +193,9 @@ def nyse_holidays(start_year: int = 1990, end_year: Optional[int] = None) -> pd.
             Holiday("Christmas", month=12, day=25, observance=nearest_workday),
         ]
     end_year = end_year or (pd.Timestamp.now().year + 2)
-    return _NYSE().holidays(pd.Timestamp(f"{start_year}-01-01"), pd.Timestamp(f"{end_year}-12-31"))
+    lo, hi = pd.Timestamp(f"{start_year}-01-01"), pd.Timestamp(f"{end_year}-12-31")
+    special = pd.DatetimeIndex(sorted(NYSE_SPECIAL_CLOSURES))
+    return _NYSE().holidays(lo, hi).union(special[(special >= lo) & (special <= hi)])
 
 
 _HOLIDAYS: Optional[set] = None
