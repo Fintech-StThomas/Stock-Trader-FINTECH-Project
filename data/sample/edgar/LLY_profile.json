@@ -1,0 +1,20 @@
+{
+ "cik": 59478,
+ "name": "ELI LILLY & Co",
+ "sic": "2834",
+ "sicDescription": "Pharmaceutical Preparations",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "IN",
+ "tickers": [
+  "LLY"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "LILLY ELI & CO",
+  "LILLY ELI & CO ET AL"
+ ]
+}

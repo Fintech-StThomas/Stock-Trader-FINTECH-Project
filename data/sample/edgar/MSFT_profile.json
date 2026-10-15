@@ -1,0 +1,17 @@
+{
+ "cik": 789019,
+ "name": "MICROSOFT CORP",
+ "sic": "7372",
+ "sicDescription": "Services-Prepackaged Software",
+ "fiscalYearEnd": "0630",
+ "entityType": "operating",
+ "stateOfIncorporation": "WA",
+ "tickers": [
+  "MSFT"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}

@@ -1,0 +1,52 @@
+{
+ "cik": 70858,
+ "name": "BANK OF AMERICA CORP /DE/",
+ "sic": "6021",
+ "sicDescription": "National Commercial Banks",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "BAC",
+  "BML-PG",
+  "BML-PL",
+  "BAC-PB",
+  "BAC-PK",
+  "BAC-PE",
+  "BAC-PL",
+  "BAC-PM",
+  "BAC-PN",
+  "BAC-PO",
+  "BAC-PP",
+  "BAC-PQ",
+  "BAC-PS",
+  "BACRP",
+  "BML-PH",
+  "BML-PJ",
+  "MER-PK"
+ ],
+ "exchanges": [
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "OTC",
+  "NYSE",
+  "NYSE",
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "BANKAMERICA CORP/DE/",
+  "NATIONSBANK CORP"
+ ]
+}

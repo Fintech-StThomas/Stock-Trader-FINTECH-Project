@@ -1,0 +1,20 @@
+{
+ "cik": 310158,
+ "name": "Merck & Co., Inc.",
+ "sic": "2834",
+ "sicDescription": "Pharmaceutical Preparations",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "NJ",
+ "tickers": [
+  "MRK"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "Merck & Co. Inc.",
+  "SCHERING PLOUGH CORP"
+ ]
+}

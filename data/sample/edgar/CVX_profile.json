@@ -1,0 +1,19 @@
+{
+ "cik": 93410,
+ "name": "CHEVRON CORP",
+ "sic": "2911",
+ "sicDescription": "Petroleum Refining",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "CVX"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "CHEVRONTEXACO CORP"
+ ]
+}

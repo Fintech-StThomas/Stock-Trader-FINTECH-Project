@@ -1,0 +1,19 @@
+{
+ "cik": 315852,
+ "name": "RANGE RESOURCES CORP",
+ "sic": "1311",
+ "sicDescription": "Crude Petroleum & Natural Gas",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "DE",
+ "tickers": [
+  "RRC"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": [
+  "LOMAK PETROLEUM INC"
+ ]
+}

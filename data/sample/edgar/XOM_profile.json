@@ -1,0 +1,17 @@
+{
+ "cik": 2115436,
+ "name": "ExxonMobil Holdings Corp",
+ "sic": "2911",
+ "sicDescription": "Petroleum Refining",
+ "fiscalYearEnd": "1231",
+ "entityType": "operating",
+ "stateOfIncorporation": "TX",
+ "tickers": [
+  "XOM"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "category": "Large accelerated filer",
+ "former_names": []
+}
