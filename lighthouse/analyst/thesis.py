@@ -208,6 +208,14 @@ def check_theses(book: Optional[ThesisBook] = None, source: str = "auto", date=N
     return out
 
 
+def _ttm_end(quarterly: Optional[pd.DataFrame], by) -> Optional[pd.Timestamp]:
+    """The period end of the latest quarter filed by `by`: where a trailing-twelve-month sum known then ends."""
+    if quarterly is None or quarterly.empty or "filed" not in quarterly:
+        return None
+    known = quarterly[pd.to_datetime(quarterly["filed"]) <= pd.Timestamp(by)]
+    return pd.Timestamp(known.index.max()) if len(known) else None
+
+
 def post_mortem(row, f_now, spy_return: Optional[float] = None, broke: Optional[List[str]] = None) -> List[str]:
     """Expected against what happened, from the thesis row and the numbers at close."""
     p0, p1 = float(row["price"]), f_now.price
@@ -217,12 +225,23 @@ def post_mortem(row, f_now, spy_return: Optional[float] = None, broke: Optional[
              f"${float(row['target'] or np.nan):,.2f}; closed {f_now.as_of.date()} at ${p1:,.2f} ({ret:+.1%})"
              + (f" against SPY {spy_return:+.1%}." if spy_return is not None and np.isfinite(spy_return) else ".")]
     rev0, rev1 = row["revenue"], f_now.get("revenue")
+    end0, end1 = _ttm_end(f_now.quarterly, row["as_of"]), _ttm_end(f_now.quarterly, f_now.as_of)
     if rev0 and np.isfinite(rev1):
-        years = max((f_now.as_of - pd.Timestamp(row["as_of"])).days / 365.25, 0.25)
-        g = (rev1 / rev0) ** (1 / years) - 1.0
-        lines.append(f"Revenue grew {g:+.1%} a year against {float(row['base_growth'] or np.nan):.1%} in the base case "
-                     f"and {float(row['implied_growth']) if row['implied_growth'] is not None else float('nan'):.1%} "
-                     "implied by the price.")
+        # trailing revenue moves when a quarter is reported, so the growth rate is per year of reported quarters
+        # (the quarter ends behind the two trailing sums), not per calendar year between the memo dates
+        if end0 is not None and end1 is not None:
+            years = (end1 - end0).days / 365.25
+            span = f" (trailing twelve months to {end0.date()} vs to {end1.date()})"
+        else:
+            years, span = (f_now.as_of - pd.Timestamp(row["as_of"])).days / 365.25, ""
+        expected = (f"against {float(row['base_growth'] or np.nan):.1%} in the base case and "
+                    f"{float(row['implied_growth']) if row['implied_growth'] is not None else float('nan'):.1%} "
+                    "implied by the price")
+        if years < 0.2:
+            lines.append(f"Revenue: no new quarter reported since the thesis was opened ({expected}).")
+        else:
+            g = (rev1 / rev0) ** (1 / years) - 1.0
+            lines.append(f"Revenue grew {g:+.1%} a year{span}, {expected}.")
     if row["operating_margin"] is not None and np.isfinite(r_now["operating_margin"]):
         lines.append(f"Operating margin went from {float(row['operating_margin']):.1%} to {r_now['operating_margin']:.1%}.")
     e0, e1 = row["net_income"], f_now.get("net_income")

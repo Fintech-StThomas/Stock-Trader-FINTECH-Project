@@ -285,6 +285,14 @@ def test_msft_memo_end_to_end_offline(msft, tmp_path):
     assert cov.loc[tid, "filings_since"] == 1 and cov.loc[tid, "stale"]
     lines = thesis.close_thesis(tid, "test", book, source="sample", date="2017-11-10")
     assert any("Revenue grew" in x for x in lines) and any("P/E" in x for x in lines)
+    # growth per year of reported quarters: the trailing sums known on the two dates, over their quarter ends
+    f_close = financials_as_of("MSFT", st, px, acts, "2017-11-10")
+    q = f_close.quarterly
+    end0 = q.index[pd.to_datetime(q["filed"]) <= "2016-11-15"].max()
+    end1 = q.index.max()
+    g = (f_close.get("revenue") / m.financials.get("revenue")) ** (365.25 / (end1 - end0).days) - 1.0
+    rev_line = next(x for x in lines if x.startswith("Revenue grew"))
+    assert f"Revenue grew {g:+.1%} a year (trailing twelve months to {pd.Timestamp(end0).date()}" in rev_line
     assert thesis.coverage(book, date="2017-11-10", prices_now=False).loc[tid, "status"] == "closed"
     assert book.open_ids() == []
     with pytest.raises(Exception):                                  # append-only

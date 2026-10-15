@@ -257,8 +257,11 @@ def build_memo(memo) -> str:
                    "the bear case is above the price" if not np.isfinite(ud) or ud == float("inf") else
                    f"upside-to-downside {ud:.2f} (bull gain ÷ bear loss)")
         L.append(f"- Probability-weighted value **${v.target:,.2f}** ({v.target / f.price - 1:+.0%}); {ud_text}.")
-        L.append(f"- Reverse DCF: the price implies **{_p(v.implied_growth)}** revenue growth a year for five years at today's "
-                 f"margin, or a **{_p(v.implied_margin)}** operating margin at the base case's growth.")
+        g_txt = (f"**{_p(v.implied_growth)}** revenue growth a year for five years at today's margin"
+                 if v.implied_growth is not None else "no constant revenue growth between -30% and +60% at today's margin")
+        m_txt = (f"a **{_p(v.implied_margin)}** operating margin at the base case's growth"
+                 if v.implied_margin is not None else "no operating margin between -20% and 80% at the base case's growth")
+        L.append(f"- Reverse DCF: the price implies {g_txt}, or {m_txt}.")
         L.append(f"- Discount rate (WACC) {_p(v.rate.wacc, 2)}: risk-free {_p(v.rate.risk_free, 2)}, beta {v.rate.beta:.2f}, "
                  f"equity premium {_p(v.rate.equity_premium)}, cost of debt {_p(v.rate.cost_of_debt, 2)}; terminal growth "
                  f"{_p(v.terminal_growth)}, reinvesting growth / RONIC of operating profit after tax (RONIC "
