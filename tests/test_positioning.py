@@ -18,6 +18,7 @@ import pytest
 
 from lighthouse import data, store
 from lighthouse.data import DataUnavailable
+from lighthouse.http import HTTPStatusError
 from lighthouse.research import positioning as P
 
 FIX = Path(__file__).parent / "fixtures" / "positioning"
@@ -31,8 +32,9 @@ class _Resp:
 
 
 def _serve(monkeypatch, tmp_path, until=None):
-    """Answer FINRA and SEC URLs from the fixtures, as the hosts do: a missing daily file is HTTP 403 (DataUnavailable),
-    a date without short interest is HTTP 204 with no body. `until`: pretend nothing after this date exists yet."""
+    """Answer FINRA and SEC URLs from the fixtures, as the hosts do: a missing daily file is HTTP 403 (HTTPStatusError,
+    as `http.fetch` raises it), a date without short interest is HTTP 204 with no body. `until`: pretend nothing after
+    this date exists yet."""
     calls = []
     monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
     cut = pd.Timestamp(until) if until is not None else None
@@ -49,7 +51,7 @@ def _serve(monkeypatch, tmp_path, until=None):
         name = url.rsplit("/", 1)[-1]
         f = FIX / name
         if not f.exists() or (cut is not None and pd.Timestamp(name[-12:-4]) > cut):
-            raise DataUnavailable(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>")
+            raise HTTPStatusError(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>", 403)
         return _Resp(f.read_bytes())
 
     monkeypatch.setattr(P, "_get", fake)
@@ -106,6 +108,69 @@ def test_short_volume_day_before_august_2018_sums_the_facilities(monkeypatch, tm
     assert not (tmp_path / "finra_shvol" / "20150105.parquet").exists()
 
 
+def _failing_once(monkeypatch, failures: dict):
+    """Wrap the fixture server: the first request for each named file fails with the given error, later ones are
+    served as usual."""
+    served = P._get
+
+    def fake(url, **kw):
+        name = url.rsplit("/", 1)[-1]
+        if name in failures:
+            raise failures.pop(name)
+        return served(url, **kw)
+    monkeypatch.setattr(P, "_get", fake)
+
+
+def test_a_session_is_cached_only_when_every_facility_answered(monkeypatch, tmp_path):
+    # 2 January 2015: FNSQ, FNYX and FNRA published; FNQC did not exist yet and FINRA answers 403 ("no such file").
+    # Before October 2026 a timeout on one facility (a plain DataUnavailable: no answer through every retry) was
+    # skipped like a 403 and the session cached without it, for good.
+    calls = _serve(monkeypatch, tmp_path)
+    timeout = DataUnavailable("cdn.finra.org: gave up after 5 attempts (ReadTimeout: read timed out) for the file")
+    _failing_once(monkeypatch, {"FNYXshvol20150102.txt": timeout})
+    part = P.short_volume_day("2015-01-02")
+    assert part.loc["AAPL", "ShortVolume"] == 4_537_230 + 196_866              # FNSQ and FNRA: usable in this run ...
+    assert store.read_frame("finra_shvol", "20150102") is None                   # ... but not cached
+    full = P.short_volume_day("2015-01-02")                                      # asked again: every facility answers
+    assert full.loc["AAPL", "ShortVolume"] == 4_537_230 + 1_120_622 + 196_866
+    assert store.read_json("finra_shvol", "20150102") == {
+        "facilities": {"FNSQ": "published", "FNYX": "published", "FNQC": "not published", "FNRA": "published"},
+        "rows": len(full)}
+    n = len(calls)
+    assert P.short_volume_day("2015-01-02").equals(full) and len(calls) == n       # now from the cache
+    # an HTTP error other than "no such file" (401 here) is a failure too, not an absent facility
+    _serve(monkeypatch, tmp_path / "auth")
+    _failing_once(monkeypatch, {"FNRAshvol20150102.txt": HTTPStatusError("HTTP 401 from cdn.finra.org", 401)})
+    assert P.short_volume_day("2015-01-02").loc["AAPL", "ShortVolume"] == 4_537_230 + 1_120_622
+    assert store.read_frame("finra_shvol", "20150102") is None
+
+
+def test_a_signal_built_on_a_partial_session_is_not_cached(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    _serve(monkeypatch, tmp_path)
+    _failing_once(monkeypatch, {"FNSQshvol20150102.txt": DataUnavailable("cdn.finra.org: gave up after 5 attempts")})
+    # only the short-volume part of `monthly` is under test: the other positioning signals are stubbed
+    monkeypatch.setattr(P, "insider_trades", lambda: None)
+    monkeypatch.setattr(P, "issuer_ciks_for", lambda tickers: {})
+    monkeypatch.setattr(P, "insider_signals", lambda trades, dates, tickers, cap, issuer_ciks=None: {
+        k: pd.DataFrame(np.nan, index=dates, columns=tickers) for k in ("insider_buyers", "insider_net")})
+    monkeypatch.setattr(P, "days_to_cover_signal", lambda dates, tickers: pd.DataFrame(np.nan, index=dates,
+                                                                                       columns=tickers))
+    # 9 January 2015: the window is 2 and 5-8 January; the excerpt holds 2 January only (the rest answer 403)
+    panel = SimpleNamespace(dates=pd.DatetimeIndex(["2015-01-09"]), prices=pd.DataFrame(columns=["AAPL", "MSFT"]))
+    first = P.monthly(None, panel)["short_volume"]
+    assert first.attrs["incomplete_sessions"] == ["2015-01-02"]
+    assert first.loc["2015-01-09", "AAPL"] == pytest.approx(-(1_120_622 + 196_866) / (2_937_726 + 533_853))
+    assert store.read_frame("research_signals", "short_volume") is None          # not cached as complete
+    assert store.read_json("research", "short_volume_incomplete") == ["2015-01-02"]
+    again = P.monthly(None, panel)["short_volume"]                               # the next run downloads it again
+    assert again.attrs["incomplete_sessions"] == [] and store.read_json("research", "short_volume_incomplete") == []
+    assert again.loc["2015-01-09", "AAPL"] == pytest.approx(-(4_537_230 + 1_120_622 + 196_866)
+                                                            / (17_474_580 + 2_937_726 + 533_853))
+    pd.testing.assert_frame_equal(store.read_frame("research_signals", "short_volume"), again, check_freq=False,
+                                  check_index_type=False)
+
+
 def test_an_early_file_without_a_header_line_is_read(monkeypatch, tmp_path):
     # 22 November 2010: the Nasdaq file starts with its first row (no header), the NYSE file has one, the ADF file
     # has a header and no rows, and the Chicago facility did not exist yet (403)
@@ -160,7 +225,7 @@ def test_the_short_volume_window_skips_one_off_closures(monkeypatch, tmp_path):
         calls.append(name)
         day = name[-12:-4]
         if not name.startswith("FNSQ") or day not in vols:
-            raise DataUnavailable(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>")
+            raise HTTPStatusError(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>", 403)
         short, total = vols[day]
         body = (f"Date|Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market\n{day}|AAA|{short}|0|{total}|Q\n"
                 f"{day}|BBB|1|0|10|Q\n2\n")

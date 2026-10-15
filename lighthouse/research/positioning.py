@@ -288,43 +288,74 @@ def _read_shvol(txt: str) -> pd.DataFrame:
     return pd.read_csv(io.StringIO(txt), sep="|", dtype={"Symbol": str}, header=None, names=names)
 
 
-def short_volume_day(day) -> Optional[pd.DataFrame]:
+# How cdn.finra.org answers a file that does not exist: a facility that did not publish that day (FNQC before it
+# opened). Any other failure (a timeout, a server error that outlasted the retries) says nothing about the file.
+FINRA_NOT_PUBLISHED = (403, 404, 410)
+
+
+def _session_files(d: pd.Timestamp):
+    """(the files of one session as tables, each facility's answer: 'published' | 'not published' | 'failed')."""
+    key = d.strftime("%Y%m%d")
+    names = ["CNMS"] if d >= pd.Timestamp("2018-08-01") else ["FNSQ", "FNYX", "FNQC", "FNRA"]
+    parts, answers = [], {}
+    for n in names:
+        try:
+            txt = _get(FINRA_SHVOL.format(name=n, date=key), timeout=60).text
+        except DataUnavailable as exc:
+            answers[n] = "not published" if getattr(exc, "status", None) in FINRA_NOT_PUBLISHED else "failed"
+            continue
+        df = _read_shvol(txt)
+        df = df[pd.to_numeric(df["Date"], errors="coerce").notna()]
+        parts.append(df[["Symbol", "ShortVolume", "TotalVolume"]])
+        answers[n] = "published"
+    return parts, answers
+
+
+def _short_volume_day(day, refresh: bool = False):
+    """(the session's table or None, complete): complete unless a facility's download failed (see short_volume_day)."""
+    d = pd.Timestamp(day)
+    key = d.strftime("%Y%m%d")
+    hit = None if refresh else store.read_frame("finra_shvol", key)
+    if hit is not None:
+        return _normalised_day(hit), True
+    parts, answers = _session_files(d)
+    complete = "failed" not in answers.values()
+    if not parts:
+        return None, complete
+    raw = pd.concat(parts)
+    raw = raw.assign(Symbol=_norm_symbols(raw["Symbol"]))
+    out = raw.groupby("Symbol")[["ShortVolume", "TotalVolume"]].sum()
+    if complete:
+        store.write_frame("finra_shvol", key, out)
+        store.write_json("finra_shvol", key, {"facilities": answers, "rows": int(len(out))})
+    return out, complete
+
+
+def short_volume_day(day, refresh: bool = False) -> Optional[pd.DataFrame]:
     """Symbol, short volume and total volume for one session (all trade reporting facilities summed).
 
     Until July 2018 FINRA published one file per facility (FNSQ, FNQC: the Nasdaq TRFs in Carteret and Chicago; FNYX:
     the NYSE TRF; FNRA: the ADF); a facility that did not exist yet (FNQC in January 2015) is answered with HTTP 403
     and skipped. Each file ends with a line holding its record count, which has no symbol and is dropped. Class shares
-    are written 'BRK/B' and stored as 'BRK-B'."""
-    d = pd.Timestamp(day)
-    key = d.strftime("%Y%m%d")
-    hit = store.read_frame("finra_shvol", key)
-    if hit is not None:
-        return _normalised_day(hit)
-    names = ["CNMS"] if d >= pd.Timestamp("2018-08-01") else ["FNSQ", "FNYX", "FNQC", "FNRA"]
-    parts = []
-    for n in names:
-        try:
-            txt = _get(FINRA_SHVOL.format(name=n, date=key), timeout=60).text
-        except DataUnavailable:
-            continue
-        df = _read_shvol(txt)
-        df = df[pd.to_numeric(df["Date"], errors="coerce").notna()]
-        parts.append(df[["Symbol", "ShortVolume", "TotalVolume"]])
-    if not parts:
-        return None
-    raw = pd.concat(parts)
-    raw = raw.assign(Symbol=_norm_symbols(raw["Symbol"]))
-    out = raw.groupby("Symbol")[["ShortVolume", "TotalVolume"]].sum()
-    store.write_frame("finra_shvol", key, out)
-    return out
+    are written 'BRK/B' and stored as 'BRK-B'.
+
+    A session is cached only when every facility answered: with its file, or with "no such file" (FINRA_NOT_PUBLISHED).
+    When a download failed (a timeout, a server error through every retry) the session is returned from the files that
+    came, as a session without any file is skipped, but it is not cached, and the next call tries again. The cache
+    records each facility's answer (finra_shvol/<date>.json). A session cached before October 2026 has no record and
+    may lack a facility that failed then: its table holds only the summed volumes, so it cannot be told apart from a
+    complete one; `refresh=True` downloads a session again. A session without any file is not cached."""
+    return _short_volume_day(day, refresh)[0]
 
 
 def short_volume_signal(dates: pd.DatetimeIndex, tickers: Iterable[str], sessions: int = 5) -> pd.DataFrame:
     """Minus the short share of volume over the `sessions` trading days before each month's last session. FINRA posts
     a session's file in the evening, after the close at which the signal is read, so the month-end session itself is
-    not known yet."""
+    not known yet. The sessions whose download failed in part or in full (see short_volume_day) are listed in
+    `attrs["incomplete_sessions"]`: the values use what came, and `monthly` does not cache a signal built on them."""
     tickers = list(tickers)
     out = pd.DataFrame(np.nan, index=dates, columns=tickers)
+    incomplete: List[str] = []
     for d in dates:
         if d < pd.Timestamp("2009-08-03"):
             continue
@@ -335,7 +366,9 @@ def short_volume_signal(dates: pd.DatetimeIndex, tickers: Iterable[str], session
             x -= pd.Timedelta(days=1)
         tot = None
         for day in days:
-            sv = short_volume_day(day)
+            sv, complete = _short_volume_day(day)
+            if not complete:
+                incomplete.append(str(pd.Timestamp(day).date()))
             if sv is None:
                 continue
             tot = sv if tot is None else tot.add(sv, fill_value=0.0)
@@ -343,6 +376,7 @@ def short_volume_signal(dates: pd.DatetimeIndex, tickers: Iterable[str], session
             continue
         ratio = (tot["ShortVolume"] / tot["TotalVolume"].replace(0, np.nan)).reindex(tickers)
         out.loc[d] = -ratio.to_numpy(float)
+    out.attrs["incomplete_sessions"] = sorted(incomplete)
     return out
 
 
@@ -438,7 +472,10 @@ def monthly(frames, panel, market_cap: Optional[pd.DataFrame] = None, refresh: b
             out[k] = v
     if "short_volume" not in out:
         out["short_volume"] = short_volume_signal(panel.dates, tickers)
-        store.write_frame("research_signals", "short_volume", out["short_volume"])
+        incomplete = out["short_volume"].attrs.get("incomplete_sessions", [])
+        store.write_json("research", "short_volume_incomplete", incomplete)
+        if not incomplete:         # a session that failed to download is tried again next time, so is the signal
+            store.write_frame("research_signals", "short_volume", out["short_volume"])
     if "days_to_cover" not in out:
         out["days_to_cover"] = days_to_cover_signal(panel.dates, tickers)
         store.write_frame("research_signals", "days_to_cover", out["days_to_cover"])
