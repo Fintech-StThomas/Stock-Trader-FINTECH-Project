@@ -1,0 +1,58 @@
+EX-99.1
+ 2
+ msft-ex99_1.htm
+ EX-99.1
+ Exhibit 99.1 
+ Microsoft Cloud and AI Strength Fuels Third Quarter Results 
+ REDMOND, Wash. — April 29, 2026 — Microsoft Corp. today announced the following results for the quarter ended March 31, 2026, as compared to the corresponding period of last fiscal year: 
+ • Revenue was $82.9 billion and increased 18% (up 15% in constant currency) 
+ • Operating income was $38.4 billion and increased 20% (up 16% in constant currency) 
+ • Net income was $31.8 billion and increased 23% on a GAAP basis, and increased 20% (up 18% in constant currency) on a non-GAAP basis 
+ • Diluted earnings per share was $4.27 and increased 23% on a GAAP basis, and increased 21% (up 18% in constant currency) on a non-GAAP basis 
+ • Non-GAAP results exclude the impact from investments in OpenAI, explained in the Non-GAAP Definition section below 
+ “We are focused on delivering cloud and AI infrastructure and solutions that empower every business to eval-max their outcomes in the agentic computing era,” said Satya Nadella, chairman and chief executive officer of Microsoft. “Our AI business surpassed an annual revenue run rate of $37 billion, up 123% year-over-year.” 
+ “We delivered results that exceeded expectations across revenue, operating income, and earnings per share, reflecting strong execution and growing demand for the Microsoft Cloud,” said Amy Hood, executive vice president and chief financial officer of Microsoft. 
+ The following table reconciles our financial results reported in accordance with generally accepted accounting principles (GAAP) to non-GAAP financial results. Additional information regarding our non-GAAP definition is provided below. All growth comparisons relate to the corresponding period in the last fiscal year. 
+ Three Months Ended March 31, 
+ 2026 
+ 2025 
+ Percentage Change Y/Y 
+ ($ in millions, except per share amounts) 
+ As Reported (GAAP) 
+ Adjustment* 
+ As Adjusted (non-GAAP) 
+ As Reported (GAAP) 
+ Adjustment* 
+ As Adjusted (non-GAAP) 
+ GAAP 
+ Constant Currency 
+ Non-GAAP 
+ Non-GAAP Constant Currency 
+ Net 
+Income 
+ $31,778 
+ $14 
+ $31,792 
+ $25,824 
+ $583 
+ $26,407 
+ 23% 
+ 20% 
+ 20% 
+ 18% 
+ Diluted Earnings 
+per Share 
+ $4.27 
+ $0.00 
+ $4.27 
+ $3.46 
+ $0.08 
+ $3.54 
+ 23% 
+ 21% 
+ 21% 
+ 18% 
+ *Adjustment is the impact from investments in OpenAI 
+ Business Highlights 
+ Microsoft Cloud revenue was $54.5 billion and increased 29% (up 25% in constant currency), and commercial remaining performance obligation increased 99% to $627 billion. 
+ Revenue in Productivity and Business Processes was $35.

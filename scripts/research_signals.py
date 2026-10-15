@@ -141,6 +141,8 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-repeat", action="store_true", help="re-evaluate a hold-out (counts as another trial)")
     ap.add_argument("--no-text", action="store_true", help="skip the 10-K text signals (reads every 10-K since 2006)")
     ap.add_argument("--no-13f", action="store_true", help="skip 13F breadth (reads the SEC's 13F data sets, ~3 GB)")
+    ap.add_argument("--no-8k", action="store_true", help="skip the earnings-release tone (reads ~17,000 8-K exhibits "
+                    "for half the members)")
     ap.add_argument("--product-only", action="store_true", help="only the signals the product already uses (beacons, "
                     "technical, fundamental and composite scores)")
     ap.add_argument("--blend", nargs="+", default=None, metavar="SIGNAL",
@@ -206,7 +208,7 @@ def library_signals(frames, panel, a) -> dict:
     sigs.update(PO.monthly(frames, panel, market_cap=mcap, refresh=a.refresh_signals))
     from lighthouse.research import event_signals as EV
     from lighthouse.research import institutions as IN
-    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text))
+    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text, eightk=not a.no_8k))
     if not a.no_13f:
         sigs.update(IN.monthly(frames, panel, refresh=a.refresh_signals))
     for mod in (FS, PS, PO, EV, IN):
