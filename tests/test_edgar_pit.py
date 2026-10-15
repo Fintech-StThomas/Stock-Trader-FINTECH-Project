@@ -287,6 +287,65 @@ def test_facts_cache_is_used_as_it_is_offline_or_when_edgar_is_unreachable(facts
     assert srv.calls == 0 and set(got.concept) == {"NetIncomeLoss"}
 
 
+class _FsdsServer:
+    """Stands in for www.sec.gov's Financial Statement Data Sets: every quarter is the recorded MSFT subset of 2017 Q3
+    (five tags); counts the downloads; `down = True` behaves like an unreachable EDGAR."""
+
+    def __init__(self):
+        self.blob = (FIX / "fsds_2017q3_msft_subset.zip").read_bytes()
+        self.calls, self.down = 0, False
+
+    def __call__(self, url, **kw):
+        if self.down:
+            raise DataUnavailable("EDGAR unreachable (test)")
+        assert "financial-statement-data-sets" in url
+        self.calls += 1
+        blob = self.blob
+
+        class Reply:
+            content = blob
+        return Reply()
+
+
+def test_bulk_data_set_cache_records_its_tags_and_refetches_for_more(monkeypatch, tmp_path):
+    monkeypatch.setattr(edgar.store._data, "CACHE_DIR", tmp_path)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")          # the fetch is replaced: nothing reaches the network
+    srv = _FsdsServer()
+    monkeypatch.setattr(edgar, "_get", srv)
+    old_list = ["NetIncomeLoss", "SalesRevenueNet"]
+    monkeypatch.setattr(pit, "CONCEPTS", old_list)          # the concept list of the day
+    first = edgar.bulk_quarter(2017, 3)
+    meta = edgar.store.read_json("edgar_fsds", "2017q3")
+    assert srv.calls == 1 and set(first["concept"]) == set(old_list)
+    assert meta["concepts"] == old_list and meta["rows"] == len(first)
+    only = edgar.bulk_quarter(2017, 3, ciks=[789019], tags=["us-gaap:NetIncomeLoss"])   # within the record: cached
+    assert srv.calls == 1 and len(only) == len(first) and edgar.bulk_quarter(2017, 3, ciks=[1]).empty
+    # a tag the cache was not filtered to: before October 2026 it read as never reported; now downloaded again, and
+    # the cache keeps the union (never shrinks)
+    grown = edgar.bulk_quarter(2017, 3, tags=["StockholdersEquity"])
+    assert srv.calls == 2 and set(grown["concept"]) == {"NetIncomeLoss", "SalesRevenueNet", "StockholdersEquity"}
+    assert len(grown) == len(edgar.parse_fsds_zip(srv.blob, tags=old_list + ["StockholdersEquity"])) > len(first)
+    # a tag no filer has that quarter is recorded too: asking again does not download again
+    edgar.bulk_quarter(2017, 3, tags=["SomeNewTag"])
+    edgar.bulk_quarter(2017, 3, tags=["SomeNewTag", "NetIncomeLoss"])
+    assert srv.calls == 3
+    # offline, the cache is used as it is (Assets reads as unreported); with EDGAR unreachable too
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "1")
+    off = edgar.bulk_quarter(2017, 3, tags=["Assets"])
+    assert srv.calls == 3 and "Assets" not in set(off["concept"]) and len(off) == len(grown)
+    monkeypatch.setenv("LIGHTHOUSE_OFFLINE", "0")
+    srv.down = True
+    assert len(edgar.bulk_quarter(2017, 3, tags=["Assets"])) == len(grown)
+    srv.down = False
+    assert "Assets" in set(edgar.bulk_quarter(2017, 3, tags=["Assets"])["concept"]) and srv.calls == 4
+    # a table cached before the record existed covers only the tags it has rows for
+    edgar.store.write_frame("edgar_fsds", "2016q4", first)
+    edgar.bulk_quarter(2016, 4, tags=["SalesRevenueNet"])
+    assert srv.calls == 4
+    edgar.bulk_quarter(2016, 4, tags=["EarningsPerShareDiluted"])
+    assert srv.calls == 5
+
+
 def test_sample_pack_dates_are_nanoseconds_whichever_pandas_wrote_them():
     # the pack is re-recorded with pandas 3 (microsecond dates in Parquet) and read by pandas 2 on Python 3.10, which
     # refuses to merge microsecond with nanosecond dates

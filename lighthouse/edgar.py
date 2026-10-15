@@ -286,14 +286,23 @@ def _concept_names(concepts: Iterable[str]) -> set:
     return {str(c).split(":")[-1] for c in concepts}
 
 
+def _recorded_concepts(kind: str, key: str, cached: pd.DataFrame) -> Optional[set]:
+    meta = store.read_json(kind, key)
+    if not isinstance(meta, dict) or not isinstance(meta.get("concepts"), list) or meta.get("rows") != len(cached):
+        return None
+    return {str(c) for c in meta["concepts"]}
+
+
+def _record_concepts(kind: str, key: str, concepts: Iterable[str], df: pd.DataFrame) -> None:
+    store.write_json(kind, key, {"concepts": sorted(concepts), "rows": int(len(df)),
+                                 "written": pd.Timestamp.now(tz="UTC").isoformat()})
+
+
 def cached_fact_concepts(key: str, cached: pd.DataFrame) -> Optional[set]:
     """The concepts a cached facts table was filtered to, from its sidecar (edgar_facts/<key>.json), or None when it
     has no usable record: written before the sidecar existed, or the sidecar describes another write (its row count
     differs, e.g. two processes refreshed the same company at once and their writes interleaved)."""
-    meta = store.read_json("edgar_facts", key)
-    if not isinstance(meta, dict) or not isinstance(meta.get("concepts"), list) or meta.get("rows") != len(cached):
-        return None
-    return {str(c) for c in meta["concepts"]}
+    return _recorded_concepts("edgar_facts", key, cached)
 
 
 def _facts_for_cik(cik: int, concepts, refresh: bool, ticker: Optional[str]) -> pd.DataFrame:
@@ -331,8 +340,7 @@ def _facts_for_cik(cik: int, concepts, refresh: bool, ticker: Optional[str]) -> 
     keep = sorted(want | have | _concept_names(CONCEPTS))
     df = flatten_company_facts(payload, keep)
     store.write_frame("edgar_facts", key, df)
-    store.write_json("edgar_facts", key, {"concepts": keep, "rows": int(len(df)),
-                                          "written": pd.Timestamp.now(tz="UTC").isoformat()})
+    _record_concepts("edgar_facts", key, keep, df)
     return df
 
 
@@ -464,18 +472,41 @@ def parse_fsds_zip(blob, ciks: Optional[Iterable[int]] = None, tags: Optional[It
     return _typed_facts(out)
 
 
-def bulk_quarter(year: int, qtr: int, ciks: Optional[Iterable[int]] = None, tags: Optional[Iterable[str]] = None) -> pd.DataFrame:
-    """Download one quarterly data set into memory (no temporary file), filter it, and cache the result."""
+def bulk_quarter(year: int, qtr: int, ciks: Optional[Iterable[int]] = None, tags: Optional[Iterable[str]] = None,
+                 refresh: bool = False) -> pd.DataFrame:
+    """One quarterly data set, downloaded into memory (no temporary file), filtered to `tags` (default
+    `pit.CONCEPTS`) for every filer and cached; `ciks` selects companies from it.
+
+    The cache keeps no rows for the tags it was not filtered to, so it records the tags it holds (edgar_fsds/<key>.json)
+    and is downloaded again when asked for more: otherwise a tag added since would read as never reported, as the
+    company-facts cache once did. The download is filtered to the union of what is asked, what the cache held and
+    `pit.CONCEPTS`, so a narrow request never shrinks it. A table cached before the record existed covers the tags it
+    has rows for. Offline, or with EDGAR unreachable, the cache is used as it is, whatever it lacks."""
+    from .pit import CONCEPTS
     key = f"{year}q{qtr}"
+    want = _concept_names((list(tags) if tags is not None else []) or CONCEPTS)
     cached = store.read_frame("edgar_fsds", key)
-    if cached is None:
-        from .pit import CONCEPTS
-        blob = _get(FSDS_URL.format(year=year, qtr=qtr), timeout=300).content
-        cached = parse_fsds_zip(blob, None, tags or CONCEPTS)
-        store.write_frame("edgar_fsds", key, cached)
+    have: set = set()
+    if cached is not None:
+        recorded = _recorded_concepts("edgar_fsds", key, cached)
+        have = recorded if recorded is not None else set(cached["concept"].dropna().astype(str))
+    if cached is not None and not refresh and (want <= have or offline_mode()):
+        out = cached
+    else:
+        try:
+            blob = _get(FSDS_URL.format(year=year, qtr=qtr), timeout=300).content
+        except DataUnavailable:
+            if cached is None:
+                raise
+            out = cached
+        else:
+            keep = sorted(want | have | _concept_names(CONCEPTS))
+            out = parse_fsds_zip(blob, None, keep)
+            store.write_frame("edgar_fsds", key, out)
+            _record_concepts("edgar_fsds", key, keep, out)
     if ciks is not None:
-        cached = cached[cached["cik"].isin({int(c) for c in ciks})]
-    return cached
+        out = out[out["cik"].isin({int(c) for c in ciks})] if "cik" in out.columns else out.iloc[:0]
+    return out
 
 
 def document_url(cik: int, accn: str, doc: str) -> str:
