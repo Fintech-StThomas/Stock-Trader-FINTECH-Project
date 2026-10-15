@@ -4,6 +4,7 @@ finished session and nothing else), no look-ahead in any of the three signals, l
 hand, and that nothing of it reaches a verdict, a ticket or lighthouse/decision.py."""
 import ast
 import io
+import json
 import math
 import os
 import sqlite3
@@ -389,30 +390,46 @@ def test_scoring_on_a_small_example_checked_by_hand(tmp_path):
 def test_the_forward_rule_is_read_at_the_december_look(tmp_path):
     """Three years of forward months from a signal that knows next month's return: the rule is met at the look of
     December (and only says a new pre-registered test may be considered); an incomplete record is not judged."""
-    rng = np.random.default_rng(5)
-    j = Journal(tmp_path / "j.sqlite")
-    dates = [d for d in W.sessions("2027-01-01", "2030-03-31") if W.is_month_end_session(d)]
     names = [f"T{k:02d}" for k in range(35)]
-    for d in dates[:-1]:
-        r = rng.normal(0.01, 0.05, len(names))
-        v = r + rng.normal(0, 0.05, len(names))                  # a planted signal: knows next month's return
-        at = (d + pd.Timedelta(hours=22)).tz_localize("UTC").isoformat(timespec="seconds")
-        j.append_watch_rows([{**_row(t, str(d.date()), "fcf_yield", float(x)), "recorded_at": at,
-                              "config_hash": W.WATCH_SIGNALS["fcf_yield"].config_hash} for t, x in zip(names, v)])
-        j.append_watch_outcomes([{**_outcome(t, str(d.date()), float(x)), "end_date": "x"} for t, x in zip(names, r)])
-    wc = score_watch(j, power=False)
-    st = wc.status.set_index("signal").loc["fcf_yield"]
+
+    def planted(path, dates, seed=5):
+        rng = np.random.default_rng(seed)
+        j = Journal(path)
+        for d in dates:
+            r = rng.normal(0.01, 0.05, len(names))
+            v = r + rng.normal(0, 0.05, len(names))              # a planted signal: knows next month's return
+            at = (d + pd.Timedelta(hours=22)).tz_localize("UTC").isoformat(timespec="seconds")
+            j.append_watch_rows([{**_row(t, str(d.date()), "fcf_yield", float(x)), "recorded_at": at,
+                                  "config_hash": W.WATCH_SIGNALS["fcf_yield"].config_hash} for t, x in zip(names, v)])
+            j.append_watch_outcomes([{**_outcome(t, str(d.date()), float(x)), "end_date": "x"}
+                                     for t, x in zip(names, r)])
+        return score_watch(j, power=False).status.set_index("signal").loc["fcf_yield"]
+    month_ends = [d for d in W.sessions("2027-01-01", "2033-03-31") if W.is_month_end_session(d)]
+    # 35 months to December 2029: still collecting
+    st = planted(tmp_path / "a.sqlite", month_ends[1:37])
+    assert st["look"] == "2029-12-31" and st["months_at_look"] == 35 and st["status"].startswith("collecting: 35 of 36")
+    # 36 months: met at the look of December 2029 (which only makes the case for a new test)
+    st = planted(tmp_path / "b.sqlite", month_ends[:38])
     assert st["look"] == "2029-12-31" and st["months_at_look"] == 36 >= FORWARD_MIN_MONTHS
     assert st["status"].startswith("met at the look of 2029-12-31") and "nothing is weighted" in st["status"]
-    # with a third of the month ends missing the record is incomplete, whatever the numbers
-    k = Journal(tmp_path / "k.sqlite")
-    s, o = j.watch_signals(), j.watch_outcomes()
-    keep = sorted(set(s["as_of"]))[::3]
-    drop = set(sorted(set(s["as_of"]))) - set(keep[: len(keep) // 2])
-    k.append_watch_rows(s[s["as_of"].isin(drop)].drop(columns="id").to_dict("records"))
-    k.append_watch_outcomes(o[o["as_of"].isin(drop)].drop(columns="id").to_dict("records"))
-    st2 = score_watch(k, power=False).status.set_index("signal").loc["fcf_yield"]
-    assert st2["status"].startswith("collecting") or st2["status"].startswith("incomplete record")
+    # six years with every fourth month end missing (each December among them): enough months, but the record is
+    # incomplete, whatever the numbers. The look is dated by the calendar: a missing December does not skip it, and it
+    # is read once a later month (January 2033) has been scored
+    st = planted(tmp_path / "c.sqlite", [d for k, d in enumerate(month_ends[:73]) if k % 4 != 3])
+    assert st["look"] == "2032-12-31" and st["months_at_look"] == 54
+    assert st["status"].startswith("incomplete record at the look of 2032-12-31: 18 of 72")
+    # a signal with no edge: not met
+    rng = np.random.default_rng(9)
+    j = Journal(tmp_path / "d.sqlite")
+    for d in month_ends[:38]:
+        at = (d + pd.Timedelta(hours=22)).tz_localize("UTC").isoformat(timespec="seconds")
+        j.append_watch_rows([{**_row(t, str(d.date()), "fcf_yield", float(x)), "recorded_at": at,
+                              "config_hash": W.WATCH_SIGNALS["fcf_yield"].config_hash}
+                             for t, x in zip(names, rng.normal(size=len(names)))])
+        j.append_watch_outcomes([{**_outcome(t, str(d.date()), float(x)), "end_date": "x"}
+                                 for t, x in zip(names, rng.normal(0.01, 0.05, len(names)))])
+    st = score_watch(j, power=False).status.set_index("signal").loc["fcf_yield"]
+    assert st["status"].startswith("not met at the look of 2029-12-31") and "Newey-West" in st["status"]
 
 
 def test_months_needed_follow_from_the_logged_ic():
@@ -443,7 +460,7 @@ def test_watch_signals_are_the_logged_trials():
         assert H.config_hash(name, spec.config) == spec.config_hash          # the configuration, hashed as logged
         logged = log[log["signal"] == name]
         assert set(logged["config_hash"]) == {spec.config_hash}
-        assert pd.Series(logged["config"]).map(lambda c: pd.io.json.loads(c)).iloc[-1] == spec.config
+        assert json.loads(logged["config"].iloc[-1]) == spec.config
     from lighthouse.research import event_signals as EV
     from lighthouse.research import fundamental_signals as FS
     from lighthouse.research import positioning as PO

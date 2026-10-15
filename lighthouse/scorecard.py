@@ -228,12 +228,17 @@ def _watch_summary(res, alt) -> Dict[str, object]:
 
 
 def _forward_status(name: str, use: Optional[str], fp, snaps_tab: pd.DataFrame, min_names: int) -> Dict[str, object]:
-    """The forward rule at the last annual look (the scored months to the latest December month end)."""
+    """The forward rule at the last annual look: the scored months to the latest December month end that is on or
+    before the last scored month (dated by the calendar, so a missing December snapshot does not skip the look)."""
     from .research import harness as H
     from .research import watch as W
     from .total_return import DELISTING_RULES
     out: Dict[str, object] = {"signal": name, "look": None, "months_at_look": 0}
-    looks = [d for d in (fp[0].dates if fp is not None else []) if d.month == 12]
+    looks = []
+    if fp is not None:
+        first, last = fp[0].dates[0], fp[0].dates[-1]
+        looks = [d for d in (W.month_end_session(f"{y}-12-01") for y in range(first.year, last.year + 1))
+                 if first <= d <= last]
     if not looks:
         n = 0 if fp is None else len(fp[0].dates)
         out["status"] = (f"collecting: {n} forward month(s) with an outcome; the rule is read once a year, on the months "
