@@ -337,7 +337,7 @@ def _fundamental_view_lines(fv) -> List[str]:
          f"*Norms: {fv.source}. Fundamental score {score(fv.score)} {head}"
          + (f" ({score(fv.sector_score)} against the sector norms for {fv.sector or 'the overall market'})"
             if fv.peer_based else "")
-         + ". The rule-based verdict keeps the sector norms it was tested with; P/E, P/B, EV/EBITDA and operating "
+         + ". The rule-based verdict does not read them (it reads prices only); P/E, P/B, EV/EBITDA and operating "
            "margin are scored against the norms, the other beacons against fixed bands.*\n",
          beacon_table(fv.beacons) + "\n"]
     return L

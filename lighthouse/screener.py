@@ -1,7 +1,7 @@
 """Watchlist screener: analyse several tickers and rank the opportunities."""
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import pandas as pd
 
@@ -19,8 +19,16 @@ def screen(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, pa
     done = (lambda t, k, n: print(f"  analysed {t} ({k}/{n})", flush=True)) if progress else None
     results, errors = map_tickers(lambda t: analyze(t, profile, params, years=years, source=source, run_backtest_=with_backtest,
                                                     benchmark=benchmark), tickers, max_workers, source, done)
+    return rank(results, errors, tickers, with_backtest)
+
+
+def rank(results: Dict[str, object], errors: Dict[str, str], tickers: Optional[Iterable[str]] = None,
+         with_backtest: bool = False) -> pd.DataFrame:
+    """The ranking table of results already analysed ({ticker: AnalysisResult}, {ticker: error}), best score first;
+    `tickers` sets which rows appear (default: every result and error)."""
+    names = list(results) + list(errors) if tickers is None else list(tickers)
     rows: List[dict] = []
-    for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip()):
+    for t in dict.fromkeys(x.upper().strip() for x in names if x and x.strip()):
         try:
             if t in errors:
                 raise RuntimeError(errors[t])

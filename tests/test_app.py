@@ -27,6 +27,29 @@ def test_app_runs_an_analysis_offline():
     text = " ".join(str(m.value) for m in at.markdown)
     assert "Lighthouse score" in text and "Position plan" in text
     assert any("Strong Buy" in str(m.value) or "Buy" in str(m.value) for m in at.markdown)
+    # the analysis carries its analyst memo (from the bundled SEC filings), next to the verdict and outside the score
+    assert "Analyst memo (fundamentals)" in text and "Investment memo" in text and "What would prove this wrong" in text
+    assert "Fundamental beacons" in text                       # the memo is where the fundamental beacons live now
+    assert "aria-label='Fundamental score'" not in text      # no fundamental score card next to the verdict
+    labels = [t.label for t in at.tabs]          # every tab, the Analyse tab's own sub-tabs included, in page order
+    assert labels[0] == "📍 Analyse a stock" and labels[1:6] == ["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Technicals",
+                                                                 "🧪 Backtest", "🗂️ Data"]
+    assert {"🎯 Find trades", "🧺 Portfolio", "📓 Journal & theses", "ℹ️ How it works"} <= set(labels)
+    assert not any("Research" in str(t.label) for t in at.tabs)   # research is evidence, not a tab
+
+
+def test_app_without_filings_keeps_the_verdict_and_says_why_there_is_no_memo():
+    """An index (or an ETF, or a company that does not file with the SEC) has no memo; the rule's verdict stands."""
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    at.sidebar.text_input(key="ticker").set_value("^GSPC")
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.sidebar.button(key="analyse").click()
+    at.run()
+    assert not at.exception, at.exception
+    text = " ".join(str(m.value) for m in at.markdown)
+    assert "Lighthouse score" in text and "Analyst memo (fundamentals)" in text and "Investment memo" not in text
+    assert any("No analyst memo for ^GSPC" in str(w.value) and "no SEC filings" in str(w.value) for w in at.warning)
 
 
 def test_app_reports_a_bad_ticker_kindly():
@@ -82,13 +105,15 @@ def test_app_trade_desk_offline():
     at.run()
     assert not at.exception, at.exception
     text = " ".join(str(m.value) for m in at.markdown)
-    assert "BUY " in text and "SELL SHORT" in text           # long and short tickets from the 2022 sample pack
+    assert "BUY " in text and "SELL SHORT" not in text       # long tickets only
+    assert "Ranked by Lighthouse score" in text               # the same scan ranks the universe ...
+    assert any({"ticker", "verdict", "score", "technical"} <= set(getattr(df.value, "columns", [])) for df in at.dataframe)
+    assert "Trade ideas funded from your cash" in text        # ... and funds its best setups
     assert "The plan" in text and "stop order" in text
     assert "When to get out" in text                          # every ticket says where to take the loss and the profit
     exits = [t.value for t in at.table if "Exit" in getattr(t.value, "columns", [])]
     trend = {"Stop-loss (stop order)", "Trend exit (review)", "Signal exit (review)"}
     assert exits and trend <= set(exits[0]["Exit"])            # long-term buys: the backtest's review-day exits
-    assert any({"Stop-loss (before target 1)", "Target 2: the rest"} <= set(e["Exit"]) for e in exits)   # shorts: targets
     assert not any("Position monitor" in str(t.label) for t in at.tabs)   # removed: the tickets carry the exits
 
 
@@ -117,13 +142,13 @@ def test_trade_and_portfolio_figures_build():
     fig = ix.trade_chart(r, build_trade_plan(r, "long", TradeSettings(long_exit="targets"), with_stats=False))
     assert len(fig.layout.shapes) >= 3                                                # entry, stop, targets
     fig.to_json()
-    port = pf.build_portfolio(["AAPL", "JNJ", "XOM", "KO", "PG"], "hrp", capital=10_000, source="sample", years=6)
+    port = pf.build_portfolio(["AAPL", "JNJ", "XOM", "KO", "PG"], "risk_parity", capital=10_000, source="sample", years=6)
     for f in (ix.allocation_chart(port.table()), ix.correlation_heatmap(port.risk["correlation"]), ix.equity_curves(port.comparison_runs)):
         assert len(f.data) >= 1
         f.to_json()
 
 
-def test_app_analyst_coverage_journal_research_tabs_offline(tmp_path, monkeypatch):
+def test_app_saves_the_memo_thesis_to_the_journal_offline(tmp_path, monkeypatch):
     monkeypatch.setenv("LIGHTHOUSE_JOURNAL", str(tmp_path / "journal.sqlite"))
     at = AppTest.from_file(APP, default_timeout=300)
     at.run()
@@ -133,8 +158,8 @@ def test_app_analyst_coverage_journal_research_tabs_offline(tmp_path, monkeypatc
     text = " ".join(str(m.value) for m in at.info)
     assert "No journal yet" in text or "No journal at" in text           # nothing saved: no file is created
     assert not (tmp_path / "journal.sqlite").exists()
-    at.text_input(key="memo_ticker").set_value("MSFT")
-    at.button(key="memo_build").click()
+    at.sidebar.text_input(key="ticker").set_value("MSFT")
+    at.sidebar.button(key="analyse").click()
     at.run()
     assert not at.exception, at.exception
     md = " ".join(str(m.value) for m in at.markdown)
