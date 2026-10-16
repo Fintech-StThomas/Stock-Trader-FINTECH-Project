@@ -1,13 +1,10 @@
 """
-Fundamental analysis: valuation, quality and growth beacons.
+Fundamental analysis: valuation, quality and growth beacons, for the analyst memo (lighthouse.analyst.memo).
 
-Each beacon compares a ratio with a sector norm (editable in SECTOR_NORMS) or
-an absolute band and votes between -1 (expensive / weak) and +1 (cheap /
-strong). The weighted result is the Fundamental Score (0-100).
-
-`point_in_time_scores` rebuilds the score for every historical date using only
-statements that had already been published (period end + reporting lag), so
-the backtest never peeks at numbers an investor could not have known.
+Each beacon compares a ratio with a sector norm (editable in SECTOR_NORMS) or a peer median, or with an absolute band,
+and votes between -1 (expensive / weak) and +1 (cheap / strong). The weighted result is the Fundamental Score (0-100).
+It is a view for the investor, not an input to the trading rule: a fundamental gate cost return in every backtest and
+the score had no ranking ability across the S&P 500 (docs/METHODOLOGY.md sections 8 and 8b).
 """
 from __future__ import annotations
 
@@ -94,9 +91,8 @@ class FundamentalSnapshot:
 
 @dataclass
 class StatementHistory:
-    """Annual and quarterly statements, one row per period end. A `filed` column, when present, is the date each row
-    became public (SEC EDGAR); without it a row is assumed public `StrategyParams.reporting_lag_days` after its period
-    end (Yahoo's statements carry no filing dates)."""
+    """Annual and quarterly statements from SEC EDGAR, one row per period end, with a `filed` column: the date each row
+    became public (lighthouse.pit)."""
     annual: pd.DataFrame = field(default_factory=pd.DataFrame)
     quarterly: pd.DataFrame = field(default_factory=pd.DataFrame)
     source: str = ""
@@ -325,101 +321,3 @@ def fundamental_score(beacons: List[Beacon]) -> Optional[float]:
     if total_w <= 0:
         return None
     return float(50.0 + 50.0 * sum(b.weight * b.score for b in usable) / total_w)
-
-
-# --------------------------------------------------------------------------- #
-# Point-in-time scores for the backtest
-# --------------------------------------------------------------------------- #
-def point_in_time_scores(prices: pd.DataFrame, history: StatementHistory, sector: Optional[str] = None,
-                         params: Optional[StrategyParams] = None, actions: Optional[pd.DataFrame] = None) -> pd.Series:
-    """Daily fundamental score using only statements published before each date.
-
-    A statement is usable from the session after its filing date when the history carries filing dates (SEC EDGAR,
-    column `filed`), else `params.reporting_lag_days` after its period end (Yahoo's statements are undated). Each date
-    uses the latest fiscal year that was public then. Returns NaN before the first usable statement (the backtest
-    treats NaN as "unknown -> no gate"). Valuation is recomputed daily (price / EPS).
-
-    P/E needs the price and the EPS in the same units. EDGAR's EPS is as reported on its filing date, so with
-    `actions` (dividends and splits, `total_return.load_actions`) it is restated in the share units of the price
-    series' last date (when the series was adjusted), and the price has its dividend adjustment removed. Without
-    `actions`, filing-dated statements skip the valuation part rather than compare unlike units.
-    """
-    p = params or StrategyParams()
-    idx = prices.index
-    out = pd.Series(np.nan, index=idx, dtype=float)
-    a = history.annual
-    if a is None or a.empty:
-        return out
-    norms = sector_norms(sector)
-    is_financial = sector == "Financial Services"
-    a = a.sort_index()
-    close = prices["Close"].copy()
-    close.attrs = {}      # pandas deep-copies attrs on every operation (see technicals.compute_indicators)
-
-    dated = "filed" in a.columns and a["filed"].notna().any()
-    lag = pd.Timedelta(days=p.reporting_lag_days)
-    if dated:
-        filed = pd.to_datetime(a["filed"])
-        avail = (filed + pd.Timedelta(days=1)).where(filed.notna(), a.index.to_series() + lag)
-    else:
-        avail = a.index.to_series() + lag
-    avail = pd.DatetimeIndex(avail)
-    # a fiscal year applies from its availability until a LATER fiscal year becomes available (suffix minimum, so an
-    # older year that only became public after a newer one never takes over)
-    suffix_min = np.minimum.accumulate(avail[::-1].to_numpy())[::-1]
-    until = list(suffix_min[1:]) + [np.datetime64(idx[-1] + pd.Timedelta(days=1))]
-
-    split_adj, price_for_pe = np.ones(len(a)), close
-    can_value = True
-    if dated:
-        if actions is not None:
-            from .total_return import price_only_close, split_factor_after, to_units_of
-            acts = to_units_of(actions, idx[-1])
-            price_for_pe = price_only_close(close, acts)
-            split_adj = split_factor_after(pd.to_datetime(a["filed"]).fillna(a.index.to_series()), acts, idx[-1])
-        else:
-            can_value = False
-
-    for i in range(len(a)):
-        row = a.iloc[i]
-        prev = a.iloc[i - 1] if i > 0 else None
-        mask = (idx >= avail[i]) & (idx < pd.Timestamp(until[i]))
-        if not mask.any():
-            continue
-
-        # static (quality & growth) part
-        qual, gro = [], []
-        eq, ni, debt = row.get("equity"), row.get("net_income"), row.get("total_debt")
-        if pd.notna(eq) and pd.notna(ni) and eq > 0:
-            qual.append(score_band(ni / eq, 0.10, 0.15))
-        if pd.notna(row.get("operating_income")) and pd.notna(row.get("revenue")) and row["revenue"]:
-            qual.append(score_band(row["operating_income"] / row["revenue"], norms["op_margin"], 0.15))
-        if not is_financial and pd.notna(debt) and pd.notna(eq) and eq > 0:
-            qual.append(_clip((1.0 - debt / eq) / 1.0))
-        if prev is not None:
-            if pd.notna(row.get("revenue")) and pd.notna(prev.get("revenue")) and prev["revenue"]:
-                gro.append(score_band(row["revenue"] / prev["revenue"] - 1.0, 0.05, 0.15))
-            if pd.notna(row.get("eps")) and pd.notna(prev.get("eps")) and prev["eps"] > 0:
-                gro.append(score_band(row["eps"] / prev["eps"] - 1.0, 0.08, 0.20))
-
-        # dynamic valuation part: P/E from the lagged EPS and each day's price
-        eps = row.get("eps")
-        groups, weights = [], []
-        if pd.notna(eps) and can_value:
-            eps_units = eps / split_adj[i]
-            px = price_for_pe[mask]
-            pe_series = px / eps_units if eps_units > 0 else pd.Series(-1.0, index=px.index)
-            val_series = pe_series.apply(lambda v: score_multiple_vs_norm(v, norms["pe"]))
-            groups.append(val_series.astype(float))
-            weights.append(FUNDAMENTAL_WEIGHTS["valuation"])
-        if qual:
-            groups.append(pd.Series(float(np.mean(qual)), index=close[mask].index))
-            weights.append(FUNDAMENTAL_WEIGHTS["quality"])
-        if gro:
-            groups.append(pd.Series(float(np.mean(gro)), index=close[mask].index))
-            weights.append(FUNDAMENTAL_WEIGHTS["growth"])
-        if not groups:
-            continue
-        combined = sum(w * g for w, g in zip(weights, groups)) / sum(weights)
-        out[mask] = 50.0 + 50.0 * combined.values
-    return out

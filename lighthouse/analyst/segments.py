@@ -286,7 +286,7 @@ def segments_for(ticker: str, as_of=None, source: str = "auto", forms: Iterable[
     instances) a filing whose tables are not cached yet. Downloads: the filing index, the instance and the label
     document, three requests under the SEC's rate limit."""
     from ..data import DataUnavailable, offline_mode
-    from ..edgar import company_filings, filing_documents
+    from ..edgar import company_filings, filing_documents, registrant_cik
     t = ticker.upper().strip()
     if filings is None or cik is None:
         profile, filings = company_filings(t, source=source)
@@ -299,6 +299,7 @@ def segments_for(ticker: str, as_of=None, source: str = "auto", forms: Iterable[
         return None
     last = usable.iloc[-1]
     accn = str(last["accn"])
+    cik = registrant_cik(last, cik)          # a predecessor's filing sits under the predecessor's CIK
     key = f"{int(cik)}_{accn.replace('-', '')}"
     notes: List[str] = []
     table = None if refresh else store.read_frame("edgar_segments", key)

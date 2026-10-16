@@ -1,0 +1,7 @@
+hypothesis,rule,wins,n,share,median_diff,p_value,holds,cohort
+H1 timing earns more than the same exposure (CAGR),exclude,70,257,0.2723735408560311,-0.012589420961868214,1.7544907047398434e-13,False,1996-01-02
+H2 timing has a shallower drawdown than the same exposure,exclude,153,257,0.5953307392996109,0.029583243409367577,0.0026822288217923976,True,1996-01-02
+H3 the rule beats the plain 200-day trend rule (Sharpe),exclude,149,257,0.5797665369649806,0.028909384838701035,0.012440578175525113,True,1996-01-02
+H1 timing earns more than the same exposure (CAGR),pessimistic,70,257,0.2723735408560311,-0.012589420961868214,1.7544907047398434e-13,False,1996-01-02
+H2 timing has a shallower drawdown than the same exposure,pessimistic,153,257,0.5953307392996109,0.029583243409367577,0.0026822288217923976,True,1996-01-02
+H3 the rule beats the plain 200-day trend rule (Sharpe),pessimistic,149,257,0.5797665369649806,0.028909384838701035,0.012440578175525113,True,1996-01-02

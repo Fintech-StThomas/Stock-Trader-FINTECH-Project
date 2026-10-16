@@ -39,8 +39,11 @@ jobs:
       - name: Restore the journal from the journal-data branch
         run: |
           mkdir -p data/journal
+          # a journal-data branch without a readable journal stops the run: starting a new journal here would replace
+          # the real one on the branch when the run saves
           if git show-ref --verify --quiet refs/remotes/origin/journal-data; then
-            git show origin/journal-data:lighthouse_journal.sqlite > data/journal/lighthouse_journal.sqlite || true
+            git show origin/journal-data:lighthouse_journal.sqlite > data/journal/lighthouse_journal.sqlite
+            test -s data/journal/lighthouse_journal.sqlite
           fi
       - name: Record today's decisions, check positions, paper-trade
         env:
@@ -55,7 +58,7 @@ jobs:
           else
             set -- $WATCHLIST
           fi
-          python -m lighthouse journal run "$@" --cash "$CASH" --sides long --paper \
+          python -m lighthouse journal run "$@" --cash "$CASH" --paper \
             --summary "$GITHUB_STEP_SUMMARY" --alerts alerts.txt
       - name: Score and export
         run: |

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from lighthouse import membership as mb
-from lighthouse.data import load_prices, sample_pack_tickers
+from lighthouse.data import load_prices
 from lighthouse.research import harness as H
 from lighthouse.research import signals as S
 
@@ -84,10 +84,10 @@ def test_holdout_is_evaluated_once(tmp_path):
 def test_every_price_signal_is_causal(ticker):
     df = load_prices(ticker, source="sample", years=None)
     df.attrs = {}
-    full = {**S.product_signals(df), **{k: v.fn(df) for k, v in S.PRICE_SIGNALS.items()}}
+    full = S.product_signals(df)
     cut = df.index[len(df) * 2 // 3]
     part_df = df[df.index <= cut]
-    part = {**S.product_signals(part_df), **{k: v.fn(part_df) for k, v in S.PRICE_SIGNALS.items()}}
+    part = S.product_signals(part_df)
     for k in full:
         a, b = full[k][full[k].index <= cut], part[k]
         pd.testing.assert_series_equal(a, b, check_names=False, obj=k)
@@ -114,6 +114,14 @@ def test_fundamental_signals_on_real_filings_and_causal(monkeypatch):
     assert full["sue"].dropna().between(-50, 50).all()
     # a split is not an issue of shares: AAPL's 4-for-1 split in August 2020 leaves net issuance near zero
     assert abs(full["net_issuance"].loc["2021-03-01"]) < 0.1
+    # nor a change in market value: the cover page of 30 July 2020 counts pre-split shares, the price after 31 August
+    # is post-split; the count is restated, so the value moves only with the price (+3.4% that day) and agrees with
+    # the memo's (analyst.financials) and membership's market cap
+    mc = full["market_cap"]
+    assert mc.loc["2020-08-31"] / mc.loc["2020-08-28"] == pytest.approx(df["Close"].loc["2020-08-31"] / df["Close"].loc["2020-08-28"],
+                                                                        rel=1e-9)
+    assert 1.8e12 < mc.loc["2020-09-15"] < 2.2e12
+    assert abs(full["net_issuance"].loc["2020-10-15"]) < 0.1
     # truncating the filings at a date leaves every earlier value unchanged
     facts = edgar.company_facts(ticker="AAPL", source="sample")
     cut = pd.Timestamp("2016-06-30")
@@ -122,28 +130,6 @@ def test_fundamental_signals_on_real_filings_and_causal(monkeypatch):
     for k in ("roic", "sue", "earnings_yield", "piotroski", "net_issuance", "accruals"):
         a, b = full[k][full[k].index <= cut], part[k][part[k].index <= cut]
         pd.testing.assert_series_equal(a, b, check_names=False, obj=k)
-
-
-def test_residual_momentum_finds_a_planted_residual_drift(monkeypatch):
-    from lighthouse.research import panel_signals as PS
-    rng = np.random.default_rng(5)
-    months = pd.period_range("2010-01", periods=72, freq="M")
-    fac = pd.DataFrame({"Mkt-RF": rng.normal(0.008, 0.04, 72), "SMB": rng.normal(0, 0.02, 72),
-                        "HML": rng.normal(0, 0.02, 72), "RF": 0.001}, index=months.to_timestamp("M"))
-    monkeypatch.setattr(PS.ff, "load_factors", lambda freq="monthly": fac.copy())
-    idx = pd.bdate_range("2010-01-01", "2015-12-31")
-    me = H.month_ends(idx)
-    prices = {}
-    for k in range(20):
-        # residual momentum is relative to the stock's own 36-month alpha: S00 beats its factor exposure only lately
-        drift = np.where(np.arange(72) >= 58, 0.03, 0.0) if k == 0 else 0.0
-        r = 0.001 + 1.0 * fac["Mkt-RF"].to_numpy() + drift + rng.normal(0, 0.01, 72)
-        prices[f"S{k:02d}"] = pd.Series(100 * np.cumprod(1 + r), index=me[:72])
-    panel = H.Panel(dates=me[:72], prices=pd.DataFrame(prices), members=pd.DataFrame(True, index=me[:72], columns=list(prices)),
-                    fwd={}, last_price=pd.Series(dtype="datetime64[ns]"), data_end=me[71])
-    rm = PS.residual_momentum(panel)
-    last = rm.iloc[-1].dropna()
-    assert last.idxmax() == "S00" and len(last) == 20
 
 
 def test_coverage_counts_members_without_any_price():

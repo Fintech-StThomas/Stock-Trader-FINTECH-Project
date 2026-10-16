@@ -1,19 +1,18 @@
 """
-Trade plans: what to buy (or sell short) right now with the cash you have, where you are wrong (stop-loss),
-where to take profit, and how to manage the trade once it is on.
+Trade plans: what to buy right now with the cash you have, where you are wrong (stop-loss), where to take profit,
+and how to manage the trade once it is on. Long only: short tickets lost money under both exit plans on the 2009
+cohort and were removed in October 2026 (docs/METHODOLOGY.md section 9).
 
-The plan reuses the verdict, the stop rules and the three risk rules of the decision engine, so a long ticket
-here and the Position plan in the Analyse tab agree. Shorts mirror the long rules (see `SHORT_MAX_SCORE`).
+The plan reuses the verdict, the stop rules and the three risk rules of the decision engine, so the ticket here and
+the Position plan in the Analyse tab agree.
 
 Trade-management rules (the same rules drive the ticket, the historical setup test and the position monitor):
   1. Initial stop  : the horizon's stop rule (long horizon: 200-day SMA minus a buffer; short horizon: k x ATR).
-                     Shorts always use the short-horizon (tactical) rules - an ATR stop and the short time stop -
-                     because a short's loss is open-ended and it pays borrow fees for as long as it is held.
-  2. Target 1      : entry +/- m1 x R (R = distance from entry to the initial stop). Close `partial_exit` of the
+  2. Target 1      : entry + m1 x R (R = distance from entry to the initial stop). Close `partial_exit` of the
                      position there and move the stop on the rest to breakeven (the entry price).
-  3. Trailing stop : after target 1, trail the stop at the best close since entry -/+ k x ATR (a chandelier exit);
+  3. Trailing stop : after target 1, trail the stop at the best close since entry - k x ATR (a chandelier exit);
                      it only ever tightens.
-  4. Target 2      : entry +/- m2 x R closes the rest.
+  4. Target 2      : entry + m2 x R closes the rest.
   5. Time stop     : if the trade is still open after `time_stop_days` sessions, close it at that session's close.
 
 Long-horizon longs follow a trend plan by default instead (TradeSettings.long_exit = "trend"): the same initial stop,
@@ -40,17 +39,11 @@ from .decision import conviction_from_score, dollars_to_shares, risk_sizing, sto
 from .regime import regime_adjustments
 from .technicals import beacon_scores
 
-SIDES = ("long", "short")
-# Shorts mirror the long rule around 50: a long needs a composite >= 60 (Buy); a short needs <= 40.
-SHORT_MAX_SCORE = 40.0
+SIDES = ("long",)                  # the `side` arguments below accept "long" only (the journal records it)
 # Default time stops (sessions) per horizon: short = weeks to a few months, long = about a year.
 TIME_STOP_DEFAULT = {"short": 40, "long": 252}
 # Long-horizon longs: "trend" = the backtest's review-day trend and signal exits, no fixed target; "targets" = R targets.
 LONG_EXITS = ("trend", "targets")
-REG_T_INITIAL_SHORT = 0.50        # Regulation T: 150% of the short value = the sale proceeds + 50% deposited
-FINRA_SHORT_MAINT_PCT = 0.30      # FINRA Rule 4210(c): short stock >= $5: greater of $5/share or 30% of market value
-FINRA_SHORT_MAINT_PER_SHARE = 5.0
-FINRA_LOW_PRICE_MAINT_PER_SHARE = 2.5   # short stock < $5: greater of $2.50/share or 100% of market value
 
 
 class StaleDataError(RuntimeError):
@@ -130,8 +123,13 @@ class TradeSettings:
         return int(self.time_stop_days or TIME_STOP_DEFAULT.get(horizon, 40))
 
 
+def _check_side(side: str) -> None:
+    if side not in SIDES:
+        raise ValueError(f"side must be one of {SIDES} (short tickets were removed)")
+
+
 def trend_plan_applies(side: str, profile: InvestorProfile, params: StrategyParams, settings: TradeSettings) -> bool:
-    """True when a trade follows the trend plan: a long, on the long horizon, with the 200-day SMA exit switched on."""
+    """True when a trade follows the trend plan: on the long horizon, with the 200-day SMA exit switched on."""
     return (side == "long" and profile.horizon == "long" and settings.long_exit == "trend" and not params.atr_stop
             and params.exit_below_sma is not None)
 
@@ -158,7 +156,7 @@ def review_days(index: pd.DatetimeIndex, frequency: str) -> np.ndarray:
 class Target:
     r_multiple: float
     price: float
-    move_pct: float          # signed % move from the entry (negative for a short's targets)
+    move_pct: float          # % move from the entry
     shares: int              # shares closed at this level
     profit: float            # $ profit on those shares if the level fills
 
@@ -176,7 +174,7 @@ class SetupStats:
     timed_out: float         # share closed by the time stop before target 1 (the three shares sum to 1; for a trend
                              # plan, stopped_out + timed_out + trend_exited sum to 1)
     avg_days: float
-    avg_return_pct: float    # average % return of the position per trade (sign-adjusted for shorts)
+    avg_return_pct: float    # average % return of the position per trade
     years: float
     trades: pd.DataFrame = field(default_factory=pd.DataFrame)
     exit_style: str = "targets"     # "targets" | "trend"
@@ -191,18 +189,18 @@ class SetupStats:
 class TradePlan:
     ticker: str
     name: str
-    side: str                       # "long" | "short"
+    side: str                       # "long"
     status: str                     # "actionable" | "watch" | "avoid"
     reasons: List[str]
     as_of: str                      # last finished session the signals use
     price: float                    # reference entry price: the live quote when there is one, else the last close
-    entry_limit: float              # do-not-chase price (long: max price to pay; short: min price to sell at)
+    entry_limit: float              # do-not-chase price: the most to pay
     stop: Optional[float]
     stop_label: str
     stop_pct: Optional[float]       # distance from entry to stop, fraction of price
     risk_per_share: float
     shares: int
-    notional: float                 # shares x price (cash spent for a long, collateral for a short)
+    notional: float                 # shares x price: the cash spent
     dollars_at_risk: float          # shares x risk per share (gaps can make it worse)
     risk_pct_of_account: float
     targets: List[Target]
@@ -212,7 +210,6 @@ class TradePlan:
     atr: float
     composite_score: float
     technical_score: float
-    fundamental_score: Optional[float]
     verdict: str
     regime: str
     conviction: float
@@ -221,10 +218,9 @@ class TradePlan:
     account_value: float
     sizing_notes: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
-    margin: Dict[str, float] = field(default_factory=dict)
     stats: Optional[SetupStats] = None
     priced_from: str = ""           # where `price` comes from (live quote with its time, or the close)
-    horizon: str = "long"           # the rules the trade follows ("short" for every short sale)
+    horizon: str = "long"           # the rules the trade follows
     partial_exit: float = 0.5       # share of the position sold at target 1 (TradeSettings.partial_exit)
     exit_style: str = "targets"     # "targets" | "trend" (long-horizon longs: review-day trend and signal exits)
     trend_exit_level: Optional[float] = None    # trend plans: a review-day close below this ends the trade (today's value)
@@ -265,9 +261,7 @@ class TradePlan:
 
     def management_steps(self) -> List[str]:
         """The plan in plain English, in the order the investor acts on it."""
-        verb, unverb = ("Buy", "sell") if self.side == "long" else ("Sell short", "buy back")
-        best = "highest" if self.side == "long" else "lowest"
-        sign = "−" if self.side == "long" else "+"
+        verb, unverb, best, sign = "Buy", "sell", "highest", "−"
         if self.shares <= 0:
             levels = [f"stop ${self.stop:,.2f}"] if self.stop is not None else []
             levels += [f"target {k + 1} ${t.price:,.2f}" for k, t in enumerate(self.targets)]
@@ -277,9 +271,8 @@ class TradePlan:
                                        "buy a whole share") + (". Reference levels: " + ", ".join(levels) + "." if levels else ".")]
         steps = []
         if self.shares > 0:
-            chase = "above" if self.side == "long" else "below"
             steps.append(f"{verb} {self.shares} shares of {self.ticker} with a limit order near ${self.price:,.2f}; "
-                         f"skip the trade if it is already trading {chase} ${self.entry_limit:,.2f} (do not chase).")
+                         f"skip the trade if it is already trading above ${self.entry_limit:,.2f} (do not chase).")
         if self.stop is not None:
             steps.append(f"Immediately place a stop order at ${self.stop:,.2f} ({self.stop_label}): if hit, {unverb} everything. "
                          f"Planned loss ≈ ${self.dollars_at_risk:,.0f} ({self.risk_pct_of_account:.2f}% of the account).")
@@ -317,8 +310,7 @@ class TradePlan:
     def exit_plan(self) -> List["ExitRule"]:
         """When to get out, for a loss or a profit: every exit the plan has, its trigger price, what it does to the
         whole position's P&L if the trade ends that way, and how often it happened on this stock's history."""
-        short = self.side == "short"
-        unverb = "Buy back" if short else "Sell"
+        unverb = "Sell"
         t1 = self.targets[0] if self.targets else None
         t2 = self.targets[1] if len(self.targets) > 1 else None
         if self.shares > 0:
@@ -361,10 +353,9 @@ class TradePlan:
                     f"{unverb} the whole position.", hist.get("target 1", "")))
         if t2 is not None and q2:
             best = q1 * (t1.r_multiple if t1 else 0.0) + q2 * t2.r_multiple
-            trail_dir = "−" if not short else "+"
             rules.append(ExitRule(
                 "profit", "Trailing stop (after target 1)", None, None, t2.shares or None, None, None,
-                f"Trail the stop on the rest at the {'lowest' if short else 'highest'} close since entry {trail_dir} "
+                f"Trail the stop on the rest at the highest close since entry − "
                 f"{self.trail_atr_multiple:g} × ATR (≈ ${self.trail_atr_multiple * self.atr:,.2f} today), never loosening it. "
                 f"It locks in more of the run; the result lands between target 1's and target 2's.",
                 hist.get("trailing", "")))
@@ -380,8 +371,7 @@ class TradePlan:
         rules.append(ExitRule(
             "evidence", "Verdict turns", None, None, None, None, None,
             (f"Re-run Lighthouse every {'week' if self.horizon == 'short' else 'month'} (the review cycle these rules were "
-             "tested with). If the verdict turns " + ("Buy or better while you are short, buy back early." if short else
-                                                      "Reduce or Sell while you are long, sell early.")),
+             "tested with). If the verdict turns Reduce or Sell while you hold the stock, sell early."),
             ""))
         return rules
 
@@ -471,14 +461,6 @@ def _exit_history(stats: Optional["SetupStats"]) -> Dict[str, str]:
 # --------------------------------------------------------------------------- #
 # Setup rules
 # --------------------------------------------------------------------------- #
-def trade_rules(profile: InvestorProfile, params: StrategyParams, side: str) -> Tuple[InvestorProfile, StrategyParams]:
-    """The profile and parameters whose stop, trailing-stop and time-stop rules apply to `side`.
-    Longs follow the investor's horizon; shorts always follow the short-horizon rules (ATR stop)."""
-    if side == "short":
-        return profile.with_overrides(horizon="short"), params.copy(atr_stop=True)
-    return profile, params
-
-
 def _trend_score(decision) -> float:
     for b in decision.technical_beacons:
         if b.key == "trend":
@@ -488,48 +470,24 @@ def _trend_score(decision) -> float:
 
 def evaluate_setup(decision, side: str, params: StrategyParams) -> Tuple[str, List[str], float]:
     """Is there a trade right now? Returns (status, reasons, regime size multiplier)."""
-    if side not in SIDES:
-        raise ValueError(f"side must be one of {SIDES}")
+    _check_side(side)
     trend = _trend_score(decision)
     score, tech, verdict = decision.composite_score, decision.technical_score, decision.verdict
     reg = decision.regime
     reasons: List[str] = []
-    if side == "long":
-        mult = regime_adjustments(reg.is_bear if reg else False, reg.is_turbulent if reg else False, params)["size_multiplier"]
-        bullish = verdict in {"Buy", "Strong Buy"}
-        trend_up = np.isfinite(trend) and trend > 0
-        reasons.append(f"Verdict {verdict} (score {score:.0f}; a buy needs ≥ 60).")
-        reasons.append(f"Trend beacon {trend:+.2f}: " + ("price and the 50-day are above the 200-day (up-trend)." if trend_up
-                                                         else "not in an up-trend yet."))
-        if any("new entries are blocked" in w for w in decision.warnings):
-            reasons.append("Market is Bear / Turbulent: new long entries are blocked by the regime rule.")
-        if mult < 1:
-            reasons.append(f"Bear market: position size × {mult:g}.")
-        if bullish and trend_up:
-            return "actionable", reasons, mult
-        if (bullish and not trend_up) or (verdict == "Hold" and trend_up and tech >= params.entry_score):
-            return "watch", reasons, mult
-        return "avoid", reasons, mult
-
-    # short side: mirror of the long rule
-    bull = reg is not None and not reg.is_bear
-    calm_bull = bull and not reg.is_turbulent
-    mult = 0.5 if bull else 1.0
-    bearish = score <= SHORT_MAX_SCORE
-    trend_down = np.isfinite(trend) and trend < 0
-    tech_weak = tech <= 100.0 - params.entry_score
-    reasons.append(f"Score {score:.0f} (a short needs ≤ {SHORT_MAX_SCORE:.0f}: the mirror of a buy's ≥ 60).")
-    reasons.append(f"Trend beacon {trend:+.2f}: " + ("price and the 50-day are below the 200-day (down-trend)." if trend_down
-                                                     else "not in a down-trend."))
-    reasons.append(f"Technical score {tech:.0f} (a short needs ≤ {100 - params.entry_score:.0f}).")
-    if calm_bull:
-        reasons.append("Market is Bull / Calm: shorts fight the tide, so new shorts are blocked (mirror of the long rule's "
-                       "Bear / Turbulent block).")
-    elif bull:
-        reasons.append("Bull market: short size × 0.5.")
-    if bearish and trend_down and tech_weak and not calm_bull:
+    mult = regime_adjustments(reg.is_bear if reg else False, reg.is_turbulent if reg else False, params)["size_multiplier"]
+    bullish = verdict in {"Buy", "Strong Buy"}
+    trend_up = np.isfinite(trend) and trend > 0
+    reasons.append(f"Verdict {verdict} (score {score:.0f}; a buy needs ≥ 60).")
+    reasons.append(f"Trend beacon {trend:+.2f}: " + ("price and the 50-day are above the 200-day (up-trend)." if trend_up
+                                                     else "not in an up-trend yet."))
+    if any("new entries are blocked" in w for w in decision.warnings):
+        reasons.append("Market is Bear / Turbulent: new entries are blocked by the regime rule.")
+    if mult < 1:
+        reasons.append(f"Bear market: position size × {mult:g}.")
+    if bullish and trend_up:
         return "actionable", reasons, mult
-    if score < 45 and trend_down:
+    if (bullish and not trend_up) or (verdict == "Hold" and trend_up and tech >= params.entry_score):
         return "watch", reasons, mult
     return "avoid", reasons, mult
 
@@ -566,32 +524,24 @@ def build_trade_plan(result, side: str = "long", settings: Optional[TradeSetting
     price, atr = float(d.price), float(last["atr"])
     rv = float(last["sizing_vol"]) if np.isfinite(last["sizing_vol"]) else float("nan")
     status, reasons, mult = evaluate_setup(d, side, p)
-    short = side == "short"
     warnings: List[str] = []
     notes: List[str] = []
 
-    rprof, rparams = trade_rules(prof, p, side)
+    rprof, rparams = prof, p
     trend = trend_plan_applies(side, rprof, rparams, s)
-    stop, stop_label, _ = stop_level(price, atr, float(last["sma_slow"]), rprof, rparams, side=side)
+    stop, stop_label, _ = stop_level(price, atr, float(last["sma_slow"]), rprof, rparams)
     stop_label = stop_label.replace("trailing stop", "stop below the entry")   # the ticket only trails after target 1
     stop_pct = None if stop is None else max(abs(stop / price - 1.0), 0.01)
     risk_ps = 0.0 if stop is None else abs(price - stop)
 
-    if short:
-        conviction = conviction_from_score(100.0 - d.composite_score)
-        entry_limit = price - s.chase_atr * atr
-    else:
-        conviction = conviction_from_score(d.composite_score)
-        entry_limit = price + s.chase_atr * atr
+    conviction = conviction_from_score(d.composite_score)
+    entry_limit = price + s.chase_atr * atr
 
     shares, value, pct, binding = 0, 0.0, 0.0, "no trade"
     if status in {"actionable", "watch"} and stop is not None:
         base_pct, binding = risk_sizing(price, stop_pct, rv, prof, notes)
         pct = float(min(base_pct * conviction * mult, prof.max_position_pct))
         notes.append(f"Scaled by conviction {conviction:.2f} and regime multiplier {mult:g}.")
-        if short:
-            notes.append("Short collateral is capped at the cash available (1:1), more conservative than Regulation T's 50% "
-                         "initial margin, which would allow up to 2:1.")
         pct, value, shares, binding = dollars_to_shares(pct, price, prof, binding, notes)
         if status == "watch":
             notes.insert(0, "Conditional ticket: only place it if the setup turns actionable.")
@@ -606,10 +556,7 @@ def build_trade_plan(result, side: str = "long", settings: Optional[TradeSetting
     for m, n in ((m1, n1), (m2, n2)):
         if risk_ps <= 0 or trend:
             break
-        tp = price - m * risk_ps if short else price + m * risk_ps
-        if tp <= 0.01 * price:
-            warnings.append(f"The {m:g}R target would be at or below zero; it is not reachable for this short.")
-            continue
+        tp = price + m * risk_ps
         targets.append(Target(m, float(tp), float((tp / price - 1.0) * 100.0), int(n), float(n * m * risk_ps)))
 
     typical = float(rv * math.sqrt(typical_days / p.trading_days) * 100.0) if np.isfinite(rv) else float("nan")
@@ -636,37 +583,16 @@ def build_trade_plan(result, side: str = "long", settings: Optional[TradeSetting
     warnings.append("Stops are orders, not guarantees: an overnight gap (earnings, news) can fill beyond the stop. "
                     "Check the next earnings date before entering.")
 
-    margin: Dict[str, float] = {}
-    if short:
-        if prof.horizon == "long":
-            notes.append("Shorts use the short-horizon rules (ATR stop, short time stop) even for a long-term investor: a short's "
-                         "loss is open-ended and borrow fees accrue every day it is held.")
-        notional = shares * price
-        maint = (max(FINRA_SHORT_MAINT_PCT * notional, FINRA_SHORT_MAINT_PER_SHARE * shares) if price >= 5
-                 else max(notional, FINRA_LOW_PRICE_MAINT_PER_SHARE * shares))
-        margin = {"reg_t_initial": REG_T_INITIAL_SHORT * notional, "finra_maintenance": maint}
-        warnings += [
-            "Short selling needs a margin account (not a cash account or an IRA) and shares your broker can borrow; "
-            "hard-to-borrow stocks charge a daily borrow fee and the lender can recall the shares.",
-            "A short's loss is not capped by the purchase price: if the stock gaps up through the stop (or is squeezed), "
-            "the loss can exceed the plan.",
-            "Short sellers owe any dividends paid while short (payment in lieu); the historical test includes them.",
-            f"Borrow fee assumed {p.short_borrow_fee * 100:g}% a year (StrategyParams.short_borrow_fee) in the historical "
-            "test: free data has no borrow rates, and hard-to-borrow stocks can cost far more.",
-            "SEC Rule 201: after a 10% one-day fall, shorts may only be sold above the national best bid for the rest of "
-            "that day and the next.",
-        ]
-
     plan = TradePlan(
-        ticker=d.ticker, name=result.fundamentals.name or d.ticker, side=side, status=status, reasons=reasons, as_of=d.as_of,
+        ticker=d.ticker, name=getattr(result, "name", "") or d.ticker, side=side, status=status, reasons=reasons, as_of=d.as_of,
         price=price, entry_limit=float(entry_limit), stop=stop, stop_label=stop_label, stop_pct=stop_pct,
         risk_per_share=float(risk_ps), shares=int(shares), notional=float(shares * price),
         dollars_at_risk=float(shares * risk_ps), risk_pct_of_account=float(100.0 * shares * risk_ps / prof.account_value),
         targets=targets, trail_atr_multiple=float(rprof.stop_atr_multiple), time_stop_days=t_days, typical_move_pct=typical,
         atr=atr, composite_score=float(d.composite_score), technical_score=float(d.technical_score),
-        fundamental_score=d.fundamental_score, verdict=d.verdict, regime=d.regime.label if d.regime else "n/a",
+        verdict=d.verdict, regime=d.regime.label if d.regime else "n/a",
         conviction=float(conviction), size_binding=binding, cash_available=prof.cash, account_value=prof.account_value,
-        sizing_notes=notes, warnings=warnings, margin=margin,
+        sizing_notes=notes, warnings=warnings,
         priced_from=(f"live quote {result.quote.describe()}" if getattr(result, "quote", None) is not None
                      else f"close of {d.as_of}"),
         horizon=rprof.horizon, partial_exit=s.partial_exit, typical_days=typical_days, **trend_fields,
@@ -729,10 +655,7 @@ def _bar_exit(o: float, h: float, l: float, c: float, stop: float, target: Optio
 def _simulate(o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray, atr: np.ndarray, start: int, entry: float,
               stop: float, tp1: Optional[float], tp2: Optional[float], partial: float, trail_k: float, max_bars: Optional[int],
               real_ohlc: bool, check_first_bar: bool) -> Dict[str, object]:
-    """Walk one long-space trade forward from bar `start` (the entry bar). Returns the exits and the live state.
-
-    Shorts are simulated by negating prices (and swapping high/low) before calling this, so one engine serves both.
-    """
+    """Walk one trade forward from bar `start` (the entry bar). Returns the exits and the live state."""
     n = len(c)
     remaining, exits = 1.0, []          # exits: (fraction, price, reason, bar)
     stage1 = True
@@ -812,10 +735,8 @@ def _simulate_trend(o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray, 
             "stop": stop, "last_bar": last}
 
 
-def _to_long_space(df: pd.DataFrame, side: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _ohlc(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     o, h, l, c = (df[k].to_numpy(dtype=float) for k in ("Open", "High", "Low", "Close"))
-    if side == "short":
-        return -o, -l, -h, -c
     return o, h, l, c
 
 
@@ -829,27 +750,21 @@ def _has_real_ohlc(df: pd.DataFrame) -> bool:
 # --------------------------------------------------------------------------- #
 def _historical_conditions(result, side: str) -> np.ndarray:
     """Point-in-time version of `evaluate_setup` (actionable only) for every date."""
-    ind, p, prof = result.indicators, result.params, result.profile
+    ind, p = result.indicators, result.params
+    _check_side(side)
     tech = result.technical_scores.reindex(ind.index).to_numpy(dtype=float)
     trend = beacon_scores(ind, p)["trend"].to_numpy(dtype=float)
-    pit = result.pit_scores.reindex(ind.index).to_numpy(dtype=float) if result.pit_scores is not None else np.full(len(ind), np.nan)
-    blended = np.where(np.isfinite(pit), prof.fundamental_weight * pit + prof.technical_weight * tech, tech)
     if result.regimes is not None:
         rt = result.regimes.reindex(ind.index.union(result.regimes.index)).ffill().reindex(ind.index)
         known = rt["regime"].notna().to_numpy()
-        bull = (rt["bull"].to_numpy() == 1.0) & known
         bear = (rt["bull"].to_numpy() == 0.0) & known
         turb = (rt["turbulent"].to_numpy() == 1.0) & known
-        calm = (rt["turbulent"].to_numpy() == 0.0) & known
     else:
-        bull = bear = turb = calm = np.zeros(len(ind), dtype=bool)
+        bear = turb = np.zeros(len(ind), dtype=bool)
     penalty = np.where(bear, p.bear_score_penalty, 0.0) + np.where(turb, p.turbulent_score_penalty, 0.0)
-    composite = np.clip(blended - penalty, 0.0, 100.0)
+    composite = np.clip(tech - penalty, 0.0, 100.0)
     with np.errstate(invalid="ignore"):
-        if side == "long":
-            cond = (composite >= 60.0) & (trend > 0) & ~(bear & turb)
-        else:
-            cond = (composite <= SHORT_MAX_SCORE) & (trend < 0) & (tech <= 100.0 - p.entry_score) & ~(bull & calm)
+        cond = (composite >= 60.0) & (trend > 0) & ~(bear & turb)
     return cond & np.isfinite(tech) & np.isfinite(trend)
 
 
@@ -863,21 +778,22 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
     """
     s = settings or TradeSettings()
     ind = result.indicators
-    prof, p = trade_rules(result.profile, result.params, side)
+    _check_side(side)
+    prof, p = result.profile, result.params
     trend = trend_plan_applies(side, prof, p, s)
-    if exit_style is not None:       # evaluation only: force a plan (a trend exit for short-horizon longs and shorts)
+    if exit_style is not None:       # evaluation only: force a plan (a trend exit for short-horizon trades)
         if exit_style not in LONG_EXITS:
             raise ValueError(f"exit_style must be one of {LONG_EXITS}")
         trend = exit_style == "trend" and p.exit_below_sma is not None
     cond = _historical_conditions(result, side)
-    o, h, l, c = _to_long_space(ind, side)
+    o, h, l, c = _ohlc(ind)
     atr = ind["atr"].to_numpy(dtype=float)
     sma = ind["sma_slow"].to_numpy(dtype=float)
     real = _has_real_ohlc(ind)
     cost = (p.cost_bps + p.slippage_bps) / 10_000.0
     t_days = s.time_stop_days if trend else s.time_stop_for(prof.horizon)
     if trend:
-        exit_level, tech_now, review = _trend_inputs(result, p, side)
+        exit_level, tech_now, review = _trend_inputs(result, p)
     m1, m2 = s.reward_multiples
     rows = []
     i, n = 0, len(ind)
@@ -886,20 +802,14 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
             i += 1
             continue
         e = i + 1
-        entry_raw = abs(o[e]) if real else abs(c[e])
-        stop_raw, _, _ = stop_level(entry_raw, atr[i], sma[i], prof, p, side=side)
+        entry_raw = o[e] if real else c[e]
+        stop_raw, _, _ = stop_level(entry_raw, atr[i], sma[i], prof, p)
         if stop_raw is None or not np.isfinite(stop_raw):
             i += 1
             continue
         risk = abs(entry_raw - stop_raw)
-        sgn = -1.0 if side == "short" else 1.0
-        entry_ls, stop_ls = sgn * entry_raw, sgn * stop_raw
+        entry_ls, stop_ls = entry_raw, stop_raw
         tp1_ls, tp2_ls = entry_ls + m1 * risk, entry_ls + m2 * risk
-        if side == "short" and entry_raw - m1 * risk <= 0.01 * entry_raw:
-            i += 1
-            continue
-        if side == "short" and entry_raw - m2 * risk <= 0.01 * entry_raw:
-            tp2_ls = None
         if trend:
             sim = _simulate_trend(o, h, l, c, e, stop_ls, exit_level, tech_now, review, p.exit_score, t_days, real,
                                   check_first_bar=real)
@@ -910,10 +820,8 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
             break
         exits = sim["exits"]
         gross_r = sum(f * (px - entry_ls) for f, px, _, _ in exits) / risk
-        exit_avg = sum(f * abs(px) for f, px, _, _ in exits)
+        exit_avg = sum(f * px for f, px, _, _ in exits)
         cost_r = cost * (entry_raw + exit_avg) / risk
-        if side == "short":     # the borrow fee on the shorted shares for every session held (an assumption)
-            cost_r += p.short_borrow_fee * (max(x[3] for x in exits) - e + 1) / p.trading_days * entry_raw / risk
         r = gross_r - cost_r
         reasons = [x[2] for x in exits]
         exit_bar = max(x[3] for x in exits)
@@ -938,17 +846,13 @@ def setup_statistics(result, side: str = "long", settings: Optional[TradeSetting
         trend_exited=float(first.isin(["trend exit", "signal exit"]).mean()))
 
 
-def _trend_inputs(result, p: StrategyParams, side: str = "long") -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _trend_inputs(result, p: StrategyParams) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per session: the trend-exit level (200-day SMA minus the buffer), the technical score the backtest tests (smoothed
-    like the backtest's) and whether the session is a review day. For a short, in the simulator's negated price space:
-    the level is the 200-day SMA plus the buffer and the score is 100 minus the score (a strong score ends a short)."""
+    like the backtest's) and whether the session is a review day."""
     ind = result.indicators
     tech = result.technical_scores.reindex(ind.index)
     if p.score_smoothing > 1:
         tech = tech.rolling(p.score_smoothing, min_periods=1).mean()
-    if side == "short":
-        exit_level = -(ind["sma_slow"] * (1.0 + p.exit_below_sma)).to_numpy(dtype=float)
-        return exit_level, (100.0 - tech).to_numpy(dtype=float), review_days(ind.index, p.decision_frequency)
     exit_level = (ind["sma_slow"] * (1.0 - p.exit_below_sma)).to_numpy(dtype=float)
     return exit_level, tech.to_numpy(dtype=float), review_days(ind.index, p.decision_frequency)
 
@@ -981,7 +885,7 @@ def allocate_ideas(results: Sequence, side: str = "long", settings: Optional[Tra
                                               if len(refused) > 1 else ""))
     results = current
     plans = [build_trade_plan(r, side, s, with_stats=False, allow_stale=allow_stale) for r in results]
-    key = (lambda pl: -pl.composite_score) if side == "long" else (lambda pl: pl.composite_score)
+    key = (lambda pl: -pl.composite_score)
     candidates = sorted([pl for pl in plans if pl.status == "actionable"], key=key)
     watch = sorted([pl for pl in plans if pl.status == "watch"], key=key) if include_watch else []
     by_ticker = {r.ticker: r for r in results}
@@ -1095,13 +999,12 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
     The path since entry is replayed with the same rules as the setup test, starting the session after entry. A long on
     the long horizon follows the trend plan (review-day trend and signal exits) unless `targets` are given.
     """
-    if side not in SIDES:
-        raise ValueError(f"side must be one of {SIDES}")
+    _check_side(side)
     if entry_price <= 0 or shares <= 0:
         raise ValueError("entry_price and shares must be positive")
     s = settings or TradeSettings()
     ind, d = result.indicators, result.decision
-    prof, p = trade_rules(result.profile, result.params, side)
+    prof, p = result.profile, result.params
     entry_ts = pd.Timestamp(entry_date)
     alerts: List[str] = []
     if entry_ts > ind.index[-1]:
@@ -1117,35 +1020,33 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
                           "check the entry price and date (and whether the data is split-adjusted).")
     atr_entry, sma_entry = float(ind["atr"].iloc[ref]), float(ind["sma_slow"].iloc[ref])
     if stop is None:
-        stop_raw, stop_note, _ = stop_level(entry_price, atr_entry, sma_entry, prof, p, side=side)
+        stop_raw, stop_note, _ = stop_level(entry_price, atr_entry, sma_entry, prof, p)
         if stop_raw is None:
             raise ValueError("no stop could be derived (ATR unknown); enter your own stop")
         stop_note = f"plan stop: {stop_note}"
     else:
         stop_raw, stop_note = float(stop), "your stop"
-    if (side == "long" and stop_raw >= entry_price) or (side == "short" and stop_raw <= entry_price):
-        raise ValueError("the stop must be below the entry for a long and above it for a short")
+    if stop_raw >= entry_price:
+        raise ValueError("the stop must be below the entry")
     risk = abs(entry_price - stop_raw)
     if not targets and trend_plan_applies(side, prof, p, s):
         return _monitor_trend(result, entry_price, int(shares), entry_ts, pos, float(stop_raw), stop_note, s, alerts)
     m1, m2 = s.reward_multiples
     if targets:
-        tps = sorted((float(t) for t in targets), reverse=(side == "short"))[:2]
-        if any((t <= entry_price) if side == "long" else (t >= entry_price) for t in tps):
-            raise ValueError("targets must be above the entry for a long and below it for a short")
+        tps = sorted(float(t) for t in targets)[:2]
+        if any(t <= entry_price for t in tps):
+            raise ValueError("targets must be above the entry")
     else:
-        tps = [entry_price + m * risk if side == "long" else entry_price - m * risk for m in (m1, m2)]
-        tps = [t for t in tps if t > 0.01 * entry_price]
-    sgn = -1.0 if side == "short" else 1.0
-    o, h, l, c = _to_long_space(ind, side)
+        tps = [entry_price + m * risk for m in (m1, m2)]
+    o, h, l, c = _ohlc(ind)
     atr = ind["atr"].to_numpy(dtype=float)
     real = _has_real_ohlc(ind)
-    sim = _simulate(o, h, l, c, atr, pos, sgn * entry_price, sgn * stop_raw, sgn * tps[0] if tps else None,
-                    sgn * tps[1] if len(tps) > 1 else None, s.partial_exit, prof.stop_atr_multiple, None, real,
+    sim = _simulate(o, h, l, c, atr, pos, entry_price, stop_raw, tps[0] if tps else None,
+                    tps[1] if len(tps) > 1 else None, s.partial_exit, prof.stop_atr_multiple, None, real,
                     check_first_bar=False)
     last_price = float(ind["Close"].iloc[-1])
     last_atr = float(ind["atr"].iloc[-1])
-    cur_stop = abs(sim["stop"])
+    cur_stop = float(sim["stop"])
     days_held = len(ind) - 1 - pos
     # Whole shares per exit, as the ticket splits them: target 1 sells `partial_exit` of the shares when a second target
     # exists; every other exit closes whatever is still open. P&L is realised on the exits, unrealised on the rest.
@@ -1155,21 +1056,21 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
         n = min(n1, open_sh) if reason == "target 1" else open_sh
         if n <= 0:
             continue
-        realised += sgn * (abs(px) - entry_price) * n
+        realised += (px - entry_price) * n
         open_sh -= n
-        done.append((str(ind.index[bar].date()), int(n), float(abs(px)), reason))
-    unrealised = sgn * (last_price - entry_price) * open_sh
+        done.append((str(ind.index[bar].date()), int(n), float(px), reason))
+    unrealised = (last_price - entry_price) * open_sh
     pnl = realised + unrealised
     r_now = pnl / (risk * shares)
-    dist = sgn * (last_price - cur_stop) / last_price
-    dist_atr = sgn * (last_price - cur_stop) / last_atr if last_atr > 0 else float("nan")
+    dist = (last_price - cur_stop) / last_price
+    dist_atr = (last_price - cur_stop) / last_atr if last_atr > 0 else float("nan")
     reached = []
     for k, tp in enumerate(tps):
         r_mult = abs(tp - entry_price) / risk
         hit = sim["tp1_hit"] if k == 0 else any(x[2] == "target 2" for x in sim["exits"])
         reached.append((float(r_mult), float(tp), bool(hit)))
     t_days = s.time_stop_for(prof.horizon)
-    unverb = "Sell" if side == "long" else "Buy back"
+    unverb = "Sell"
     closing = done[-1] if open_sh == 0 and done else None     # the exit that closed the whole position, if any
     result_txt = f"Result {signed_usd(pnl)} ({r_now:+.2f}R)."
     if closing is not None and "stop" in closing[3]:
@@ -1205,10 +1106,8 @@ def monitor_position(result, side: str, entry_price: float, shares: int, entry_d
     else:
         status = "OK"
         action = f"On plan. Stop ${cur_stop:,.2f}, target 1 ${tps[0]:,.2f}." if tps else f"On plan. Stop ${cur_stop:,.2f}."
-    if side == "long" and d.verdict in {"Reduce", "Sell"}:
-        alerts.append(f"Lighthouse now says {d.verdict} (score {d.composite_score:.0f}): the evidence has turned against this long.")
-    if side == "short" and d.verdict in {"Buy", "Strong Buy"}:
-        alerts.append(f"Lighthouse now says {d.verdict} (score {d.composite_score:.0f}): the evidence has turned against this short.")
+    if d.verdict in {"Reduce", "Sell"}:
+        alerts.append(f"Lighthouse now says {d.verdict} (score {d.composite_score:.0f}): the evidence has turned against this trade.")
     if (pd.Timestamp.today().normalize() - ind.index[-1]).days > 4:
         alerts.append(f"Prices end {ind.index[-1].date()}: refresh live data for a current status.")
     return PositionStatus(
@@ -1225,7 +1124,7 @@ def _monitor_trend(result, entry_price: float, shares: int, entry_ts: pd.Timesta
     """`monitor_position` for a trend plan: the stop order, then the review-day trend and signal exits."""
     ind, d, p = result.indicators, result.decision, result.params
     exit_level, tech, review = _trend_inputs(result, p)
-    o, h, l, c = _to_long_space(ind, "long")
+    o, h, l, c = _ohlc(ind)
     sim = _simulate_trend(o, h, l, c, pos, stop, exit_level, tech, review, p.exit_score, None, _has_real_ohlc(ind),
                           check_first_bar=False)
     last_price, last_atr = float(ind["Close"].iloc[-1]), float(ind["atr"].iloc[-1])
@@ -1269,7 +1168,7 @@ def _monitor_trend(result, entry_price: float, shares: int, entry_ts: pd.Timesta
                   f"is below ${level_now:,.2f} ({label}; it rises with the average) or the technical score is "
                   f"{p.exit_score:g} or lower (today {tech_now:.0f}).")
     if d.verdict in {"Reduce", "Sell"} and not done:
-        alerts.append(f"Lighthouse now says {d.verdict} (score {d.composite_score:.0f}): the evidence has turned against this long.")
+        alerts.append(f"Lighthouse now says {d.verdict} (score {d.composite_score:.0f}): the evidence has turned against this trade.")
     if (pd.Timestamp.today().normalize() - ind.index[-1]).days > 4:
         alerts.append(f"Prices end {ind.index[-1].date()}: refresh live data for a current status.")
     return PositionStatus(

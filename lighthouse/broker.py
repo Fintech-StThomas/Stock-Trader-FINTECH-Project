@@ -7,7 +7,7 @@ environment (ALPACA_API_KEY_ID, ALPACA_API_SECRET_KEY; free at alpaca.markets). 
 that returns the orders it would send, so the daily job can show them.
 
 How a ticket becomes orders
-  entry        a limit order at the ticket's do-not-chase price (long: the most to pay; short: the least to sell at),
+  entry        a limit order at the ticket's do-not-chase price (the most to pay),
                good for the day, with the stop-loss attached (an OTO order: the stop is live as soon as the entry fills).
                It is sent after the close, so it can fill at the open, as the backtest assumes, or later that day if the
                price comes back to the limit; the reconciliation measures the difference.
@@ -113,8 +113,7 @@ def ticket_orders(plan, decision_id: Optional[int] = None) -> List[OrderRequest]
     """The orders that put one actionable ticket on (see the module docstring). Empty for a ticket with no shares."""
     if not plan.is_actionable or plan.stop is None:
         return []
-    side = "buy" if plan.side == "long" else "sell"
-    base = {"symbol": plan.ticker, "side": side, "type": "limit", "time_in_force": "day",
+    base = {"symbol": plan.ticker, "side": "buy", "type": "limit", "time_in_force": "day",
             "limit_price": _num(plan.entry_limit)}
     tag = f"lh-{decision_id if decision_id is not None else 'x'}"
     if plan.is_trend_plan or not plan.targets:
@@ -135,7 +134,7 @@ def ticket_orders(plan, decision_id: Optional[int] = None) -> List[OrderRequest]
 
 def review_exit_order(ticker: str, side: str, qty: int, decision_id: Optional[int], why: str) -> OrderRequest:
     """A market order for the next open (time in force 'opg'): the trend plan's review exit."""
-    return OrderRequest({"symbol": ticker, "side": "sell" if side == "long" else "buy", "type": "market",
+    return OrderRequest({"symbol": ticker, "side": "sell", "type": "market",
                          "time_in_force": "opg", "qty": str(int(qty)),
                          "client_order_id": f"lh-{decision_id if decision_id is not None else 'x'}-review"},
                         f"review exit at the next open: {why}", decision_id)

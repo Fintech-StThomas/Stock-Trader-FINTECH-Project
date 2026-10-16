@@ -1,12 +1,9 @@
-"""Positioning signals (lighthouse/research/positioning.py) on recorded excerpts of the real sources (tests/fixtures/
+"""FINRA short volume (lighthouse/research/positioning.py) on recorded excerpts of the real sources (tests/fixtures/
 positioning, recorded October 2026). Every row is copied unchanged from the downloaded file; only rows were dropped:
 
 * FINRA Reg SHO daily short-sale volume: the consolidated files (CNMS) of the last five sessions of December 2023 and of
   2 January 2024, and the per-facility files of 2 January 2015 (FNSQ, FNYX, FNRA; FNQC did not exist yet and FINRA
   answers 403), 21 symbols each; the trailer line (the record count) is rewritten to the rows kept.
-* The SEC's Insider Transactions Data Set for 2020 Q1 (form345.zip): all eight tables with their real headers, only the
-  rows of 24 filings by insiders of Exxon Mobil, Chevron and JPMorgan.
-* FINRA consolidated short interest (API, CSV) at the 30 November and 29 December 2023 settlement dates, 14 rows each.
 
 The network is never touched: `positioning._get` is replaced by a function that serves these files, and the cache
 points at a fresh temporary folder."""
@@ -18,6 +15,7 @@ import pytest
 
 from lighthouse import data, store
 from lighthouse.data import DataUnavailable
+from lighthouse.http import HTTPStatusError
 from lighthouse.research import positioning as P
 
 FIX = Path(__file__).parent / "fixtures" / "positioning"
@@ -31,25 +29,18 @@ class _Resp:
 
 
 def _serve(monkeypatch, tmp_path, until=None):
-    """Answer FINRA and SEC URLs from the fixtures, as the hosts do: a missing daily file is HTTP 403 (DataUnavailable),
-    a date without short interest is HTTP 204 with no body. `until`: pretend nothing after this date exists yet."""
+    """Answer FINRA URLs from the fixtures, as the host does: a missing daily file is HTTP 403 (HTTPStatusError, as
+    `http.fetch` raises it). `until`: pretend nothing after this date exists yet."""
     calls = []
     monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
     cut = pd.Timestamp(until) if until is not None else None
 
     def fake(url, **kw):
-        body = kw.get("json_body")
-        calls.append(url if body is None else (url, body["compareFilters"][0]["fieldValue"], body["offset"]))
-        if url == P.FINRA_SI_API:
-            day = kw["json_body"]["compareFilters"][0]["fieldValue"]
-            f = FIX / f"finra_si_{day.replace('-', '')}_excerpt.csv"
-            if kw["json_body"]["offset"] or not f.exists() or (cut is not None and pd.Timestamp(day) > cut):
-                return _Resp(b"", 204)
-            return _Resp(f.read_bytes())
+        calls.append(url)
         name = url.rsplit("/", 1)[-1]
         f = FIX / name
         if not f.exists() or (cut is not None and pd.Timestamp(name[-12:-4]) > cut):
-            raise DataUnavailable(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>")
+            raise HTTPStatusError(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>", 403)
         return _Resp(f.read_bytes())
 
     monkeypatch.setattr(P, "_get", fake)
@@ -106,6 +97,62 @@ def test_short_volume_day_before_august_2018_sums_the_facilities(monkeypatch, tm
     assert not (tmp_path / "finra_shvol" / "20150105.parquet").exists()
 
 
+def _failing_once(monkeypatch, failures: dict):
+    """Wrap the fixture server: the first request for each named file fails with the given error, later ones are
+    served as usual."""
+    served = P._get
+
+    def fake(url, **kw):
+        name = url.rsplit("/", 1)[-1]
+        if name in failures:
+            raise failures.pop(name)
+        return served(url, **kw)
+    monkeypatch.setattr(P, "_get", fake)
+
+
+def test_a_session_is_cached_only_when_every_facility_answered(monkeypatch, tmp_path):
+    # 2 January 2015: FNSQ, FNYX and FNRA published; FNQC did not exist yet and FINRA answers 403 ("no such file").
+    # Before October 2026 a timeout on one facility (a plain DataUnavailable: no answer through every retry) was
+    # skipped like a 403 and the session cached without it, for good.
+    calls = _serve(monkeypatch, tmp_path)
+    timeout = DataUnavailable("cdn.finra.org: gave up after 5 attempts (ReadTimeout: read timed out) for the file")
+    _failing_once(monkeypatch, {"FNYXshvol20150102.txt": timeout})
+    part = P.short_volume_day("2015-01-02")
+    assert part.loc["AAPL", "ShortVolume"] == 4_537_230 + 196_866              # FNSQ and FNRA: usable in this run ...
+    assert store.read_frame("finra_shvol", "20150102") is None                   # ... but not cached
+    full = P.short_volume_day("2015-01-02")                                      # asked again: every facility answers
+    assert full.loc["AAPL", "ShortVolume"] == 4_537_230 + 1_120_622 + 196_866
+    assert store.read_json("finra_shvol", "20150102") == {
+        "facilities": {"FNSQ": "published", "FNYX": "published", "FNQC": "not published", "FNRA": "published"},
+        "rows": len(full)}
+    n = len(calls)
+    assert P.short_volume_day("2015-01-02").equals(full) and len(calls) == n       # now from the cache
+    # an HTTP error other than "no such file" (401 here) is a failure too, not an absent facility
+    _serve(monkeypatch, tmp_path / "auth")
+    _failing_once(monkeypatch, {"FNRAshvol20150102.txt": HTTPStatusError("HTTP 401 from cdn.finra.org", 401)})
+    assert P.short_volume_day("2015-01-02").loc["AAPL", "ShortVolume"] == 4_537_230 + 1_120_622
+    assert store.read_frame("finra_shvol", "20150102") is None
+
+
+def test_a_signal_built_on_a_partial_session_is_not_cached(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    _serve(monkeypatch, tmp_path)
+    _failing_once(monkeypatch, {"FNSQshvol20150102.txt": DataUnavailable("cdn.finra.org: gave up after 5 attempts")})
+    # 9 January 2015: the window is 2 and 5-8 January; the excerpt holds 2 January only (the rest answer 403)
+    panel = SimpleNamespace(dates=pd.DatetimeIndex(["2015-01-09"]), prices=pd.DataFrame(columns=["AAPL", "MSFT"]))
+    first = P.monthly(None, panel)["short_volume"]
+    assert first.attrs["incomplete_sessions"] == ["2015-01-02"]
+    assert first.loc["2015-01-09", "AAPL"] == pytest.approx(-(1_120_622 + 196_866) / (2_937_726 + 533_853))
+    assert store.read_frame("research_signals", "short_volume") is None          # not cached as complete
+    assert store.read_json("research", "short_volume_incomplete") == ["2015-01-02"]
+    again = P.monthly(None, panel)["short_volume"]                               # the next run downloads it again
+    assert again.attrs["incomplete_sessions"] == [] and store.read_json("research", "short_volume_incomplete") == []
+    assert again.loc["2015-01-09", "AAPL"] == pytest.approx(-(4_537_230 + 1_120_622 + 196_866)
+                                                            / (17_474_580 + 2_937_726 + 533_853))
+    pd.testing.assert_frame_equal(store.read_frame("research_signals", "short_volume"), again, check_freq=False,
+                                  check_index_type=False)
+
+
 def test_an_early_file_without_a_header_line_is_read(monkeypatch, tmp_path):
     # 22 November 2010: the Nasdaq file starts with its first row (no header), the NYSE file has one, the ADF file
     # has a header and no rows, and the Chicago facility did not exist yet (403)
@@ -146,201 +193,28 @@ def test_short_volume_signal_uses_the_last_five_sessions_and_is_causal(monkeypat
     assert early.isna().all().all() and calls == []
 
 
-# --------------------------------------------------------------------------- #
-# SEC Form 4: insider transactions
-# --------------------------------------------------------------------------- #
-@pytest.fixture(scope="module")
-def trades():
-    return P.parse_form345((FIX / "form345_2020q1_excerpt.zip").read_bytes())
-
-
-def test_parse_form345_keeps_open_market_trades_in_common_stock(trades):
-    t = trades
-    assert set(t["code"]) == {"P", "S"}                                         # A, D, F, G and M are not trades
-    n = t.groupby(["symbol", "code"]).size()
-    assert n[("XOM", "P")] == 10 and ("XOM", "S") not in n                     # four buyers, ten purchase rows
-    assert n[("CVX", "P")] == 5 and n[("CVX", "S")] == 5
-    # JPMorgan: one director bought common stock; an officer's purchase of Series HH preferred stock is not counted
-    assert n[("JPM", "P")] == 1 and n[("JPM", "S")] == 2
-    assert set(t["issuer_cik"]) == {34088, 93410, 19617}
-    hobson = t[(t["symbol"] == "JPM") & (t["code"] == "P")].iloc[0]
-    assert hobson["filed"] == pd.Timestamp("2020-01-16") and hobson["owner"] == "0001169896"
-    assert hobson["relationship"] == "Director"
-    assert hobson["value"] == pytest.approx(14_600 * 136.39)                    # purchases are positive
-    wirth = t[(t["symbol"] == "CVX") & (t["code"] == "S") & (t["filed"] == "2020-01-08")]
-    assert len(wirth) == 4 and wirth["value"].sum() == pytest.approx(-(6_777 * 121.43 + 26_973 * 120.98
-                                                                       + 26_731 * 120.98 + 7_019 * 121.43))
-
-
-def test_issuer_symbols_as_filed_are_cleaned():
-    # values seen in the ISSUERTRADINGSYMBOL field of the 2020 Q1 data set
-    raw = pd.Series(["NYSE: SCS", "(CALX)", '"OMEX"', "?NHF?", "LEN, LEN-B", "VIACA,VIAC", "WSO; WSOB", "BRK.A",
-                     "N O G", "ASX:CRN", np.nan, "(NYSE:FBC)"])
-    exploded = P._issuer_symbols(raw).explode()
-    sym = P._norm_symbols(exploded.astype(object))
-    by_row = sym.groupby(level=0).apply(list)
-    assert by_row[0] == ["SCS"] and by_row[1] == ["CALX"] and by_row[2] == ["OMEX"] and by_row[3] == ["NHF"]
-    assert by_row[4] == ["LEN", "LEN-B"] and by_row[5] == ["VIACA", "VIAC"] and by_row[6] == ["WSO", "WSOB"]
-    assert by_row[7] == ["BRK-A"]
-    assert by_row[8] == ["N O G"]                       # Northern Oil & Gas: never split into N, O (Realty Income), G
-    assert by_row[9] == ["ASX:CRN"]                     # a foreign listing never matches a US ticker
-    assert pd.isna(by_row[10][0]) and by_row[11] == ["FBC"]
-
-
-MONTH_ENDS = pd.DatetimeIndex(["2019-12-31", "2020-01-31", "2020-02-28", "2020-03-31", "2020-04-30", "2020-05-29",
-                               "2020-06-30"])
-
-
-def test_insider_signals_count_distinct_buyers_by_filing_date_over_90_days(trades):
-    tick = ["XOM", "CVX", "JPM", "MSFT"]
-    s = P.insider_signals(trades, MONTH_ENDS, tick)
-    b = s["insider_buyers"]
-    assert b.loc["2019-12-31"].isna().all()                                     # before the first filing in the data
-    assert b.loc["2020-01-31"].tolist() == [0, 0, 1, 0]                         # Hobson (JPM); Wirth (CVX) only sold
-    assert b.loc["2020-02-28"].tolist() == [1, 1, 1, 0]                         # Woods (XOM), Frank (CVX, 3 filings)
-    assert b.loc["2020-03-31"].tolist() == [4, 2, 1, 0]                         # + Weldon, Duffin, Swiger; Moorman
-    assert b.loc["2020-04-30"].tolist() == [4, 2, 0, 0]                         # Hobson (16 Jan) left the window
-    assert b.loc["2020-05-29"].tolist() == [3, 2, 0, 0]                         # Woods (11 Feb) left it
-    assert b.loc["2020-06-30"].tolist() == [0, 0, 0, 0]
-    # the window is the 90 days to d by the day after filing: Woods filed on 11 February 2020, so he is known from
-    # 12 February and leaves the window 90 days after that
-    edge = pd.DatetimeIndex([pd.Timestamp("2020-02-12") + pd.Timedelta(days=89),
-                             pd.Timestamp("2020-02-12") + pd.Timedelta(days=90)])
-    e = P.insider_signals(trades, edge, ["XOM"])["insider_buyers"]["XOM"]
-    assert e.iloc[0] == 3 + 1 and e.iloc[1] == 3
-    # Weldon bought on 6 and 9 March and filed on 13 March: he counts from the day after the filing (EDGAR dates a
-    # Form 4 accepted until 10 pm that day, after the close), never from the trade date
-    mid = P.insider_signals(trades, pd.DatetimeIndex(["2020-03-12", "2020-03-13", "2020-03-16"]),
-                            ["XOM"])["insider_buyers"]["XOM"]
-    assert mid.tolist() == [1, 1, 2]
-    # without market values the net-purchase signal is missing rather than a raw dollar amount
-    assert s["insider_net"].isna().all().all()
-
-
-def test_insider_net_is_net_purchases_over_market_value(trades):
-    tick = ["XOM", "CVX", "JPM"]
-    cap = pd.DataFrame(1e9, index=MONTH_ENDS, columns=tick)
-    cap.loc["2020-03-31", "JPM"] = 0.0                                          # a missing market value
-    net = P.insider_signals(trades, MONTH_ENDS, tick, cap)["insider_net"]
-    woods = 475 * 59.86 + 500 * 59.85 + 466 * 59.86 + 466 * 59.89 + 485 * 59.86 + 466 * 59.87
-    xom = woods + 4_590.98 * 43.56 + 4_180 * 48.09 + 30_000 * 36.41 + 30_000 * 33.80
-    assert net.loc["2020-03-31", "XOM"] == pytest.approx(xom / 1e9)
-    cvx_buys = 500 * 109.85 + 400 * 104.61 + 500 * 91.79 + 500 * 95.98 + 6_551 * 91.43
-    cvx_sales = 6_777 * 121.43 + 26_973 * 120.98 + 26_731 * 120.98 + 7_019 * 121.43 + 4_900 * 111.71
-    assert net.loc["2020-03-31", "CVX"] == pytest.approx((cvx_buys - cvx_sales) / 1e9)
-    assert np.isnan(net.loc["2020-03-31", "JPM"])
-    assert net.loc["2020-01-31", "JPM"] == pytest.approx((14_600 * 136.39 - 62_085 * 131.94) / 1e9)
-
-
-def test_repeated_amendments_and_typing_errors(trades):
-    t = trades.copy()
-    hobson = t[(t["symbol"] == "JPM") & (t["code"] == "P")]
-    again = hobson.assign(doc="4/A", filed=pd.Timestamp("2020-02-20"))           # a 4/A restating the whole form
-    fixed = hobson.assign(doc="4/A", filed=pd.Timestamp("2020-02-21"), shares=14_700.0, value=14_700 * 136.39)
-    # real rows can lack fields (an owner without a CIK, a missing price): they must not break the comparison
-    gap = t.iloc[[0]].assign(owner=np.nan, price=np.nan, value=np.nan)
-    both = pd.concat([t, again, fixed, gap, gap.assign(doc="4/A")], ignore_index=True)
-    kept = P.drop_repeated_amendments(both)
-    assert len(kept) == len(t) + 2                                 # the repeats go; the correction and the gap stay
-    assert (kept["doc"] == "4/A").sum() == 1 and kept.loc[kept["doc"] == "4/A", "shares"].iloc[0] == 14_700
-    assert kept["owner"].isna().sum() == 1
-    # a row worth more than MAX_TRADE_VALUE (the total typed into the price field) keeps its buyer, not its value
-    import io
-    import zipfile
-    src = zipfile.ZipFile(io.BytesIO((FIX / "form345_2020q1_excerpt.zip").read_bytes()))
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        for name in src.namelist():
-            body = src.read(name)
-            if name == "NONDERIV_TRANS.tsv":
-                tab = pd.read_csv(io.BytesIO(body), sep="\t", dtype=str, keep_default_na=False)
-                tab.loc[tab["TRANS_CODE"] == "P", "TRANS_PRICEPERSHARE"] = "1000000000"   # every purchase: $1bn a share
-                body = tab.to_csv(sep="\t", index=False).encode("utf-8")
-            z.writestr(name, body)
-    bad = P.parse_form345(buf.getvalue())
-    assert len(bad) == len(trades)
-    assert bad.loc[bad["code"] == "P", "value"].isna().all() and bad.loc[bad["code"] == "S", "value"].notna().all()
-    b = P.insider_signals(bad, MONTH_ENDS, ["XOM", "CVX", "JPM"])["insider_buyers"]
-    pd.testing.assert_frame_equal(b, P.insider_signals(trades, MONTH_ENDS, ["XOM", "CVX", "JPM"])["insider_buyers"])
-
-
-def test_insider_quarters_cached_by_the_old_parser_are_parsed_again(monkeypatch, tmp_path, trades):
+def test_the_short_volume_window_skips_one_off_closures(monkeypatch, tmp_path):
+    # Hurricane Sandy closed the market on 29 and 30 October 2012. October's signal reads the five sessions before
+    # the 31st: 22-26 October. Before October 2026 the calendar knew only the regular holidays, asked for the two
+    # closed days (no file: 403) and summed three sessions. Synthetic files (one facility, two symbols), one a day.
     monkeypatch.setattr(data, "CACHE_DIR", tmp_path)
-    url = "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/2020q1_form345.zip"
-    monkeypatch.setattr(P, "insider_files", lambda: [url])
-    store.write_frame("insider", "2020q1", trades.drop(columns=["doc", "trans_date"]))   # an old-format cache
+    vols = {"20121022": (100, 1_000), "20121023": (200, 1_000), "20121024": (300, 1_000), "20121025": (400, 1_000),
+            "20121026": (500, 1_000), "20121019": (900, 1_000)}
     calls = []
-    blob = (FIX / "form345_2020q1_excerpt.zip").read_bytes()
 
-    class _Zip:
-        content = blob
-    monkeypatch.setattr(P, "_get", lambda u, **kw: calls.append(u) or _Zip())
-    got = P.insider_trades()
-    assert calls == [url] and "doc" in got.columns and len(got) == len(trades)
-    assert P.insider_trades() is not None and calls == [url]                    # the new cache is used next time
-
-
-@pytest.mark.parametrize("cut", ["2020-01-31", "2020-02-28", "2020-03-13"])
-def test_insider_signals_are_causal(trades, cut):
-    tick = ["XOM", "CVX", "JPM"]
-    cap = pd.DataFrame(1e9, index=MONTH_ENDS, columns=tick)
-    full = P.insider_signals(trades, MONTH_ENDS, tick, cap)
-    part = P.insider_signals(trades[trades["filed"] <= cut], MONTH_ENDS, tick, cap)
-    for k in full:
-        pd.testing.assert_frame_equal(full[k].loc[:cut], part[k].loc[:cut], obj=k)
-
-
-# --------------------------------------------------------------------------- #
-# FINRA short interest
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("month, settles", [("2023-11-15", "2023-11-30"), ("2023-12-29", "2023-12-29"),
-                                            ("2024-02-10", "2024-02-29"), ("2024-03-01", "2024-03-28"),
-                                            ("2022-12-31", "2022-12-30")])
-def test_settlement_dates(month, settles):
-    # the last trading day of the month: 30-31 December 2023 is a weekend, 29 March 2024 Good Friday
-    assert P.settlement_dates(pd.Timestamp(month)) == pd.Timestamp(settles)
-
-
-def test_short_interest_on_parses_and_caches(monkeypatch, tmp_path):
-    calls = _serve(monkeypatch, tmp_path)
-    si = P.short_interest_on("2023-12-29")
-    assert calls == [(P.FINRA_SI_API, "2023-12-29", 0)]                         # 14 rows < 5,000: one page
-    assert list(si.columns) == ["short", "adv", "days_to_cover"] and len(si) == 14
-    assert si.loc["AAPL"].tolist() == [108_220_157, 42_416_650, 2.55]
-    assert si.loc["AMD", "days_to_cover"] == 1.0                                # FINRA floors 0.95 at 1.00
-    assert si.loc["BRKB", "short"] == 7_114_791                                 # no class separator in this source
-    P.short_interest_on("2023-12-29")
-    assert len(calls) == 1
-    # a date that is not a settlement date: HTTP 204, an empty table, cached once it is old
-    assert P.short_interest_on("2023-12-28").empty
-    assert (tmp_path / "finra_si" / "2023-12-28.parquet").exists()
-    # ... but not for a date FINRA may not have published yet
-    soon = pd.Timestamp.today().normalize() - pd.Timedelta(days=3)
-    assert P.short_interest_on(soon).empty
-    assert not (tmp_path / "finra_si" / f"{soon.date()}.parquet").exists()
-
-
-def test_days_to_cover_is_used_a_month_later_and_is_causal(monkeypatch, tmp_path):
-    dates = pd.DatetimeIndex(["2023-11-30", "2023-12-29", "2024-01-31"])
-    tick = ["AAPL", "AMD", "BRK-B", "BF-B", "BFA", "BFACU", "MSFT"]
-    _serve(monkeypatch, tmp_path / "full")
-    full = P.days_to_cover_signal(dates, tick)
-    assert full.loc["2023-11-30"].isna().all()                                  # nothing published before it
-    # December's value is November's settlement (published in December); January's is December's
-    assert full.loc["2023-12-29", "AAPL"] == pytest.approx(-110_653_413 / 42_011_310)
-    assert full.loc["2024-01-31", "AAPL"] == pytest.approx(-108_220_157 / 42_416_650)
-    # short / ADV, not FINRA's floored figure: AMD's 0.95 is not tied with every other stock under 1.00
-    assert full.loc["2024-01-31", "AMD"] == pytest.approx(-49_153_022 / 51_851_451)
-    assert full.loc["2024-01-31", "BRK-B"] == pytest.approx(-7_114_791 / 3_020_750)   # matched as 'BRKB'
-    assert full.loc["2024-01-31", "BF-B"] == pytest.approx(-7_237_812 / 1_533_360)
-    assert np.isnan(full.loc["2024-01-31", "BFACU"])                             # zero volume: no ratio (not 999.99)
-    assert np.isnan(full.loc["2024-01-31", "MSFT"])                              # not in the excerpt
-    # truncation: run on 29 December, when FINRA had published the settlements up to mid-December only (it
-    # publishes ~7 business days after each one): December's value is unchanged
-    _serve(monkeypatch, tmp_path / "cut", until="2023-12-15")
-    part = P.days_to_cover_signal(dates, tick)
-    pd.testing.assert_frame_equal(full.loc[:"2023-12-29"], part.loc[:"2023-12-29"])
-    # before the start date nothing is requested and nothing is known
-    calls = _serve(monkeypatch, tmp_path / "early")
-    early = P.days_to_cover_signal(pd.DatetimeIndex(["2017-11-30", "2017-12-29"]), tick)
-    assert early.isna().all().all() and calls == []
+    def fake(url, **kw):
+        name = url.rsplit("/", 1)[-1]
+        calls.append(name)
+        day = name[-12:-4]
+        if not name.startswith("FNSQ") or day not in vols:
+            raise HTTPStatusError(f"HTTP 403 from cdn.finra.org for {url}: <Error><Code>AccessDenied</Code>", 403)
+        short, total = vols[day]
+        body = (f"Date|Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market\n{day}|AAA|{short}|0|{total}|Q\n"
+                f"{day}|BBB|1|0|10|Q\n2\n")
+        return _Resp(body.encode())
+    monkeypatch.setattr(P, "_get", fake)
+    assert not data.is_trading_day("2012-10-29") and not data.is_trading_day("2012-10-30")
+    sig = P.short_volume_signal(pd.DatetimeIndex(["2012-10-31"]), ["AAA", "BBB"])
+    asked = sorted({c[-12:-4] for c in calls})
+    assert asked == ["20121022", "20121023", "20121024", "20121025", "20121026"]   # five real sessions, no closure
+    assert sig.loc["2012-10-31", "AAA"] == pytest.approx(-(100 + 200 + 300 + 400 + 500) / 5_000)

@@ -1,12 +1,9 @@
 """
-Interactive charts (Plotly) for the Streamlit app.
+The charts (Plotly), for the app, the notebook and the saved report (`AnalysisResult.save` writes them to one HTML
+file).
 
-Same visual system as `charts.py` (strategy = blue, buy & hold = orange, S&P 500 = aqua;
-beacon lights = green / amber / red) but every figure can be hovered, zoomed and
-downloaded, and every mark carries its explanation in the tooltip.
-
-The matplotlib charts in `charts.py` remain the ones used by the CLI, the Markdown
-report and the notebook; this module is only imported by the app.
+One visual system (`palette`: strategy = blue, buy & hold = orange, S&P 500 = aqua; beacon lights = green / amber /
+red); every figure can be hovered, zoomed and downloaded, and every mark carries its explanation in the tooltip.
 """
 from __future__ import annotations
 
@@ -145,16 +142,8 @@ def score_gauge(decision, height: int = 230) -> go.Figure:
 
 
 def score_waterfall(decision, profile, height: int = 300) -> go.Figure:
-    """How the composite is built: fundamental x weight + technical x weight - market weather = score."""
-    labels, values, text = [], [], []
-    if decision.fundamental_score is not None:
-        labels.append(f"Fundamental {decision.fundamental_score:.0f} × {profile.fundamental_weight:.0%}")
-        values.append(decision.fundamental_score * profile.fundamental_weight)
-        labels.append(f"Technical {decision.technical_score:.0f} × {profile.technical_weight:.0%}")
-        values.append(decision.technical_score * profile.technical_weight)
-    else:
-        labels.append(f"Technical {decision.technical_score:.0f} × 100% (fundamentals unavailable)")
-        values.append(decision.technical_score)
+    """How the score is built: the technical score - market weather = the Lighthouse score."""
+    labels, values, text = [f"Technical score ({profile.horizon}-term)"], [decision.technical_score], []
     labels.append("Market weather" + (f" ({decision.regime.label})" if decision.regime else ""))
     values.append(-decision.regime_penalty)
     text = [f"{v:+.1f}" for v in values]
@@ -184,7 +173,7 @@ def score_breakdown(decision, height: Optional[int] = None, beacons=None) -> go.
         fig = go.Figure()
         fig.add_annotation(text="No beacons available", showarrow=False)
         return _base_layout(fig, height=200)
-    names = [f"{'F' if b.group == 'fundamental' else 'T'} · {b.name}" for b in beacons][::-1]
+    names = [b.name for b in beacons][::-1]
     vals = [b.contribution for b in beacons][::-1]
     colors = [STATUS[b.light] for b in beacons][::-1]
     custom = [[b.value, LIGHT_WORD[b.light], f"{b.score:+.2f}", f"{b.weight * 100:.0f}%", b.rationale] for b in beacons][::-1]
@@ -198,9 +187,8 @@ def score_breakdown(decision, height: Optional[int] = None, beacons=None) -> go.
         fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", marker=dict(size=12, symbol="square", color=STATUS[light]),
                                  name=word, hoverinfo="skip"))
     lim = max(abs(min(vals)), abs(max(vals)), 5) * 1.35
-    f = f"Fundamental {decision.fundamental_score:.0f}" if decision.fundamental_score is not None else "Fundamental n/a"
     weather = f"−{decision.regime_penalty:.0f}" if decision.regime_penalty else "0"
-    _base_layout(fig, title=f"Why {decision.ticker} scores {decision.composite_score:.0f}: {f} · Technical {decision.technical_score:.0f} · weather {weather} → {decision.verdict}",
+    _base_layout(fig, title=f"Why {decision.ticker} scores {decision.composite_score:.0f}: technical {decision.technical_score:.0f} · weather {weather} → {decision.verdict}",
                  height=height or int(30 * len(beacons) + 120), hovermode="closest", barmode="overlay")
     fig.add_vline(x=0, line=dict(color=INK2, width=1))
     fig.update_xaxes(range=[-lim, lim], title="points added to the group score (−50 … +50 scale, weighted)")
@@ -399,12 +387,12 @@ def screener(df: pd.DataFrame, height: Optional[int] = None) -> go.Figure:
         fig.add_annotation(text="No ticker could be scored", showarrow=False)
         return _base_layout(fig, height=200)
     labels = [f"{t}  ({v})" for t, v in zip(d["ticker"], d["verdict"])][::-1]
-    custom = d[["name", "fundamental", "technical", "regime", "position_pct"]].fillna("n/a").values.tolist()[::-1]
+    custom = d[["name", "technical", "regime", "position_pct"]].fillna("n/a").values.tolist()[::-1]
     fig = go.Figure(go.Bar(
         x=d["score"][::-1], y=labels, orientation="h", marker=dict(color=[VERDICT_COLOR.get(v, STATUS["grey"]) for v in d["verdict"]][::-1]),
         text=[f"{s:.0f}" for s in d["score"]][::-1], textposition="outside", cliponaxis=False, customdata=custom,
-        hovertemplate="<b>%{y}</b> · %{customdata[0]}<br>score %{x:.0f} · fundamental %{customdata[1]} · technical %{customdata[2]}"
-                      "<br>market weather %{customdata[3]} · suggested position %{customdata[4]}%<extra></extra>",
+        hovertemplate="<b>%{y}</b> · %{customdata[0]}<br>score %{x:.0f} · technical %{customdata[1]}"
+                      "<br>market weather %{customdata[2]} · suggested position %{customdata[3]}%<extra></extra>",
     ))
     for thr, label in VERDICT_BANDS[:-1]:
         fig.add_vline(x=thr, line=dict(color=INK2, width=0.8, dash="dot"), annotation_text=f"{label} ≥{thr}",
@@ -433,7 +421,7 @@ def compare_prices(series: Dict[str, pd.Series], height: int = 420) -> go.Figure
 
 
 def all_figures(result) -> Dict[str, go.Figure]:
-    """Every figure the app shows for one analysis (used by the tests)."""
+    """Every figure of one analysis (the saved report's charts file; the tests)."""
     figs = {"gauge": score_gauge(result.decision), "waterfall": score_waterfall(result.decision, result.profile),
             "breakdown": score_breakdown(result.decision), "dashboard": dashboard(result)}
     if result.backtest is not None:

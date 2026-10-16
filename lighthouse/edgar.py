@@ -135,7 +135,48 @@ def parse_submissions(payload: dict, older_pages: Sequence[dict] = ()) -> tuple:
 
 def submissions(cik: int, refresh: bool = False) -> tuple:
     """(profile, filings) for one company: SIC code, fiscal year end, and every filing with its date, form and 8-K
-    items. Cached for a day (any age offline)."""
+    items, and in `cik` the registrant whose list holds it (a document is fetched under that CIK). A successor
+    issuer's list also holds its predecessors' filings (PREDECESSOR_CIKS, as `company_facts` merges their facts):
+    each registrant's list is cached as EDGAR gives it (for a day; any age offline) and merged when read, so a cache
+    or sample pack recorded before the merge keeps working. A predecessor that cannot be read is left out. The
+    profile is the successor's."""
+    prof, filings = _registrant_submissions(int(cik), refresh)
+    parts = [filings.assign(cik=int(cik))]
+    for prev in PREDECESSOR_CIKS.get(int(cik), []):
+        try:
+            parts.append(_registrant_submissions(prev, refresh)[1].assign(cik=int(prev)))
+        except DataUnavailable:
+            continue
+    return prof, merge_filings(parts)
+
+
+def merge_filings(parts: Sequence[pd.DataFrame]) -> pd.DataFrame:
+    """Filing lists as one, ordered by filing date: an accession number in several lists (a filing made for both
+    registrants) is kept once, as the first list (the successor's) has it; filings of one day keep their order."""
+    listed = [p for p in parts if p is not None and len(p)]
+    if not listed:
+        return parts[0] if len(parts) else pd.DataFrame()
+    f = pd.concat(listed, ignore_index=True)
+    for c in ("filed", "report_date"):          # one date unit, whichever pandas wrote each cached list
+        if c in f:
+            f[c] = _ns(f[c])
+    if "accepted" in f:
+        f["accepted"] = pd.to_datetime(f["accepted"], errors="coerce", utc=True).astype("datetime64[ns, UTC]")
+    return f.drop_duplicates("accn", keep="first").sort_values("filed", kind="stable").reset_index(drop=True)
+
+
+def registrant_cik(filing, default: Optional[int]) -> Optional[int]:
+    """The CIK to fetch one filing's documents under: the registrant whose list holds it (a predecessor's 10-K is not
+    under its successor's CIK), else `default` (a list without the column: the company's own)."""
+    try:
+        c = filing.get("cik")
+    except AttributeError:
+        c = None
+    return int(c) if c is not None and pd.notna(c) else default
+
+
+def _registrant_submissions(cik: int, refresh: bool = False) -> tuple:
+    """(profile, filings) of one registrant (CIK) as EDGAR lists them, cached for a day (any age offline)."""
     key = f"{int(cik):010d}"
     cached = store.read_frame("edgar_filings", key)
     prof = store.read_json("edgar_profile", key)
@@ -178,7 +219,10 @@ def company_filings(ticker: str, source: str = "auto", refresh: bool = False) ->
             for c in ("filed", "report_date"):
                 f[c] = _ns(f[c])
             f["items"] = f["items"].fillna("").astype(str)
-            return json.loads(pp.read_text()), f
+            prof = json.loads(pp.read_text())
+            if "cik" not in f.columns:          # recorded before lists were merged: the company's own filings
+                f["cik"] = prof.get("cik")
+            return prof, f
         raise DataUnavailable(f"{ticker}: no EDGAR filing list in the sample pack")
     if source == "sample":
         return sample()
@@ -286,14 +330,23 @@ def _concept_names(concepts: Iterable[str]) -> set:
     return {str(c).split(":")[-1] for c in concepts}
 
 
+def _recorded_concepts(kind: str, key: str, cached: pd.DataFrame) -> Optional[set]:
+    meta = store.read_json(kind, key)
+    if not isinstance(meta, dict) or not isinstance(meta.get("concepts"), list) or meta.get("rows") != len(cached):
+        return None
+    return {str(c) for c in meta["concepts"]}
+
+
+def _record_concepts(kind: str, key: str, concepts: Iterable[str], df: pd.DataFrame) -> None:
+    store.write_json(kind, key, {"concepts": sorted(concepts), "rows": int(len(df)),
+                                 "written": pd.Timestamp.now(tz="UTC").isoformat()})
+
+
 def cached_fact_concepts(key: str, cached: pd.DataFrame) -> Optional[set]:
     """The concepts a cached facts table was filtered to, from its sidecar (edgar_facts/<key>.json), or None when it
     has no usable record: written before the sidecar existed, or the sidecar describes another write (its row count
     differs, e.g. two processes refreshed the same company at once and their writes interleaved)."""
-    meta = store.read_json("edgar_facts", key)
-    if not isinstance(meta, dict) or not isinstance(meta.get("concepts"), list) or meta.get("rows") != len(cached):
-        return None
-    return {str(c) for c in meta["concepts"]}
+    return _recorded_concepts("edgar_facts", key, cached)
 
 
 def _facts_for_cik(cik: int, concepts, refresh: bool, ticker: Optional[str]) -> pd.DataFrame:
@@ -331,8 +384,7 @@ def _facts_for_cik(cik: int, concepts, refresh: bool, ticker: Optional[str]) -> 
     keep = sorted(want | have | _concept_names(CONCEPTS))
     df = flatten_company_facts(payload, keep)
     store.write_frame("edgar_facts", key, df)
-    store.write_json("edgar_facts", key, {"concepts": keep, "rows": int(len(df)),
-                                          "written": pd.Timestamp.now(tz="UTC").isoformat()})
+    _record_concepts("edgar_facts", key, keep, df)
     return df
 
 
@@ -464,18 +516,41 @@ def parse_fsds_zip(blob, ciks: Optional[Iterable[int]] = None, tags: Optional[It
     return _typed_facts(out)
 
 
-def bulk_quarter(year: int, qtr: int, ciks: Optional[Iterable[int]] = None, tags: Optional[Iterable[str]] = None) -> pd.DataFrame:
-    """Download one quarterly data set into memory (no temporary file), filter it, and cache the result."""
+def bulk_quarter(year: int, qtr: int, ciks: Optional[Iterable[int]] = None, tags: Optional[Iterable[str]] = None,
+                 refresh: bool = False) -> pd.DataFrame:
+    """One quarterly data set, downloaded into memory (no temporary file), filtered to `tags` (default
+    `pit.CONCEPTS`) for every filer and cached; `ciks` selects companies from it.
+
+    The cache keeps no rows for the tags it was not filtered to, so it records the tags it holds (edgar_fsds/<key>.json)
+    and is downloaded again when asked for more: otherwise a tag added since would read as never reported, as the
+    company-facts cache once did. The download is filtered to the union of what is asked, what the cache held and
+    `pit.CONCEPTS`, so a narrow request never shrinks it. A table cached before the record existed covers the tags it
+    has rows for. Offline, or with EDGAR unreachable, the cache is used as it is, whatever it lacks."""
+    from .pit import CONCEPTS
     key = f"{year}q{qtr}"
+    want = _concept_names((list(tags) if tags is not None else []) or CONCEPTS)
     cached = store.read_frame("edgar_fsds", key)
-    if cached is None:
-        from .pit import CONCEPTS
-        blob = _get(FSDS_URL.format(year=year, qtr=qtr), timeout=300).content
-        cached = parse_fsds_zip(blob, None, tags or CONCEPTS)
-        store.write_frame("edgar_fsds", key, cached)
+    have: set = set()
+    if cached is not None:
+        recorded = _recorded_concepts("edgar_fsds", key, cached)
+        have = recorded if recorded is not None else set(cached["concept"].dropna().astype(str))
+    if cached is not None and not refresh and (want <= have or offline_mode()):
+        out = cached
+    else:
+        try:
+            blob = _get(FSDS_URL.format(year=year, qtr=qtr), timeout=300).content
+        except DataUnavailable:
+            if cached is None:
+                raise
+            out = cached
+        else:
+            keep = sorted(want | have | _concept_names(CONCEPTS))
+            out = parse_fsds_zip(blob, None, keep)
+            store.write_frame("edgar_fsds", key, out)
+            _record_concepts("edgar_fsds", key, keep, out)
     if ciks is not None:
-        cached = cached[cached["cik"].isin({int(c) for c in ciks})]
-    return cached
+        out = out[out["cik"].isin({int(c) for c in ciks})] if "cik" in out.columns else out.iloc[:0]
+    return out
 
 
 def document_url(cik: int, accn: str, doc: str) -> str:

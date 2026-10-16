@@ -12,7 +12,7 @@ import pandas as pd
 
 from ..fundamentals import StatementHistory
 from ..pit import as_of, ttm
-from ..total_return import price_only_close, split_factor_after, to_units_of
+from ..total_return import price_only_close, restate_shares, split_factor_after, to_units_of
 
 FLOWS = ["revenue", "cost_of_revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "capex",
          "d_and_a", "sbc", "interest_expense", "income_tax", "pretax_income", "dividends_paid", "buybacks",
@@ -104,6 +104,12 @@ class Financials:
         return {k: (float(v) if v is not None and np.isfinite(v) else float("nan")) for k, v in r.items()}
 
 
+def _cover_filed(row: pd.Series):
+    """When a statement row's cover-page count was filed (its own filing, or an earlier one when it had none)."""
+    c = row.get("cover_filed")
+    return c if c is not None and pd.notna(c) else row.get("filed")
+
+
 def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataFrame, actions: Optional[pd.DataFrame],
                      date=None) -> Financials:
     """The company's numbers public on `date` (default: the last price) and the as-traded price that day. `prices` is the
@@ -126,6 +132,7 @@ def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataF
         t_now["gross_profit"] = t_now["revenue"] - t_now["cost_of_revenue"]
     last = q.iloc[-1]
     bs = {c: float(last[c]) for c in STOCKS if c in q and pd.notna(last[c])}
+    shares_filed = _cover_filed(last) if "cover_shares" in bs else None
     # balance-sheet items missing in the last quarter (e.g. debt maturities, which only the 10-K reports): the latest
     # annual value
     if len(a):
@@ -133,9 +140,12 @@ def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataF
         for c in STOCKS:
             if c not in bs and c in a and pd.notna(la[c]):
                 bs[c] = float(la[c])
+                if c == "cover_shares":
+                    shares_filed = _cover_filed(la)
     px = prices["Close"][prices.index <= d]
     if px.empty:
         raise ValueError(f"{ticker}: no price on or before {d.date()}")
+    acts = None
     if actions is not None and not actions.empty:
         acts = to_units_of(actions, prices.index[-1])
         po = price_only_close(prices["Close"], acts)
@@ -144,6 +154,14 @@ def financials_as_of(ticker: str, statements: StatementHistory, prices: pd.DataF
         price = float(px.iloc[-1])
         notes.append("no dividend/split history: the price is the adjusted close (valuation ratios may be off)")
     shares = bs.get("cover_shares", float("nan"))
+    # the price is as traded on `d`, the cover-page count as of its filing: a split in between (AAPL's 4-for-1 on
+    # 31 August 2020, two months before the next 10-K) would put the two in different share units
+    if acts is not None and np.isfinite(shares) and shares_filed is not None and pd.notna(shares_filed):
+        restated = float(restate_shares([shares], [pd.Timestamp(shares_filed)], acts, d)[0])
+        if restated != shares:
+            notes.append(f"cover-page share count x {restated / shares:g} for the split since the filing of "
+                         f"{pd.Timestamp(shares_filed).date()}")
+            shares = restated
     if not np.isfinite(shares) and "shares" in q:
         shares = float(q["shares"].dropna().iloc[-1])
         notes.append("shares outstanding from the weighted-average diluted count (no cover-page count)")

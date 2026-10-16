@@ -14,7 +14,7 @@ def test_profile_validation():
     with pytest.raises(ValueError):
         InvestorProfile(risk="yolo")
     p = InvestorProfile(horizon="Short", risk="Aggressive")
-    assert p.technical_weight == 0.7 and p.max_position_pct == 35
+    assert p.horizon == "short" and p.max_position_pct == 35
 
 
 def test_verdict_bands():
@@ -26,12 +26,10 @@ def test_verdict_bands():
     assert verdict_from_score(10) == "Sell"
 
 
-def test_composite_blend_and_penalty():
-    prof = InvestorProfile(horizon="long")
-    assert composite_score(80, 60, prof) == pytest.approx(0.6 * 80 + 0.4 * 60)
-    assert composite_score(None, 60, prof) == 60
-    assert composite_score(80, 60, prof, regime_penalty=8) == pytest.approx(72 - 8)
-    assert composite_score(0, 0, prof, regime_penalty=20) == 0
+def test_score_is_the_technical_score_minus_the_regime_penalty():
+    assert composite_score(60) == 60
+    assert composite_score(72, regime_penalty=8) == pytest.approx(64)
+    assert composite_score(5, regime_penalty=20) == 0 and composite_score(120) == 100
 
 
 def test_position_sizing_respects_every_cap():
@@ -121,6 +119,7 @@ def test_evaluation_helpers_run(prices, benchmark):
     prof = InvestorProfile()
     layers = strategy_layers(prices, benchmark, p, prof)
     assert "Buy & hold" in layers.index and "S&P 500" in layers.index
+    assert {"Same exposure, never traded", "Plain 200-day trend rule"} <= set(layers.index)   # the two yardsticks
     grid = sensitivity_grid(prices, benchmark, p, prof, entry_values=(55, 60), exit_values=(35, 45))
     assert len(grid) == 4 and {"entry", "exit", "sharpe"} <= set(grid.columns)
     wf = walk_forward(prices, benchmark, p, prof, entry_values=(55, 60), exit_values=(35, 45))
@@ -169,3 +168,50 @@ def test_risk_free_loader_parses_fred_and_stays_offline(tmp_path, monkeypatch):
     s.to_csv(tmp_path / "riskfree_DTB3.csv", header=True)
     got = data.load_risk_free("cache")
     assert got is not None and got.iloc[-1] == pytest.approx(0.0518)
+
+
+def test_same_exposure_is_a_fixed_mix_of_the_stock_and_cash(prices, benchmark):
+    """The yardstick shown next to every backtest: the rule's average exposure held without any timing."""
+    from lighthouse.backtest import constant_mix
+    bh = pd.Series([1.0, 1.1, 0.99, 1.089], index=pd.bdate_range("2020-01-01", periods=4))
+    mix = constant_mix(bh, 0.5, 0.0)
+    assert mix.iloc[0] == 1.0
+    assert mix.to_numpy() == pytest.approx(np.cumprod([1.0, 1.05, 0.95, 1.05]))     # half of each day's return
+    cash = constant_mix(bh, 0.0, 0.0252, trading_days=252)                          # all cash: the rate, compounded
+    assert cash.iloc[-1] == pytest.approx(1.0001 ** 3)
+    res = run_backtest(prices, benchmark, sizing="vol_target")
+    w = float(res.exposure.mean())
+    expected = constant_mix(res.buy_hold, w, res.rf if res.params.cash_yield else 0.0, res.params.trading_days)
+    pd.testing.assert_series_equal(res.same_exposure, expected)
+    assert "Same exposure, never traded" in res.summary().index
+
+
+def test_backtest_window_can_start_late(prices, benchmark):
+    """`start` once failed under pandas 3 (an in-place update of a read-only view)."""
+    full = run_backtest(prices, benchmark)
+    late = run_backtest(prices, benchmark, start=prices.index[400])
+    assert late.start >= prices.index[400] and late.start > full.start
+
+
+def test_plain_trend_rule_holds_the_stock_only_above_its_200_day_average(prices):
+    """The second yardstick (METHODOLOGY 8d): on each review day (the month's last session), fully in above the
+    200-day SMA, out below it, filled the next session; the same engine, so the same fills and costs, and nothing else
+    (no score, no regime, no stops)."""
+    from lighthouse.backtest import trend_rule
+    from lighthouse.technicals import compute_indicators
+    p, prof = StrategyParams(), InvestorProfile()
+    res = trend_rule(prices, p, prof)
+    ind = compute_indicators(prices, p)
+    gap = ind["Close"] / ind["sma_slow"] - 1.0
+
+    def review_day_before(day):
+        d = ind.index[ind.index.get_loc(day) - 1]
+        assert d == ind.index[ind.index.to_period("M") == d.to_period("M")][-1]      # the month's last session
+        return d
+
+    assert len(res.trades) > 1
+    for t in res.trades:
+        assert t.size_fraction == 1.0
+        assert gap.loc[review_day_before(t.entry_date)] > 0                           # entered above the average
+        if t.exit_reason != "end of data (open)":
+            assert t.exit_reason == "below 200-day SMA" and gap.loc[review_day_before(t.exit_date)] < 0

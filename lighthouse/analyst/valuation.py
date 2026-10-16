@@ -5,13 +5,18 @@ Discount rate  WACC = E/V x (risk-free + beta x equity premium) + D/V x cost of 
                the latest 3-month T-bill (FRED DTB3, `data.load_risk_free`; 2% offline). Practitioners often use the
                10-year yield instead; the T-bill gives a lower discount rate when the curve is upward sloping.
                Beta: 60 monthly excess returns on the Ken French market factor, shrunk toward 1 (Blume 1975:
-               0.67 x beta + 0.33). Equity premium: the Ken French market factor's average excess return since July
-               1963, arithmetic (7.2% a year in data to August 2026).
+               0.67 x beta + 0.33). Equity premium: the Ken French market factor's excess return since July 1963,
+               compounded (the geometric mean, 6.2% a year in data to August 2026): a DCF discounts over many years,
+               and the arithmetic mean (7.2%) is the expected return of one year, which overstates the rate a
+               multi-year discount should compound at. The arithmetic premium is shown beside the base case as a sensitivity
+               (the user's decision, 15 October 2026; docs/NEXT_SESSION.md).
 DCF            free cash flow to the firm after stock-based pay (a real cost, paid in shares: it is not added back),
                for the projection years, plus a terminal value by the value-driver formula (Koller, Goedhart & Wessels,
                "Valuation"): NOPAT in the year after the projection x (1 - g / RONIC) / (WACC - g). Growth g needs net
                investment g / RONIC of NOPAT, whatever capex was in the projection years; RONIC, the return on new
-               capital, is today's ROIC, never below the WACC (new capital at least earns its cost). A Gordon value on
+               capital, is today's ROIC, never below the WACC (new capital at least earns its cost), in the base and
+               bull cases; in the bear case it is the WACC (growth after the projection adds no value: the advantage
+               behind today's ROIC is competed away; Koller et al.'s conservative default). A Gordon value on
                the last year's free cash flow would carry that year's capex forever: a company in a build-out (MSFT,
                2026: capex 35% of revenue against D&A of 10%) was worth a fraction of its operating profit at any growth.
                Enterprise value - net debt = equity; per share at the cover-page share count.
@@ -23,7 +28,7 @@ Bands          where today's earnings yield, FCF yield and EV/EBITDA sit in the 
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -46,6 +51,14 @@ class DiscountRate:
     equity_weight: float
     wacc: float
     notes: List[str] = field(default_factory=list)
+    arithmetic_premium: Optional[float] = None    # the arithmetic mean of the same data, for the sensitivity
+
+    def with_premium(self, premium: float) -> "DiscountRate":
+        """The same rate with another equity premium (risk-free, beta, debt and weights unchanged)."""
+        ke = self.risk_free + self.beta * premium
+        wacc = self.equity_weight * ke + (1.0 - self.equity_weight) * self.cost_of_debt * (1.0 - self.tax_rate)
+        return replace(self, equity_premium=float(premium), cost_of_equity=float(ke), wacc=float(wacc), notes=[],
+                       arithmetic_premium=None)
 
 
 def estimate_beta(prices: pd.Series, months: int = 60, factors: Optional[pd.DataFrame] = None) -> Tuple[float, str]:
@@ -70,6 +83,7 @@ def estimate_beta(prices: pd.Series, months: int = 60, factors: Optional[pd.Data
 def discount_rate(f: Financials, prices: pd.Series, risk_free: Optional[float] = None, equity_premium: Optional[float] = None,
                   beta: Optional[float] = None, factors: Optional[pd.DataFrame] = None) -> DiscountRate:
     notes: List[str] = []
+    arithmetic = None
     if risk_free is None:
         from ..data import load_risk_free
         rf = load_risk_free()
@@ -78,8 +92,12 @@ def discount_rate(f: Financials, prices: pd.Series, risk_free: Optional[float] =
     if equity_premium is None:
         try:
             from .. import factors as ff
-            equity_premium = ff.market_premium()["arithmetic"]
-            notes.append(f"equity premium {equity_premium * 100:.1f}% (Ken French market factor, arithmetic, since 1963)")
+            mp = ff.market_premium()
+            if not np.isfinite(mp["geometric"]):
+                raise ValueError("no market factor months")
+            equity_premium, arithmetic = float(mp["geometric"]), float(mp["arithmetic"])
+            notes.append(f"equity premium {equity_premium * 100:.1f}% (Ken French market factor since 1963, "
+                         f"geometric; the arithmetic mean is {arithmetic * 100:.1f}%)")
         except Exception:  # noqa: BLE001
             equity_premium = ERP_FALLBACK
             notes.append(f"equity premium {ERP_FALLBACK * 100:.1f}% (conventional; the Ken French library was unavailable)")
@@ -94,7 +112,7 @@ def discount_rate(f: Financials, prices: pd.Series, risk_free: Optional[float] =
     w = e / (e + debt) if (e + debt) > 0 else 1.0
     wacc = w * ke + (1 - w) * kd * (1 - f.tax_rate)
     return DiscountRate(risk_free, float(beta), float(equity_premium), float(ke), float(kd), float(f.tax_rate), float(w),
-                        float(wacc), notes)
+                        float(wacc), notes, arithmetic)
 
 
 @dataclass
@@ -152,6 +170,9 @@ class Valuation:
     implied_margin: Optional[float]          # the operating margin the price implies at base growth
     terminal_growth: float
     bands: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # the base case at the arithmetic equity premium: {"equity_premium", "wacc", "per_share"} (empty when the premium
+    # was given, or the historical one could not be read)
+    premium_sensitivity: Dict[str, float] = field(default_factory=dict)
 
     @property
     def target(self) -> float:
@@ -172,7 +193,7 @@ class Valuation:
             a = c.assumptions
             rows.append({"case": k, "weight": self.weights[k], "value_per_share": c.per_share,
                          "vs_price": c.per_share / self.price - 1.0, "growth_y1": a.growth[0], "growth_last": a.growth[-1],
-                         "margin_last": a.operating_margin[-1], "terminal_share": c.terminal_share})
+                         "margin_last": a.operating_margin[-1], "terminal_share": c.terminal_share, "ronic": c.ronic})
         return pd.DataFrame(rows).set_index("case")
 
 
@@ -224,16 +245,24 @@ def value(f: Financials, prices: pd.Series, rate: Optional[DiscountRate] = None,
           terminal_growth: float = 0.025, growth_shift: float = 0.04, margin_shift: float = 0.03,
           weights: Optional[Dict[str, float]] = None, factors: Optional[pd.DataFrame] = None,
           bands: Optional[Dict[str, pd.Series]] = None) -> Valuation:
-    """Bull / base / bear DCFs, the probability-weighted target, the reverse DCF and the bands."""
+    """Bull / base / bear DCFs, the probability-weighted target, the reverse DCF and the bands. The bear case's
+    RONIC is the WACC; base and bull use `terminal_ronic`."""
     r = rate or discount_rate(f, prices, factors=factors)
     base = Assumptions.from_financials(f, years, long_run_growth=terminal_growth + 0.005, label="base")
-    cases = {"bear": dcf(base.scaled(-growth_shift, -margin_shift, "bear"), f, r.wacc, terminal_growth),
+    cases = {"bear": dcf(base.scaled(-growth_shift, -margin_shift, "bear"), f, r.wacc, terminal_growth, ronic=r.wacc),
              "base": dcf(base, f, r.wacc, terminal_growth),
              "bull": dcf(base.scaled(growth_shift, margin_shift, "bull"), f, r.wacc, terminal_growth)}
     g, m = reverse_dcf(f, base, r.wacc, terminal_growth)
+    sens: Dict[str, float] = {}
+    ap = r.arithmetic_premium
+    if ap is not None and np.isfinite(ap) and abs(ap - r.equity_premium) > 1e-9:
+        alt = r.with_premium(ap)
+        if alt.wacc > terminal_growth:
+            sens = {"equity_premium": float(ap), "wacc": alt.wacc,
+                    "per_share": dcf(base, f, alt.wacc, terminal_growth).per_share}
     return Valuation(price=f.price, rate=r, cases=cases, weights=weights or {"bear": 0.25, "base": 0.5, "bull": 0.25},
                      implied_growth=g, implied_margin=m, terminal_growth=terminal_growth,
-                     bands=valuation_bands(bands or {}))
+                     bands=valuation_bands(bands or {}), premium_sensitivity=sens)
 
 
 __all__ = ["DiscountRate", "estimate_beta", "discount_rate", "DCFResult", "dcf", "terminal_value", "terminal_ronic",

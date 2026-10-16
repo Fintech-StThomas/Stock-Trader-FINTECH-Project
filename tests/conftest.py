@@ -7,7 +7,6 @@ os.environ["LIGHTHOUSE_OFFLINE"] = "1"
 # The suite builds trade tickets on the bundled sample prices to test their mechanics, which the live-mode rule refuses
 # without the override; tests/test_live_mode.py removes it to test the refusal itself.
 os.environ["LIGHTHOUSE_ALLOW_STALE_DATA"] = "1"
-os.environ.setdefault("MPLBACKEND", "Agg")
 
 
 def make_prices(n: int = 900, seed: int = 7, drift: float = 0.0004, vol: float = 0.018, start="2015-01-01") -> pd.DataFrame:

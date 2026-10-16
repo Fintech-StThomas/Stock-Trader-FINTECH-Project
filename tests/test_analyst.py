@@ -9,7 +9,7 @@ from lighthouse.analyst import checks, memo as memo_mod, thesis
 from lighthouse.analyst.financials import Financials, financials_as_of
 from lighthouse.analyst.model import Assumptions, project
 from lighthouse.analyst.peers import choose_peers, compare, peer_norms
-from lighthouse.analyst.valuation import DiscountRate, dcf, reverse_dcf, value, valuation_bands
+from lighthouse.analyst.valuation import DiscountRate, dcf, discount_rate, reverse_dcf, value, valuation_bands
 from lighthouse.data import load_prices
 from lighthouse.total_return import load_actions
 
@@ -105,6 +105,42 @@ def test_valuation_cases_order_and_target_is_the_weighted_mean():
     assert v.target == pytest.approx(0.25 * v.cases["bear"].per_share + 0.5 * v.cases["base"].per_share
                                      + 0.25 * v.cases["bull"].per_share)
     assert v.table().loc["base", "weight"] == 0.5
+    # the bear case's new capital earns only its cost; base and bull keep today's ROIC (at least the WACC)
+    assert v.cases["bear"].ronic == pytest.approx(RATE.wacc)
+    assert v.cases["base"].ronic == v.cases["bull"].ronic == pytest.approx(max(f.ratios()["roic"], RATE.wacc))
+    assert v.table().loc["bear", "ronic"] == pytest.approx(RATE.wacc)
+    a = Assumptions.from_financials(f, years=5, long_run_growth=0.03, label="base").scaled(-0.04, -0.03, "bear")
+    assert v.cases["bear"].per_share == pytest.approx(dcf(a, f, RATE.wacc, 0.025, ronic=RATE.wacc).per_share)
+    assert v.premium_sensitivity == {}                    # no historical premium behind a given rate: no sensitivity
+
+
+def test_equity_premium_is_the_geometric_mean_with_the_arithmetic_as_a_sensitivity(monkeypatch):
+    from lighthouse import factors as ff
+    monkeypatch.setattr(ff, "market_premium", lambda *a, **k: {"arithmetic": 0.072, "geometric": 0.060, "months": 758})
+    f = company()
+    close = pd.Series(100.0, index=pd.bdate_range("2015-01-01", "2020-06-30"))
+    r = discount_rate(f, close, risk_free=0.03, beta=1.1)
+    assert r.equity_premium == pytest.approx(0.060) and r.arithmetic_premium == pytest.approx(0.072)
+    assert r.cost_of_equity == pytest.approx(0.03 + 1.1 * 0.060)
+    assert any("geometric" in n and "7.2%" in n for n in r.notes)
+    hi = r.with_premium(0.072)
+    assert hi.cost_of_equity == pytest.approx(0.03 + 1.1 * 0.072)
+    assert hi.wacc == pytest.approx(r.equity_weight * hi.cost_of_equity
+                                    + (1 - r.equity_weight) * r.cost_of_debt * (1 - r.tax_rate))
+    v = value(f, close, rate=r)
+    s = v.premium_sensitivity
+    assert s["equity_premium"] == pytest.approx(0.072) and s["wacc"] == pytest.approx(hi.wacc)
+    base = Assumptions.from_financials(f, years=5, long_run_growth=0.03, label="base")
+    assert s["per_share"] == pytest.approx(dcf(base, f, hi.wacc, 0.025).per_share)
+    assert s["per_share"] < v.cases["base"].per_share                          # a higher premium, a lower value
+    # an explicit premium has no sensitivity; no factor data falls back to the conventional 5.5%
+    assert discount_rate(f, close, risk_free=0.03, beta=1.0, equity_premium=0.05).arithmetic_premium is None
+
+    def fail(*a, **k):
+        raise OSError("offline")
+    monkeypatch.setattr(ff, "market_premium", fail)
+    off = discount_rate(f, close, risk_free=0.03, beta=1.0)
+    assert off.equity_premium == pytest.approx(0.055) and off.arithmetic_premium is None
 
 
 def test_net_debt_counts_short_term_investments():
@@ -247,6 +283,23 @@ def test_conviction_is_bounded_and_never_raises_size():
 def msft():
     px = load_prices("MSFT", years=None, source="sample")
     return px, pit.load_statements("MSFT", source="sample"), load_actions("MSFT", source="sample")
+
+
+def test_share_count_follows_a_split_made_after_the_filing():
+    """The price is as traded on the date and the cover-page count as of its filing: AAPL split 4-for-1 on 31 August
+    2020, a month after its 10-Q (4.28bn shares) and two before its 10-K. Recorded sample pack."""
+    px = load_prices("AAPL", start="2000-01-01", years=None, source="sample")
+    st, acts = pit.load_statements("AAPL", source="sample"), load_actions("AAPL", source="sample")
+    before = financials_as_of("AAPL", st, px, acts, "2020-08-28")
+    after = financials_as_of("AAPL", st, px, acts, "2020-09-15")
+    assert before.last_filed == after.last_filed == pd.Timestamp("2020-07-31")
+    assert after.shares == pytest.approx(4 * before.shares)
+    assert any("x 4" in n and "2020-07-31" in n for n in after.notes)
+    assert after.market_cap / before.market_cap == pytest.approx(after.price * 4 / before.price, rel=1e-9)
+    assert 1.5e12 < after.market_cap < 2.5e12                      # not a quarter of it ($0.49tn unadjusted)
+    later = financials_as_of("AAPL", st, px, acts, "2020-11-02")   # the 10-K's count is after the split already
+    assert later.last_filed == pd.Timestamp("2020-10-30") and not any("split" in n for n in later.notes)
+    assert later.shares == pytest.approx(after.shares, rel=0.02)
 
 
 def test_financials_use_only_filings_public_on_the_date(msft):

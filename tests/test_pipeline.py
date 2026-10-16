@@ -1,11 +1,8 @@
-import json
-from pathlib import Path
-
 import pandas as pd
 import pytest
 
 from lighthouse import analyze, screen, InvestorProfile
-from lighthouse.data import load_prices, load_fundamentals, clean_prices, sample_pack_tickers, DataUnavailable
+from lighthouse.data import load_prices, clean_prices, sample_pack_tickers, DataUnavailable
 from lighthouse.report import build_report
 
 
@@ -28,28 +25,24 @@ def test_sample_pack_available():
         load_prices("NOPE_TICKER", source="sample")
 
 
-def test_fundamentals_fixture_and_overrides():
-    snap, hist = load_fundamentals("MSFT", source="sample", overrides={"pe_trailing": 15})
-    assert snap.pe_trailing == 15 and hist.years == 5 and snap.sector == "Technology"
-    assert any("override" in n for n in snap.notes)
-    snap2, _ = load_fundamentals("ZZZZ", source="sample")
-    assert not snap2.available and snap2.source == "unavailable"
-
-
 def test_end_to_end_analysis_and_report(tmp_path):
     prof = InvestorProfile(horizon="long", risk="conservative", max_loss_pct=1.5, portfolio_value=50_000)
     r = analyze("MSFT", prof, years=8, source="sample")
     d = r.decision
     assert d.verdict in {"Strong Buy", "Buy", "Hold", "Reduce", "Sell"}
-    assert 0 <= d.composite_score <= 100 and d.fundamental_score is not None
+    assert 0 <= d.composite_score <= 100
+    assert d.composite_score == pytest.approx(max(0.0, min(100.0, d.technical_score - d.regime_penalty)))
+    assert all(b.group == "technical" for b in d.beacons)
     assert d.plan.position_pct <= prof.max_position_pct
     assert r.backtest is not None and r.backtest.metrics["n_trades"] >= 1
+    assert "Same exposure, never traded" in r.backtest.summary().index
     md = build_report(r)
-    for needle in ["Verdict", "Fundamental beacons", "Technical beacons", "Market weather", "Position plan", "Limitations"]:
+    for needle in ["Verdict", "Technical beacons", "Market weather", "Position plan", "Same exposure, never traded",
+                   "analyst memo", "Limitations"]:
         assert needle in md
     r.evaluate(layers=True, sensitivity=False, walk_forward_test=False)
     files = r.save(tmp_path, charts=True)
-    assert any(f.endswith("_report.md") for f in files) and any(f.endswith(".png") for f in files)
+    assert any(f.endswith("_report.md") for f in files) and any(f.endswith("_charts.html") for f in files)
 
 
 def test_short_horizon_profile_changes_rule():
@@ -68,3 +61,15 @@ def test_screener_handles_failures():
     assert list(df["ticker"][:2]) != ["BADTICKER", "BADTICKER"]
     assert df.loc[df["ticker"] == "BADTICKER", "error"].iloc[0] != ""
     assert df["score"].dropna().is_monotonic_decreasing
+
+
+def test_the_rule_reads_prices_only(monkeypatch):
+    """The verdict, the ticket and the backtest need no fundamentals: an analysis never opens the SEC filings."""
+    from lighthouse import edgar, pit
+
+    def refuse(*a, **k):
+        raise AssertionError("the rule must not read SEC filings")
+    monkeypatch.setattr(pit, "load_statements", refuse)
+    monkeypatch.setattr(edgar, "company_facts", refuse)
+    r = analyze("AAPL", years=8, source="sample")
+    assert r.decision.verdict and r.backtest is not None

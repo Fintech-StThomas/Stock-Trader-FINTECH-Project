@@ -40,6 +40,19 @@ def test_split_factors_and_units():
     np.testing.assert_allclose(tr.as_traded_close(s, acts).to_numpy(), [280.0, 10.0])
 
 
+def test_share_counts_are_restated_for_splits_after_their_filing():
+    """A count filed before a split, put in the units of a later date: times the splits in between only."""
+    acts = _actions([("2014-06-09", 0.0, 7.0), ("2020-08-31", 0.0, 4.0)])
+    got = tr.restate_shares([100.0, 100.0, 100.0], ["2014-05-01", "2020-07-31", "2020-10-30"], acts, "2020-09-15")
+    np.testing.assert_allclose(got, [2800.0, 400.0, 100.0])
+    # a count and a price both in the units of the same date multiply to the market value whatever that date is:
+    # 1,000 shares filed in July 2020 at $400 before the split = 4,000 shares at $100 after it = $400,000
+    traded_after = 100.0
+    assert traded_after * tr.restate_shares([1000.0], ["2020-07-31"], acts, "2020-09-15")[0] == 400_000.0
+    adjusted_at_2020 = 400.0 / 4.0       # the July price in a series adjusted at the end of 2020
+    assert adjusted_at_2020 * tr.restate_shares([1000.0], ["2020-07-31"], acts, "2020-12-31")[0] == 400_000.0
+
+
 def test_delisting_rules():
     idx = pd.bdate_range("2020-01-01", periods=30)
     px = pd.DataFrame({"Open": 10.0, "High": 10.0, "Low": 10.0, "Close": 10.0, "Volume": 1e6}, index=idx)

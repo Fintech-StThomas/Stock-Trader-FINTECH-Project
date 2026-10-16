@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from . import indicators as ind
-from . import memo
+from . import cache
 from .config import StrategyParams, TECHNICAL_WEIGHTS
 
 
@@ -60,7 +60,7 @@ class Beacon:
 def compute_indicators(prices: pd.DataFrame, params: Optional[StrategyParams] = None) -> pd.DataFrame:
     """Return a copy of `prices` with all indicator columns added (all causal). Memoised on the data and parameters."""
     p = params or StrategyParams()
-    return memo.memoize(("indicators", memo.frame_fingerprint(prices), memo.params_key(p)), lambda: _compute_indicators(prices, p))
+    return cache.memoize(("indicators", cache.frame_fingerprint(prices), cache.params_key(p)), lambda: _compute_indicators(prices, p))
 
 
 def _compute_indicators(prices: pd.DataFrame, p: StrategyParams) -> pd.DataFrame:
@@ -109,7 +109,7 @@ def _clip(x, lo=-1.0, hi=1.0):
 def beacon_scores(ind_df: pd.DataFrame, params: Optional[StrategyParams] = None) -> pd.DataFrame:
     """Per-date score of every technical beacon. NaN where an indicator is undefined. Memoised like the indicators."""
     p = params or StrategyParams()
-    return memo.memoize(("beacons", memo.frame_fingerprint(ind_df), memo.params_key(p)), lambda: _beacon_scores(ind_df, p))
+    return cache.memoize(("beacons", cache.frame_fingerprint(ind_df), cache.params_key(p)), lambda: _beacon_scores(ind_df, p))
 
 
 def _beacon_scores(ind_df: pd.DataFrame, p: StrategyParams) -> pd.DataFrame:
@@ -170,8 +170,8 @@ def technical_score(ind_df: pd.DataFrame, horizon: str = "long",
     """
     w = weights or TECHNICAL_WEIGHTS[horizon]
     p = params or StrategyParams()
-    key = ("technical_score", memo.frame_fingerprint(ind_df), tuple(sorted(w.items())), memo.params_key(p))
-    return memo.memoize(key, lambda: _technical_score(ind_df, w, p))
+    key = ("technical_score", cache.frame_fingerprint(ind_df), tuple(sorted(w.items())), cache.params_key(p))
+    return cache.memoize(key, lambda: _technical_score(ind_df, w, p))
 
 
 def _technical_score(ind_df: pd.DataFrame, w: Dict[str, float], params: StrategyParams) -> pd.Series:

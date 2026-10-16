@@ -5,16 +5,19 @@ Rule (long-only, reviewed at the close on the decision day - monthly for the
 long horizon, weekly for the short horizon; stops are checked daily):
   ENTER  when the trend beacon is positive (price and 50-day SMA above the
          200-day SMA), the Technical Score >= entry threshold (+ penalty in a
-         bear market), the market is not Bear/Turbulent, and the point-in-time
-         Fundamental Score (if known) is above the gate.
+         bear market) and the market is not Bear/Turbulent. Fundamentals play
+         no part: a fundamental gate cost return in every test (docs/METHODOLOGY.md
+         section 8), so they belong to the analyst memo, not to the rule.
   EXIT   when the Technical Score <= exit threshold, when the close is more than
          the buffer below the 200-day SMA, or (short horizon) on the ATR stop.
   SIZE   volatility-targeted fraction of the sleeve x regime multiplier.
   FILL   orders decided on day t are filled at day t+1's open (or close when no
          open data exists) and pay commission + slippage on both sides.
 
-No indicator looks forward, statements are lagged by the reporting delay, and
-every order is executed strictly after the information that triggered it.
+No indicator looks forward, and every order is executed strictly after the
+information that triggered it. Every result is shown next to buy-and-hold and next
+to the same average exposure held without timing (`BacktestResult.same_exposure`): a
+rule that sits in cash half the time has to beat holding half as much stock.
 """
 from __future__ import annotations
 
@@ -52,7 +55,7 @@ class BacktestResult:
     buy_hold: pd.Series                     # same window, starts at 1.0
     benchmark: Optional[pd.Series]          # same window, starts at 1.0 (None if not given)
     exposure: pd.Series                     # fraction of the sleeve invested each day
-    signals: pd.DataFrame                   # tech_score, fund_score, regime flags, in_market
+    signals: pd.DataFrame                   # tech_score, trend, regime flags, in_market
     trades: List[Trade]
     params: StrategyParams
     profile: InvestorProfile
@@ -72,8 +75,16 @@ class BacktestResult:
         m["exposure"] = float(self.exposure.mean())
         return m
 
+    @property
+    def same_exposure(self) -> pd.Series:
+        """The stock and cash in a fixed mix at the rule's average exposure, rebalanced daily and never timed: what
+        the rule's lower risk would have cost without any signal. Cash earns what the rule's cash earns."""
+        return constant_mix(self.buy_hold, float(self.exposure.mean()), self.rf if self.params.cash_yield else 0.0,
+                            self.params.trading_days)
+
     def summary(self) -> pd.DataFrame:
         rows = {"Lighthouse strategy": self.metrics,
+                "Same exposure, never traded": compute_metrics(self.same_exposure, self.rf, self.params.trading_days),
                 "Buy & hold": compute_metrics(self.buy_hold, self.rf, self.params.trading_days)}
         if self.benchmark is not None:
             rows["S&P 500"] = compute_metrics(self.benchmark, self.rf, self.params.trading_days)
@@ -105,6 +116,20 @@ def rate_on(rate: pd.Series, index: pd.Index) -> pd.Series:
     published value (dates before the first one take the first)."""
     s = rate.reindex(rate.index.union(index)).ffill().reindex(index)
     return s.fillna(float(rate.iloc[0])) if len(rate) else s
+
+
+def constant_mix(buy_hold: pd.Series, weight: float, cash_rate: Union[float, pd.Series] = 0.0,
+                 trading_days: int = 252) -> pd.Series:
+    """Equity of `weight` in the stock (its buy-and-hold curve) and the rest in cash at `cash_rate` (annual, fixed or by
+    date), rebalanced every day, starting at 1.0."""
+    r = buy_hold.pct_change().fillna(0.0)
+    if isinstance(cash_rate, pd.Series):
+        rf = rate_on(cash_rate, buy_hold.index) / trading_days
+    else:
+        rf = pd.Series(float(cash_rate) / trading_days, index=buy_hold.index)
+    daily = weight * r + (1.0 - weight) * rf
+    daily.iloc[0] = 0.0
+    return (1.0 + daily).cumprod().rename("same_exposure")
 
 
 def compute_metrics(equity: pd.Series, risk_free_rate: Union[float, pd.Series] = 0.02, trading_days: int = 252) -> Dict[str, float]:
@@ -160,8 +185,7 @@ def trade_metrics(trades: Sequence[Trade]) -> Dict[str, float]:
 # --------------------------------------------------------------------------- #
 def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
                  params: Optional[StrategyParams] = None, profile: Optional[InvestorProfile] = None,
-                 fundamentals_pit: Optional[pd.Series] = None, use_regime: bool = True,
-                 use_fundamental_gate: bool = True, use_stops: bool = True, sizing: str = "vol_target",
+                 use_regime: bool = True, use_stops: bool = True, sizing: str = "vol_target",
                  start=None, end=None, risk_free: Optional[pd.Series] = None) -> BacktestResult:
     """`risk_free`: the daily 3-month T-bill rate for the Sharpe and Sortino ratios (data.load_risk_free); None uses
     the fixed `params.risk_free_rate`. It changes no trade."""
@@ -190,13 +214,9 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
         turb = np.zeros(len(ind), dtype=bool)
         regime_known = np.zeros(len(ind), dtype=bool)
 
-    if fundamentals_pit is not None and use_fundamental_gate:
-        fscore = fundamentals_pit.reindex(ind.index).values.astype(float)
-    else:
-        fscore = np.full(len(ind), np.nan)
-
-    # analysis window: first date with a defined technical score (and inside start/end if given)
-    valid = tscore.notna().values
+    # analysis window: first date with a defined technical score (and inside start/end if given); a copy, because
+    # pandas 3 hands out a read-only view
+    valid = tscore.notna().to_numpy(copy=True)
     if start is not None:
         valid &= (ind.index >= pd.Timestamp(start))
     if end is not None:
@@ -220,7 +240,6 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     tr = trend.values[first:last + 1]
     sd = sma_dist.values[first:last + 1]
     dec = decide.values[first:last + 1]
-    fs = fscore[first:last + 1]
     bull, turb, regime_known = bull[first:last + 1], turb[first:last + 1], regime_known[first:last + 1]
 
     # costs per side: fixed, or commission + Corwin-Schultz half spread (floored at the slippage) + square-root impact
@@ -346,9 +365,8 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
                 pending = ("sell", 0.0, "trailing stop")
             elif dec[i] and sizing != "full":
                 # review day: steer the position back toward its volatility target
-                score_for_size = ts[i] if not np.isfinite(fs[i]) else (prof.fundamental_weight * fs[i] + prof.technical_weight * ts[i])
                 mult = (p.bear_size_multiplier if (use_regime and not bull[i]) else 1.0)
-                target = backtest_size_fraction(atr[i], rvol[i], score_for_size, prof, mult, mode=sizing)
+                target = backtest_size_fraction(atr[i], rvol[i], ts[i], prof, mult, mode=sizing)
                 current = (shares * close[i]) / equity[i] if equity[i] > 0 else 0.0
                 if abs(target - current) > p.rebalance_threshold:
                     pending = ("rebalance", target, "rebalance")
@@ -357,14 +375,14 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
                 continue
             threshold = p.entry_score + (p.bear_entry_penalty if (use_regime and not bull[i]) else 0.0)
             blocked = use_regime and p.block_entries_in_bear_turbulent and (not bull[i]) and turb[i]
-            gate_ok = (not use_fundamental_gate) or (not np.isfinite(fs[i])) or fs[i] >= p.fundamental_gate_min
             trend_ok = (not p.trend_gate) or (np.isfinite(tr[i]) and tr[i] > 0.0)
             if p.max_entry_distance is not None and np.isfinite(sd[i]) and sd[i] > p.max_entry_distance:
                 trend_ok = False
-            if ts[i] >= threshold and not blocked and gate_ok and trend_ok:
-                score_for_size = ts[i] if not np.isfinite(fs[i]) else (prof.fundamental_weight * fs[i] + prof.technical_weight * ts[i])
+            if p.min_entry_distance is not None and not (np.isfinite(sd[i]) and sd[i] > p.min_entry_distance):
+                trend_ok = False
+            if ts[i] >= threshold and not blocked and trend_ok:
                 mult = (p.bear_size_multiplier if (use_regime and not bull[i]) else 1.0)
-                frac = backtest_size_fraction(atr[i], rvol[i], score_for_size, prof, mult, mode=sizing)
+                frac = backtest_size_fraction(atr[i], rvol[i], ts[i], prof, mult, mode=sizing)
                 if frac > 0:
                     pending = ("buy", frac, "signal entry")
 
@@ -382,11 +400,10 @@ def run_backtest(prices: pd.DataFrame, benchmark: Optional[pd.DataFrame] = None,
     if benchmark is not None:
         b = benchmark["Close"].reindex(idx.union(benchmark.index)).ffill().reindex(idx)
         bench = (b / b.iloc[0]).rename("benchmark")
-    signals = pd.DataFrame({"tech_score": ts, "trend": tr, "fund_score": fs, "bull": bull.astype(float), "turbulent": turb.astype(float),
+    signals = pd.DataFrame({"tech_score": ts, "trend": tr, "bull": bull.astype(float), "turbulent": turb.astype(float),
                             "regime_known": regime_known.astype(float), "in_market": in_market.astype(float)}, index=idx)
     return BacktestResult(prices.attrs.get("ticker", ""), eq, bh, bench, pd.Series(exposure, index=idx), signals, trades,
-                          p, prof, {"use_regime": use_regime, "use_fundamental_gate": use_fundamental_gate,
-                                    "use_stops": use_stops, "sizing": sizing, "fills": "next open" if has_open else "next close",
+                          p, prof, {"use_regime": use_regime, "use_stops": use_stops, "sizing": sizing, "fills": "next open" if has_open else "next close",
                                     "risk_free": describe_risk_free(risk_free, idx, p.risk_free_rate),
                                     "costs": ("commission + Corwin-Schultz half spread (floor "
                                               f"{p.slippage_bps:g} bps) + square-root impact" if liquid else
@@ -409,22 +426,38 @@ def describe_risk_free(risk_free: Optional[pd.Series], index: pd.Index, fixed: f
 # --------------------------------------------------------------------------- #
 # Evaluation helpers
 # --------------------------------------------------------------------------- #
-def strategy_layers(prices, benchmark, params, profile, fundamentals_pit=None, start=None, risk_free=None) -> pd.DataFrame:
-    """Add the product's layers one at a time to show what each contributes."""
+def trend_rule(prices, params: StrategyParams, profile: InvestorProfile, start=None, risk_free=None) -> BacktestResult:
+    """The plain 200-day trend rule on the same engine as the product's rule: on each review day, fully invested when
+    the close is above the 200-day SMA, in cash (earning the risk-free rate) when below; the same review days, fills,
+    costs and cash yield, no score, no market regime, no stops. The yardstick for what the beacons add over one line
+    (METHODOLOGY section 8d)."""
+    p = params.copy(entry_score=0.0, exit_score=-1.0, trend_gate=False, min_entry_distance=0.0, exit_below_sma=0.0,
+                    trend_exit=None, max_entry_distance=None)
+    return run_backtest(prices, None, p, profile, use_regime=False, use_stops=False, sizing="full", start=start,
+                        risk_free=risk_free)
+
+
+def strategy_layers(prices, benchmark, params, profile, start=None, risk_free=None) -> pd.DataFrame:
+    """Add the product's layers one at a time to show what each contributes, then the two yardsticks every timing rule
+    has to beat: the full rule's average exposure held without timing, and the plain 200-day trend rule."""
     variants = [
-        ("Technical signals only (fully invested)", dict(use_regime=False, use_fundamental_gate=False, use_stops=False, sizing="full")),
-        ("+ market regime filter", dict(use_regime=True, use_fundamental_gate=False, use_stops=False, sizing="full")),
-        ("+ fundamental gate (point-in-time)", dict(use_regime=True, use_fundamental_gate=True, use_stops=False, sizing="full")),
+        ("Technical signals only (fully invested)", dict(use_regime=False, use_stops=False, sizing="full")),
+        ("+ market regime filter", dict(use_regime=True, use_stops=False, sizing="full")),
     ]
     if params.atr_stop:
-        variants.append(("+ trailing ATR stop", dict(use_regime=True, use_fundamental_gate=True, use_stops=True, sizing="full")))
-    variants.append(("+ volatility-targeted sizing (full Lighthouse)", dict(use_regime=True, use_fundamental_gate=True, use_stops=True, sizing="vol_target")))
+        variants.append(("+ trailing ATR stop", dict(use_regime=True, use_stops=True, sizing="full")))
+    variants.append(("+ volatility-targeted sizing (full Lighthouse)", dict(use_regime=True, use_stops=True, sizing="vol_target")))
     rows = {}
-    base = None
+    base = full = None
     for name, opts in variants:
-        res = run_backtest(prices, benchmark, params, profile, fundamentals_pit, start=start, risk_free=risk_free, **opts)
+        res = run_backtest(prices, benchmark, params, profile, start=start, risk_free=risk_free, **opts)
         rows[name] = res.metrics
         base = base or res
+        full = res
+    same = compute_metrics(full.same_exposure, full.rf, params.trading_days)
+    same["exposure"] = float(full.exposure.mean())
+    rows["Same exposure, never traded"] = same
+    rows["Plain 200-day trend rule"] = trend_rule(prices, params, profile, start=start, risk_free=risk_free).metrics
     rows["Buy & hold"] = compute_metrics(base.buy_hold, base.rf, params.trading_days)
     if base.benchmark is not None:
         rows["S&P 500"] = compute_metrics(base.benchmark, base.rf, params.trading_days)
@@ -432,7 +465,7 @@ def strategy_layers(prices, benchmark, params, profile, fundamentals_pit=None, s
     return df.reindex(columns=["cagr", "volatility", "sharpe", "max_drawdown", "n_trades", "win_rate", "exposure"])
 
 
-def sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit=None,
+def sensitivity_grid(prices, benchmark, params, profile,
                      entry_values=(50, 55, 60, 65, 70), exit_values=(25, 30, 35, 40, 45), start=None,
                      risk_free=None) -> pd.DataFrame:
     """Backtest every (entry, exit) threshold pair. A robust rule has a *plateau*, not a single spike."""
@@ -440,7 +473,7 @@ def sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit=None,
     for e_in, e_out in product(entry_values, exit_values):
         if e_out >= e_in:
             continue
-        res = run_backtest(prices, benchmark, params.copy(entry_score=e_in, exit_score=e_out), profile, fundamentals_pit, start=start,
+        res = run_backtest(prices, benchmark, params.copy(entry_score=e_in, exit_score=e_out), profile, start=start,
                            risk_free=risk_free)
         m = res.metrics
         rows.append({"entry": e_in, "exit": e_out, "cagr": m["cagr"], "sharpe": m["sharpe"],
@@ -448,38 +481,38 @@ def sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit=None,
     return pd.DataFrame(rows)
 
 
-def parameter_sweep(prices, benchmark, params, profile, fundamentals_pit, name: str, values: Sequence, start=None) -> pd.DataFrame:
+def parameter_sweep(prices, benchmark, params, profile, name: str, values: Sequence, start=None) -> pd.DataFrame:
     rows = []
     for v in values:
         if name == "stop_atr_multiple":
-            res = run_backtest(prices, benchmark, params, profile.with_overrides(stop_atr_override=float(v)), fundamentals_pit, start=start)
+            res = run_backtest(prices, benchmark, params, profile.with_overrides(stop_atr_override=float(v)), start=start)
         elif name == "target_vol":
-            res = run_backtest(prices, benchmark, params, profile.with_overrides(target_vol_override=float(v)), fundamentals_pit, start=start)
+            res = run_backtest(prices, benchmark, params, profile.with_overrides(target_vol_override=float(v)), start=start)
         else:
-            res = run_backtest(prices, benchmark, params.copy(**{name: v}), profile, fundamentals_pit, start=start)
+            res = run_backtest(prices, benchmark, params.copy(**{name: v}), profile, start=start)
         m = res.metrics
         rows.append({name: v, "cagr": m["cagr"], "sharpe": m["sharpe"], "max_drawdown": m["max_drawdown"],
                      "n_trades": m["n_trades"], "win_rate": m["win_rate"]})
     return pd.DataFrame(rows)
 
 
-def walk_forward(prices, benchmark, params, profile, fundamentals_pit=None, split: float = 0.6,
+def walk_forward(prices, benchmark, params, profile, split: float = 0.6,
                  entry_values=(50, 55, 60, 65, 70), exit_values=(25, 30, 35, 40, 45), risk_free=None) -> Dict[str, object]:
     """Tune thresholds on the first `split` of history, then test them - untouched - on the rest.
 
     Reports the default rule and the tuned rule on the out-of-sample window, so the
     investor can see whether tuning helped or merely fitted noise.
     """
-    base = run_backtest(prices, benchmark, params, profile, fundamentals_pit, risk_free=risk_free)
+    base = run_backtest(prices, benchmark, params, profile, risk_free=risk_free)
     rf = base.rf
     idx = base.equity.index
     split_date = idx[int(len(idx) * split)]
-    grid = sensitivity_grid(prices, benchmark, params, profile, fundamentals_pit, entry_values, exit_values, start=None,
+    grid = sensitivity_grid(prices, benchmark, params, profile, entry_values, exit_values, start=None,
                             risk_free=risk_free)
     # in-sample: metrics restricted to the training window
     rows = []
     for _, g in grid.iterrows():
-        res = run_backtest(prices, benchmark, params.copy(entry_score=g["entry"], exit_score=g["exit"]), profile, fundamentals_pit)
+        res = run_backtest(prices, benchmark, params.copy(entry_score=g["entry"], exit_score=g["exit"]), profile)
         is_eq = res.equity[res.equity.index < split_date]
         m = compute_metrics(is_eq, rf, params.trading_days)
         rows.append({"entry": g["entry"], "exit": g["exit"], "is_sharpe": m["sharpe"], "is_cagr": m["cagr"],
@@ -490,7 +523,7 @@ def walk_forward(prices, benchmark, params, profile, fundamentals_pit=None, spli
     tuned = params.copy(entry_score=float(best["entry"]), exit_score=float(best["exit"]))
 
     def oos(p):
-        res = run_backtest(prices, benchmark, p, profile, fundamentals_pit)
+        res = run_backtest(prices, benchmark, p, profile)
         eq = res.equity[res.equity.index >= split_date]
         eq = eq / eq.iloc[0]
         m = compute_metrics(eq, rf, params.trading_days)

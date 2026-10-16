@@ -1,9 +1,6 @@
-import numpy as np
-import pandas as pd
-
-from lighthouse.fundamentals import (FundamentalSnapshot, StatementHistory, fundamental_beacons, fundamental_score,
-                                     point_in_time_scores, score_multiple_vs_norm, score_band)
-from lighthouse.config import StrategyParams
+"""The fundamental beacons of the analyst memo (lighthouse/fundamentals.py): sector norms or peer medians."""
+from lighthouse.fundamentals import (FundamentalSnapshot, fundamental_beacons, fundamental_score, score_multiple_vs_norm,
+                                     score_band)
 
 
 def snap(**kw):
@@ -52,7 +49,7 @@ def test_financials_skip_leverage_beacon():
 
 
 def test_default_beacons_keep_the_sector_norms_and_wording():
-    """Without `norms` the beacons are the sector-norm ones the decision and the backtest were tested with."""
+    """Without `norms` the beacons are scored against the sector norms, with the sector wording."""
     b = {x.key: x for x in fundamental_beacons(snap())}
     assert b["valuation:pe"].value == "P/E 20.0 vs Technology ~28"
     assert b["valuation:pb"].value == "P/B 5.00 vs ~7.0"
@@ -91,19 +88,3 @@ def test_peer_norms_never_turn_ev_ebitda_on_for_financials():
                             norms={"pe": 11.0, "ev_ebitda": 9.0, "label": "peer median", "source": "x"})
     assert not any(x.key.endswith("ev_ebitda") for x in b)
     assert any(x.value == "P/E 20.0 vs peer median ~11" for x in b)
-
-
-def test_point_in_time_scores_respect_reporting_lag(prices):
-    annual = pd.DataFrame({"revenue": [100, 120], "net_income": [10, 15], "eps": [1.0, 1.5], "operating_income": [20, 28],
-                           "equity": [50, 60], "total_debt": [20, 20]},
-                          index=pd.to_datetime(["2016-12-31", "2017-12-31"]))
-    hist = StatementHistory(annual=annual)
-    p = StrategyParams(reporting_lag_days=90)
-    s = point_in_time_scores(prices, hist, "Technology", p)
-    first_known = pd.Timestamp("2016-12-31") + pd.Timedelta(days=90)
-    assert s[s.index < first_known].isna().all()
-    assert s[s.index >= first_known].notna().all()
-    assert s.dropna().between(0, 100).all()
-    # valuation moves daily with price: scores are not constant within a statement window
-    window = s[(s.index >= first_known) & (s.index < pd.Timestamp("2017-12-31") + pd.Timedelta(days=90))]
-    assert window.std() > 0

@@ -13,12 +13,17 @@ Two kinds of forecast are scored, each only once its outcome is known (nothing i
 
 Daily runs journal overlapping windows for the same stock: they are not independent. `per_month=True` keeps the first
 decision per stock and month, and the summary reports how many windows were scored.
+
+A third, separate part scores the watch-only research signals (lighthouse/research/watch.py, `score_watch`): monthly
+rank IC with its Newey-West t, the top quintile against the equal-weight universe and the long-short spread before and
+after the harness's costs, and turnover, computed by the research harness's own `evaluate` on the journal's forward
+snapshots and outcomes. They are not survivors and carry no weight: nothing here feeds a verdict or a ticket.
 """
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -158,3 +163,198 @@ def price_closes(source: str = "auto", start="2000-01-01") -> Callable[[str], Op
                 memo[t] = None
         return memo[t]
     return get
+
+
+# --------------------------------------------------------------------------- #
+# Watch-only signals: forward evidence for the research near misses (lighthouse/research/watch.py)
+# --------------------------------------------------------------------------- #
+WATCH_LABEL = ("watch-only: research near misses, not survivors of the pre-registered rule; they carry no weight in any "
+               "verdict, ticket or decision")
+# The forward rule (docs/METHODOLOGY.md section 8c), written down on 15 October 2026, before any forward data existed.
+# It is read once a year, on the forward months to December, and when met it only makes the case for a new
+# pre-registered test: it never gives a signal weight.
+FORWARD_MIN_MONTHS = 36
+FORWARD_IC_T = 2.0
+FORWARD_MAX_GAP_SHARE = 1.0 / 6.0
+FLAT_BPS = 10.0              # the harness's cost sensitivity: one cost per side for every stock
+
+
+def forward_panel(snaps: pd.DataFrame, outcomes: pd.DataFrame):
+    """(harness Panel, signal, per-side costs) from one watch signal's snapshots and the recorded outcomes: the month
+    ends that have both. None when there is no such month end. Members, the volume screen and the costs are the ones
+    recorded with the snapshot; the next-month returns are the recorded outcomes under each delisting rule."""
+    from .research import harness as H
+    from .total_return import DELISTING_RULES
+    if snaps is None or snaps.empty or outcomes is None or outcomes.empty:
+        return None
+    dates = sorted(set(snaps["as_of"]) & set(outcomes["as_of"]))
+    if not dates:
+        return None
+    s = snaps[snaps["as_of"].isin(dates)]
+    o = outcomes[outcomes["as_of"].isin(dates)]
+    idx = pd.DatetimeIndex(pd.to_datetime(dates))
+    tickers = sorted(set(s["ticker"]))
+
+    def pivot(df: pd.DataFrame, col: str) -> pd.DataFrame:
+        p = df.pivot_table(index="as_of", columns="ticker", values=col, aggfunc="last", dropna=False)
+        p.index = pd.DatetimeIndex(pd.to_datetime(p.index))
+        return p.reindex(index=idx, columns=tickers).astype(float)
+    members = pd.DataFrame(False, index=idx, columns=tickers)
+    for d, g in s.groupby("as_of"):
+        members.loc[pd.Timestamp(d), sorted(set(g["ticker"]))] = True
+    fwd = {rule: pivot(o, f"ret_{rule}").where(members) for rule in DELISTING_RULES}
+    prices = fwd["exclude"].notna().astype(float).where(lambda x: x > 0)        # 1.0: priced at both month ends
+    tradable = pivot(s, "tradable").fillna(0.0) > 0.5
+    counts = s.groupby("as_of")["ticker"].nunique()
+    counts.index = pd.DatetimeIndex(pd.to_datetime(counts.index))
+    panel = H.Panel(dates=idx, prices=prices, members=members, fwd=fwd, last_price=pd.Series(dtype=object),
+                    data_end=idx[-1], universe_name="S&P 500 (point in time), forward",
+                    member_count=counts.reindex(idx), tradable=tradable)
+    return panel, pivot(s, "value"), pivot(s, "cost")
+
+
+def _watch_summary(res, alt) -> Dict[str, object]:
+    """The forward statistics of one signal and delisting rule (res: harness cost model; alt: flat 10 bps)."""
+    s = res.summary
+
+    def ann(x: pd.Series) -> float:                    # the mean monthly return x 12, as the harness annualises
+        return float(x.mean() * 12) if len(x) else float("nan")
+    return {"months": int(len(res.ic)), "coverage": s["coverage"],
+            "ic_mean": float(res.ic.mean()) if len(res.ic) else float("nan"), "ic_nw_t": s["ic_nw_t"],
+            "ic_hit": s["ic_hit"], "long_only_gross_ann": ann(res.long_only), "long_only_net_ann": ann(res.long_only_net),
+            f"long_only_net_ann_{FLAT_BPS:g}bps": ann(alt.long_only_net), "long_short_gross_ann": ann(res.spread),
+            "long_short_net_ann": ann(res.spread_net), f"long_short_net_ann_{FLAT_BPS:g}bps": ann(alt.spread_net),
+            "top_turnover": s["top_turnover"]}
+
+
+def _forward_status(name: str, use: Optional[str], fp, snaps_tab: pd.DataFrame, min_names: int) -> Dict[str, object]:
+    """The forward rule at the last annual look: the scored months to the latest December month end that is on or
+    before the last scored month (dated by the calendar, so a missing December snapshot does not skip the look)."""
+    from .research import harness as H
+    from .research import watch as W
+    from .total_return import DELISTING_RULES
+    out: Dict[str, object] = {"signal": name, "look": None, "months_at_look": 0}
+    looks = []
+    if fp is not None:
+        first, last = fp[0].dates[0], fp[0].dates[-1]
+        looks = [d for d in (W.month_end_session(f"{y}-12-01") for y in range(first.year, last.year + 1))
+                 if first <= d <= last]
+    if not looks:
+        n = 0 if fp is None else len(fp[0].dates)
+        out["status"] = (f"collecting: {n} forward month(s) with an outcome; the rule is read once a year, on the months "
+                         f"to December, from {FORWARD_MIN_MONTHS} months on")
+        return out
+    panel, value, costs = fp
+    look = looks[-1]
+    out["look"] = str(look.date())
+    res = {r: H.evaluate(panel, value, name, r, (str(panel.dates[0].date()), str(look.date())), costs, None,
+                         min_names=min_names) for r in DELISTING_RULES}
+    months = min(len(v.ic) for v in res.values())
+    out["months_at_look"] = months
+    due = [d for d in W.sessions(pd.Timestamp(snaps_tab["as_of"].min()), look) if W.is_month_end_session(d)]
+    have = set(pd.to_datetime(snaps_tab.loc[snaps_tab["on_time"].astype(bool), "as_of"]))
+    gaps = sum(1 for d in due if d not in have)
+    key = "long_only_net" if use == "long_only" else "spread_net"
+    checks = {
+        f"IC > 0 with Newey-West t >= {FORWARD_IC_T:g}": all(
+            v.ic.mean() > 0 and v.summary["ic_nw_t"] >= FORWARD_IC_T for v in res.values()),
+        "IC > 0 in more than half the months": all(v.summary["ic_hit"] > 0.5 for v in res.values()),
+        f"{(use or 'long_short').replace('_', '-')} return after costs > 0": all(
+            getattr(v, key).mean() > 0 for v in res.values()),
+    }
+    failed = [k for k, ok in checks.items() if not ok]
+    if months < FORWARD_MIN_MONTHS:
+        out["status"] = f"collecting: {months} of {FORWARD_MIN_MONTHS} forward months at the look of {look.date()}"
+    elif due and gaps / len(due) > FORWARD_MAX_GAP_SHARE:
+        out["status"] = (f"incomplete record at the look of {look.date()}: {gaps} of {len(due)} month ends missing or "
+                         "late")
+    elif failed:
+        out["status"] = f"not met at the look of {look.date()}: " + "; ".join(f"no {k}" for k in failed)
+    else:
+        out["status"] = (f"met at the look of {look.date()}: the case for a new pre-registered test (the user decides; "
+                         "nothing is weighted)")
+    return out
+
+
+@dataclass
+class WatchScorecard:
+    table: pd.DataFrame                  # one row per (signal, configuration, delisting rule)
+    monthly: pd.DataFrame                # one row per (signal, rule, month end scored)
+    snapshots: pd.DataFrame              # one row per snapshot: when written, its deadline, on time or late
+    status: pd.DataFrame                 # the forward rule per signal
+    power: pd.DataFrame = field(default_factory=pd.DataFrame)   # months a Newey-West t of 2 would take (from the log)
+
+    def late(self) -> pd.DataFrame:
+        s = self.snapshots
+        return s[~s["on_time"].astype(bool)] if len(s) else s
+
+    def text(self) -> str:
+        lines = [f"WATCH-ONLY SIGNALS ({WATCH_LABEL})"]
+        if self.snapshots.empty:
+            lines.append("no watch snapshots yet (python -m lighthouse journal watch records them at month ends)")
+            return "\n".join(lines)
+        ok = int(self.snapshots["on_time"].astype(bool).sum())
+        lines.append(f"snapshots: {ok} on time, {len(self.snapshots) - ok} late (kept, not scored)")
+        for _, r in self.late().iterrows():
+            lines.append(f"  late: {r['signal']} {r['as_of']} written {r['recorded_at']}, after the open at {r['deadline']}")
+        if len(self.table):
+            cols = [c for c in ("signal", "rule", "months", "coverage", "ic_mean", "ic_nw_t", "ic_hit",
+                                "long_only_gross_ann", "long_only_net_ann", f"long_only_net_ann_{FLAT_BPS:g}bps",
+                                "long_short_net_ann", "top_turnover") if c in self.table]
+            with pd.option_context("display.width", 250, "display.max_columns", 30):
+                lines.append(self.table[cols].round(4).to_string(index=False))
+        for _, r in self.status.iterrows():
+            lines.append(f"forward rule, {r['signal']}: {r['status']}")
+        if len(self.power):
+            for name, g in self.power.groupby("signal", sort=False):
+                parts = [f"{int(round(x))} at the {p} IC" if np.isfinite(x) else f"never at the {p} IC (not positive)"
+                         for p, x in zip(g["period"].str.replace("holdout", "hold-out"), g["months_t2"])]
+                lines.append(f"months for an expected Newey-West t of 2, {name}: " + ", ".join(parts))
+        return "\n".join(lines)
+
+
+def score_watch(journal, min_names: Optional[int] = None, signals=None, power: bool = True) -> WatchScorecard:
+    """Score the watch-only signals on their on-time forward snapshots whose outcome is recorded (nothing earlier),
+    with the research harness's own statistics, costs and delisting rules. Late snapshots are listed, not scored."""
+    from .research import harness as H
+    from .research import watch as W
+    from .total_return import DELISTING_RULES
+    snaps, outs = journal.watch_signals(), journal.watch_outcomes()
+    tab = W.snapshot_table(snaps)
+    specs = W.WATCH_SIGNALS if signals is None else signals
+    min_names = H.MIN_NAMES if min_names is None else int(min_names)
+    rows: List[Dict[str, object]] = []
+    monthly: List[pd.DataFrame] = []
+    status: List[Dict[str, object]] = []
+    groups = snaps.groupby(["signal", "config_hash"], sort=False) if len(snaps) else []
+    for (name, ch), g in groups:
+        st = tab[(tab["signal"] == name) & (tab["config_hash"] == ch)]
+        on = set(st.loc[st["on_time"].astype(bool), "as_of"])
+        base = {"signal": name, "config_hash": ch, "snapshots": int(len(st)),
+                "late": int((~st["on_time"].astype(bool)).sum()), "first": st["as_of"].min(), "last": st["as_of"].max()}
+        fp = forward_panel(g[g["as_of"].isin(on)], outs)
+        if fp is None:
+            rows += [{**base, "rule": r, "months": 0} for r in DELISTING_RULES]
+        else:
+            panel, value, costs = fp
+            flat = H.cost_panel(dict.fromkeys(panel.prices.columns), panel.dates, fixed_bps=FLAT_BPS)
+            period = (str(panel.dates[0].date()), None)
+            for rule in DELISTING_RULES:
+                res = H.evaluate(panel, value, name, rule, period, costs, None, min_names=min_names)
+                alt = H.evaluate(panel, value, name, rule, period, flat, None, min_names=min_names)
+                rows.append({**base, "rule": rule, **_watch_summary(res, alt)})
+                m = pd.DataFrame({"ic": res.ic, "long_only": res.long_only, "long_only_net": res.long_only_net,
+                                  "spread": res.spread, "spread_net": res.spread_net, "turnover": res.turnover})
+                if len(m):
+                    monthly.append(m.rename_axis("as_of").reset_index().assign(signal=name, rule=rule))
+        spec = specs.get(name)
+        status.append(_forward_status(name, spec.use if spec is not None and spec.config_hash == ch else None, fp, st,
+                                      min_names))
+    pw = pd.DataFrame()
+    if power:
+        try:
+            pw = W.months_needed(signals=specs)
+        except Exception:  # noqa: BLE001 - the experiment log is optional for scoring
+            pw = pd.DataFrame()
+    return WatchScorecard(pd.DataFrame(rows), pd.concat(monthly, ignore_index=True) if monthly else pd.DataFrame(),
+                          tab, pd.DataFrame(status), pw)

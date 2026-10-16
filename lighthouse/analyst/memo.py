@@ -57,7 +57,8 @@ class Criterion:
 class FundamentalView:
     """The fundamental beacons on the memo's own point-in-time numbers (`fundamental_snapshot`), scored against the
     peer medians when the memo found peers, next to the same numbers against the sector norms. Opt-in
-    (`build(peer_norms=True)`, CLI `--peer-norms`); the rule-based verdict keeps the sector norms it was tested with."""
+    (`build(peer_norms=True)`, CLI `--peer-norms`; the app always asks for it). The rule-based verdict reads none of
+    them: it reads prices only."""
     beacons: List[Beacon]                 # against `norms`
     score: Optional[float]
     sector_beacons: List[Beacon]          # the same numbers against fundamentals.SECTOR_NORMS
@@ -238,8 +239,8 @@ def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: boo
     """The memo for `ticker` on `as_of` (default: the last close). `result` (an `engine.AnalysisResult`) adds the
     rule-based verdict; `peers=False` skips the peer search (it reads every same-industry candidate's filings).
     `peer_norms=True` adds the fundamental beacons on the memo's numbers scored against the peer medians (needs the
-    peer search; without peers they are scored against the sector norms and say why). Nothing else changes: the
-    stance, the rule-based verdict and the decision keep the sector norms."""
+    peer search; without peers they are scored against the sector norms and say why). Nothing else changes: neither
+    the stance nor the rule-based verdict (prices only) reads them."""
     from ..data import load_prices
     from ..edgar import company_filings
     from ..pit import load_statements
@@ -248,9 +249,8 @@ def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: boo
     t = ticker.upper().strip()
     notes: List[str] = []
     prices = result.prices if result is not None else load_prices(t, years=11, end=as_of, source=source)
-    actions = result.actions if result is not None and result.actions is not None else load_actions(t, source=source)
-    statements = result.pit_statements if result is not None and result.pit_statements is not None else \
-        load_statements(t, source=source)
+    actions = load_actions(t, source=source)
+    statements = load_statements(t, source=source)
     if statements.quarterly is None or statements.quarterly.empty:
         raise DataUnavailable(f"{t}: no SEC filings to build a memo from ({'; '.join(statements.notes) or 'not a US filer'})")
     f = financials_as_of(t, statements, prices, actions, as_of)

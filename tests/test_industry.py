@@ -85,13 +85,32 @@ def test_tangible_book_value_usb():
     assert gone.value is None and "goodwill" in gone.note
 
 
+def test_tangible_book_counts_preferred_as_zero_only_when_never_tagged():
+    usb = facts("usb_companyfacts_2025")
+    pref = usb["concept"].isin(pit.INDUSTRY["preferred_equity"].concepts)
+    # a bank whose filings never tag preferred stock under any preferred concept: preferred counted as 0, said so
+    none = industry_metrics(usb[~pref], "6021", "2025-12-01", market_cap=100e9)
+    tbv = none.get("tbv_per_share")
+    assert tbv.value == pytest.approx((63_340 - 0 - 12_634 - 5_152) * 1e6 / 1_554_434_067)
+    assert "counted as 0" in tbv.note and "counted as 0" in none.get("price_to_tbv").note
+    assert none.get("price_to_tbv").value == pytest.approx(100e9 / ((63_340 - 12_634 - 5_152) * 1e6))
+    # tagged in the 10-Q but not in the later 10-K: the 10-K's tangible book stays unknown (never a guess)
+    gap = usb[~(pref & (usb["end"] == pd.Timestamp("2025-12-31")))]
+    late = industry_metrics(gap, "6021", "2026-03-02").get("tbv_per_share")
+    assert late.value is None and "preferred stock" in late.note and "counted as 0" not in late.note
+    # with preferred tagged, nothing changes and no note is added
+    assert industry_metrics(usb, "6021", "2025-12-01").get("tbv_per_share").note == ""
+
+
 def test_reit_ffo_realty_income():
     o = facts("o_companyfacts_2024_2025")
     v = industry_metrics(o, "6798", "2026-03-02", market_cap=50e9)
     ffo = v.get("ffo")
-    assert ffo.value == pytest.approx((1_058_590 + 2_524_200 - 177_640) * 1e3)     # fiscal 2025
+    # NAREIT's definition: net income + D&A - gains on property sales + real-estate impairments (fiscal 2025)
+    assert ffo.value == pytest.approx((1_058_590 + 2_524_200 - 177_640 + 471_335) * 1e3)
     assert ffo.period == "12 months to 2025-12-31 (fiscal year)" and ffo.filed == pd.Timestamp("2026-02-25")
-    assert v.get("ffo_payout").value == pytest.approx(2_920_895 / (1_058_590 + 2_524_200 - 177_640))
+    assert "NAREIT" in ffo.formula and ffo.note == ""
+    assert v.get("ffo_payout").value == pytest.approx(2_920_895 / (1_058_590 + 2_524_200 - 177_640 + 471_335))
     assert v.get("p_ffo").value == pytest.approx(50e9 / ffo.value)
     assert v.get("re_impairments").value == pytest.approx(471_335e3)
     # before the 10-K: four quarters, the fourth quarter of 2024 from the 10-K minus nine months, dividends from
@@ -100,9 +119,15 @@ def test_reit_ffo_realty_income():
     ni = (860_772 - 661_160) + 249_815 + 196_919 + 315_771
     da = (2_395_644 - 1_788_973) + 608_935 + 647_849 + 631_981
     gains = (117_275 - 92_290) + 22_537 + 38_566 + 49_107
-    assert q.get("ffo").value == pytest.approx((ni + da - gains) * 1e3)
+    imp = (425_833 - 282_867) + 116_589 + 143_363 + 86_972
+    assert q.get("ffo").value == pytest.approx((ni + da - gains + imp) * 1e3)
+    assert q.get("re_impairments").value == pytest.approx(imp * 1e3)
     divs = (2_691_719 - 1_999_858) + 2_177_133
-    assert q.get("ffo_payout").value == pytest.approx(divs / (ni + da - gains))
+    assert q.get("ffo_payout").value == pytest.approx(divs / (ni + da - gains + imp))
+    # no impairment tagged for the period: nothing added back, and the metric says so
+    no_imp = industry_metrics(o[o["concept"] != "ImpairmentOfRealEstate"], "6798", "2026-03-02")
+    assert no_imp.get("ffo").value == pytest.approx((1_058_590 + 2_524_200 - 177_640) * 1e3)
+    assert "none added back" in no_imp.get("ffo").note and no_imp.get("re_impairments").value is None
     # a REIT that tags no gains on property sales under a standard concept (PLD since 2020, SPG): no FFO
     no_gains = industry_metrics(o[o["concept"] != "GainLossOnSaleOfProperties"], "6798", "2026-03-02")
     assert no_gains.get("ffo").value is None and "real_estate_gains" in no_gains.get("ffo").note

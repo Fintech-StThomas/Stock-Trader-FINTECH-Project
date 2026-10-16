@@ -1,7 +1,8 @@
 """
-Decision engine: blend the Fundamental and Technical scores for the investor's
-horizon, apply the market-regime headwind, map the result to a verdict, and
-turn the verdict into a concrete position plan (size, shares, stop, max loss).
+Decision engine: the technical score for the investor's horizon, minus the
+market-regime headwind, mapped to a verdict, and the verdict turned into a
+concrete position plan (size, shares, stop, max loss). The verdict is what the
+backtest trades; the fundamental analysis is the analyst memo's (lighthouse.analyst).
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from .regime import RegimeSnapshot, regime_adjustments
 from .technicals import Beacon
 
 ACTION_TEXT = {
-    "Strong Buy": "Open or add to a position - the evidence lines up across fundamentals, technicals and the market backdrop.",
+    "Strong Buy": "Open or add to a position - the trend, momentum and market backdrop line up.",
     "Buy":        "Open a position at the suggested size; the balance of evidence is positive.",
     "Hold":       "Keep an existing position but do not add new money; the evidence is mixed.",
     "Reduce":     "Trim an existing position (about half) and do not buy; the evidence leans negative.",
@@ -37,7 +38,7 @@ class PositionPlan:
     conviction: float            # 0-1 scaling from the composite score
     binding_constraint: str      # which rule limited the size
     rationale: List[str] = field(default_factory=list)
-    side: str = "long"           # "long" (buy) or "short" (sell short)
+    side: str = "long"           # "long" (buy): the only side
     cash_available: float = 0.0  # spendable cash the plan was sized against
 
     @property
@@ -46,7 +47,7 @@ class PositionPlan:
 
     @property
     def cost(self) -> float:
-        """Cash needed for the whole shares (a short ties up this much as collateral instead)."""
+        """Cash needed for the whole shares."""
         return float(self.shares * self.entry_price)
 
     @property
@@ -60,7 +61,6 @@ class Decision:
     as_of: str
     price: float
     profile: InvestorProfile
-    fundamental_score: Optional[float]
     technical_score: float
     regime: Optional[RegimeSnapshot]
     regime_penalty: float
@@ -69,10 +69,6 @@ class Decision:
     beacons: List[Beacon]
     plan: PositionPlan
     warnings: List[str] = field(default_factory=list)
-
-    @property
-    def fundamental_beacons(self) -> List[Beacon]:
-        return [b for b in self.beacons if b.group == "fundamental"]
 
     @property
     def technical_beacons(self) -> List[Beacon]:
@@ -86,14 +82,9 @@ class Decision:
 # --------------------------------------------------------------------------- #
 # Scoring
 # --------------------------------------------------------------------------- #
-def composite_score(fundamental: Optional[float], technical: float, profile: InvestorProfile,
-                    regime_penalty: float = 0.0) -> float:
-    """Horizon-weighted blend, minus the regime headwind. Missing fundamentals -> technical only."""
-    if fundamental is None or (isinstance(fundamental, float) and np.isnan(fundamental)):
-        blended = technical
-    else:
-        blended = profile.fundamental_weight * fundamental + profile.technical_weight * technical
-    return float(np.clip(blended - regime_penalty, 0.0, 100.0))
+def composite_score(technical: float, regime_penalty: float = 0.0) -> float:
+    """The Lighthouse score: the horizon's technical score minus the regime headwind, on 0-100."""
+    return float(np.clip(technical - regime_penalty, 0.0, 100.0))
 
 
 def conviction_from_score(score: float) -> float:
@@ -105,29 +96,21 @@ def conviction_from_score(score: float) -> float:
 # Position sizing
 # --------------------------------------------------------------------------- #
 def stop_level(price: float, atr: float, sma_slow: Optional[float], profile: InvestorProfile,
-               params: Optional[StrategyParams] = None, side: str = "long") -> tuple:
+               params: Optional[StrategyParams] = None) -> tuple:
     """Where the position is abandoned, and why. Returns (level, label, kind).
 
-    Long horizon : the 200-day SMA minus the exit buffer (the same rule the backtest uses);
-                   for a short, the 200-day SMA plus the buffer.
-    Short horizon: an ATR stop (risk-preset multiple x ATR) below a long / above a short.
+    Long horizon : the 200-day SMA minus the exit buffer (the same rule the backtest uses).
+    Short horizon: an ATR stop (risk-preset multiple x ATR) below the entry.
     """
     p = params or StrategyParams()
-    short = side == "short"
     atr_ok = atr is not None and np.isfinite(atr) and atr > 0 and price > 0
     if not p.atr_stop and p.exit_below_sma is not None and sma_slow is not None and np.isfinite(sma_slow):
-        if short:
-            level = sma_slow * (1.0 + p.exit_below_sma)
-            if level > price:
-                return float(level), f"200-day SMA plus {p.exit_below_sma * 100:.0f}% buffer", "sma"
-        else:
-            level = sma_slow * (1.0 - p.exit_below_sma)
-            if level < price:
-                return float(level), f"200-day SMA minus {p.exit_below_sma * 100:.0f}% buffer", "sma"
+        level = sma_slow * (1.0 - p.exit_below_sma)
+        if level < price:
+            return float(level), f"200-day SMA minus {p.exit_below_sma * 100:.0f}% buffer", "sma"
     if atr_ok:
         dist = min(max(profile.stop_atr_multiple * atr / price, 0.02), 0.5)
-        level = price * (1.0 + dist) if short else price * (1.0 - dist)
-        return float(level), f"{profile.stop_atr_multiple:g} x ATR {'stop above the entry' if short else 'trailing stop'}", "atr"
+        return float(price * (1.0 - dist)), f"{profile.stop_atr_multiple:g} x ATR trailing stop", "atr"
     return None, "no stop (volatility unknown)", "none"
 
 
@@ -138,7 +121,7 @@ def risk_sizing(price: float, stop_pct: Optional[float], realized_vol: float, pr
     1. Max-loss rule   : if the stop is hit, lose at most `max_loss_pct` of the account.
     2. Volatility rule : scale the position so its expected volatility matches the profile's target.
     3. Concentration   : never exceed the profile's maximum single-position size.
-    The smallest wins. Works for longs and shorts (the stop distance is a positive fraction either way).
+    The smallest wins.
     """
     rationale = rationale if rationale is not None else []
     candidates = {"concentration cap": profile.max_position_pct}
@@ -232,22 +215,20 @@ def backtest_size_fraction(atr: float, realized_vol: float, score: float, profil
 # Assemble the decision
 # --------------------------------------------------------------------------- #
 def make_decision(ticker: str, as_of, price: float, atr: float, realized_vol: float,
-                  fundamental: Optional[float], technical: float, beacons: List[Beacon],
+                  technical: float, beacons: List[Beacon],
                   regime: Optional[RegimeSnapshot], profile: InvestorProfile,
                   params: Optional[StrategyParams] = None, warnings: Optional[List[str]] = None,
                   sma_slow: Optional[float] = None) -> Decision:
     p = params or StrategyParams()
     adj = regime_adjustments(regime.is_bear if regime else False, regime.is_turbulent if regime else False, p)
-    score = composite_score(fundamental, technical, profile, adj["score_penalty"])
+    score = composite_score(technical, adj["score_penalty"])
     verdict = verdict_from_score(score)
     warns = list(warnings or [])
-    if fundamental is None:
-        warns.append("Fundamental data unavailable: the score is technical-only and should be treated with extra caution.")
     if adj["block_entries"] and verdict in {"Buy", "Strong Buy"}:
         verdict = "Hold"
         warns.append("Market is Bear / Turbulent: new entries are blocked by the regime rule, so the verdict is capped at Hold.")
     plan = size_position(price, atr, realized_vol, score, verdict, profile, adj["size_multiplier"], sma_slow, p)
     return Decision(ticker=ticker, as_of=str(as_of)[:10], price=float(price), profile=profile,
-                    fundamental_score=fundamental, technical_score=float(technical), regime=regime,
+                    technical_score=float(technical), regime=regime,
                     regime_penalty=adj["score_penalty"], composite_score=score, verdict=verdict,
                     beacons=beacons, plan=plan, warnings=warns)

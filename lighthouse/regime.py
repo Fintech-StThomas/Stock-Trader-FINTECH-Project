@@ -15,7 +15,7 @@ from typing import Optional
 import pandas as pd
 
 from . import indicators as ind
-from . import memo
+from . import cache
 from .config import StrategyParams
 
 
@@ -52,7 +52,7 @@ class RegimeSnapshot:
 def regime_table(benchmark: pd.DataFrame, params: Optional[StrategyParams] = None) -> pd.DataFrame:
     """Daily regime classification of the benchmark (all columns causal). Memoised on the data and parameters."""
     p = params or StrategyParams()
-    return memo.memoize(("regime", memo.frame_fingerprint(benchmark), memo.params_key(p)), lambda: _regime_table(benchmark, p))
+    return cache.memoize(("regime", cache.frame_fingerprint(benchmark), cache.params_key(p)), lambda: _regime_table(benchmark, p))
 
 
 def _regime_table(benchmark: pd.DataFrame, p: StrategyParams) -> pd.DataFrame:

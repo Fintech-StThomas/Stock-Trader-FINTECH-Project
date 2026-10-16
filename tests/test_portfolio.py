@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from lighthouse.portfolio import (METHODS, GOALS, PortfolioConstraints, ledoit_wolf, bayes_stein_means, estimate, optimize,
+from lighthouse.portfolio import (METHODS, GOALS, PortfolioConstraints, ledoit_wolf, estimate, optimize,
                                   risk_contributions, to_shares, vol_target_scale, backtest_weights, load_universe,
-                                  build_portfolio, goal_portfolio, selection_panels, select, risk_report, _hrp)
+                                  build_portfolio, goal_portfolio, selection_panels, select, risk_report)
 from lighthouse.universe import available_universe, SECTORS, LARGE_CAP_UNIVERSE
 
 BASKET = ["AAPL", "JNJ", "XOM", "JPM", "KO", "PG", "UNH", "WMT", "HD", "CVX", "MRK", "PEP"]
@@ -44,18 +44,6 @@ def test_ledoit_wolf_matches_scikit_learn():
     assert np.allclose(ours, theirs) and s1 == pytest.approx(s2)
 
 
-def test_bayes_stein_shrinks_toward_the_min_variance_mean():
-    x = _rand_returns(seed=5)
-    cov, _ = ledoit_wolf(x)
-    mu_bs, phi = bayes_stein_means(x, cov)
-    mu = x.mean(axis=0)
-    inv = np.linalg.inv(cov)
-    one = np.ones(len(mu))
-    mu0 = one @ inv @ mu / (one @ inv @ one)
-    assert 0 < phi <= 1
-    assert np.allclose(mu_bs, (1 - phi) * mu + phi * mu0)
-
-
 @pytest.mark.parametrize("method", list(METHODS))
 def test_every_method_is_fully_invested_and_respects_caps(window, method):
     cons = PortfolioConstraints(max_weight=0.25)
@@ -71,17 +59,9 @@ def test_method_properties(window):
     w_mv, _ = optimize(window, "min_variance", free, est=est)
     w_ew, _ = optimize(window, "equal_weight", free, est=est)
     assert w_mv.values @ est.cov @ w_mv.values <= w_ew.values @ est.cov @ w_ew.values
-    w_iv, _ = optimize(window, "inverse_vol", free, est=est)
-    assert np.allclose(w_iv.values * est.vol, (w_iv.values * est.vol)[0])                    # weight x vol is constant
-    w_ms, _ = optimize(window, "max_sharpe", free, risk_free_rate=0.02, est=est)
-    sr = lambda w: (w @ est.mu_bs - 0.02) / np.sqrt(w @ est.cov @ w)                          # noqa: E731
-    assert sr(w_ms.values) >= max(sr(w_ew.values), sr(w_mv.values), sr(w_rp.values)) - 1e-9
-
-
-def test_hrp_on_two_uncorrelated_identical_clusters():
-    block = np.full((2, 2), 0.5) + 0.5 * np.eye(2)
-    cov = np.block([[block, np.zeros((2, 2))], [np.zeros((2, 2)), block]]) * 0.04
-    assert np.allclose(_hrp(cov), 0.25)
+    assert np.allclose(w_ew.values, 1 / len(w_ew))
+    assert set(METHODS) == {"equal_weight", "risk_parity", "min_variance"}
+    assert {g.method for g in GOALS.values()} <= set(METHODS)                # every goal uses a method that exists
 
 
 def test_infeasible_caps_are_reported(window):

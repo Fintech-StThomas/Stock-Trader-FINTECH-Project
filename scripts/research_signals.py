@@ -12,24 +12,24 @@ Everything is reported, failures included (reports/research/signal_results.csv, 
 
 Run:  LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/research_signals.py              # tuning period only
       LIGHTHOUSE_SEC_EMAIL=you@example.com python scripts/research_signals.py --holdout    # then the hold-out, once
-Live data (Yahoo prices cached in data/cache, SEC filings, Ken French factors); the price panel is cached as Parquet.
-The 10-K text signals read every 10-K since 2006 (not stored; --no-text skips them) and need the Loughran-McDonald
-dictionary (downloaded to the cache; free for academic research, see lighthouse/text.py). 13F breadth reads the SEC's
-13F data sets in memory (--no-13f skips it). Every signal computed is cached under data/cache/research_signals, so a
-second run evaluates without downloading.
+Live data (Yahoo prices cached in data/cache, SEC filings, FINRA short volume, Ken French factors); the price panel is
+cached as Parquet. The 10-K text signals read every 10-K since 2006 (not stored; --no-text skips them) and need the
+Loughran-McDonald dictionary (downloaded to the cache; free for academic research, see lighthouse/text.py). Every
+signal computed is cached under data/cache/research_signals, so a second run evaluates without downloading.
+
+The signals: the product's own (technical score and beacons: lighthouse.research.signals), the fundamental library
+(SEC filings by filing date), FINRA short volume, the earnings reaction and the 10-K text features. The signals that
+failed and are not on the watch list were removed in October 2026; their logged rows stay in experiments.csv.
 """
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from lighthouse import factors as ff  # noqa: E402
@@ -71,8 +71,8 @@ def _no_signal(hit, frames) -> set:
 
 
 def monthly_signals(frames, panel, names=None, refresh=False) -> dict:
-    """{signal: month-end x ticker} for the product and price signals, cached as Parquet."""
-    names = names or (S.PRODUCT_SIGNALS + list(S.PRICE_SIGNALS))
+    """{signal: month-end x ticker} for the product's signals, cached as Parquet."""
+    names = names or list(S.PRODUCT_SIGNALS)
     out, todo = {}, []
     for n in names:
         hit = None if refresh else store.read_frame("research_signals", n)
@@ -87,32 +87,6 @@ def monthly_signals(frames, panel, names=None, refresh=False) -> dict:
             store.write_frame("research_signals", n, m)
             out[n] = m
     return out
-
-
-def fundamental_signal(frames, panel, refresh=False) -> pd.DataFrame:
-    """The product's point-in-time fundamental score at month ends (SEC filing dates; Yahoo-sector norms where the
-    curated sector list knows the stock, the default norms otherwise)."""
-    hit = None if refresh else store.read_frame("research_signals", "fund_pit")
-    if hit is not None and hit.index.equals(panel.dates):
-        return hit
-    from lighthouse.fundamentals import point_in_time_scores
-    from lighthouse.pit import load_statements
-    from lighthouse.total_return import load_actions
-    from lighthouse.universe import SECTORS
-    from lighthouse.config import StrategyParams
-    from lighthouse.parallel import map_tickers
-
-    def one(t):
-        h = load_statements(t)
-        if not h.has_filing_dates:
-            return None
-        acts = load_actions(t, max_age_hours=None)
-        return point_in_time_scores(frames[t], h, SECTORS.get(t), StrategyParams(), actions=None if acts.empty else acts)
-    got, _ = map_tickers(one, list(frames), max_workers=8)
-    daily = {t: v for t, v in got.items() if v is not None}
-    m = H.sample_at_month_ends(daily, panel.dates)
-    store.write_frame("research_signals", "fund_pit", m)
-    return m
 
 
 def _merge(path: Path, new: pd.DataFrame, keys) -> pd.DataFrame:
@@ -140,81 +114,50 @@ def main(argv=None) -> int:
     ap.add_argument("--refresh-signals", action="store_true")
     ap.add_argument("--allow-repeat", action="store_true", help="re-evaluate a hold-out (counts as another trial)")
     ap.add_argument("--no-text", action="store_true", help="skip the 10-K text signals (reads every 10-K since 2006)")
-    ap.add_argument("--no-13f", action="store_true", help="skip 13F breadth (reads the SEC's 13F data sets, ~3 GB)")
-    ap.add_argument("--no-8k", action="store_true", help="skip the earnings-release tone (reads ~17,000 8-K exhibits "
-                    "for half the members)")
-    ap.add_argument("--product-only", action="store_true", help="only the signals the product already uses (beacons, "
-                    "technical, fundamental and composite scores)")
-    ap.add_argument("--blend", nargs="+", default=None, metavar="SIGNAL",
-                    help="evaluate only the sector/size-neutral equal-weight blend of these signals (the survivors; "
-                    "lighthouse/research/blend.py); it is one more trial")
+    ap.add_argument("--product-only", action="store_true", help="only the signals the product uses (the technical "
+                    "score and its beacons): no SEC or FINRA data")
     a = ap.parse_args(argv)
     uni, frames, missing, panel = load_inputs()
     cov = panel.coverage()
     print(f"{uni.summary()}; {len(frames)} priced, {len(missing)} without prices; "
           f"coverage {cov[cov.index >= '2009-01-01'].mean():.0%} of member-months 2009-{panel.dates[-1].year}")
-    sigs = monthly_signals(frames, panel, refresh=a.refresh_signals)
-    if os.environ.get("LIGHTHOUSE_SEC_EMAIL") or os.environ.get("SEC_USER_AGENT"):
-        sigs["fund_pit"] = fundamental_signal(frames, panel, a.refresh_signals)
-        tech = sigs["tech_long"]
-        f = sigs["fund_pit"].reindex_like(tech)
-        sigs["composite_long"] = (0.6 * f + 0.4 * tech).where(f.notna(), tech)
-    if a.product_only:
-        # the signals Lighthouse already uses (beacons, technical, fundamental and composite scores): no new data
-        keep = set(S.PRODUCT_SIGNALS) | {"fund_pit", "composite_long"}
-        sigs = {k: v for k, v in sigs.items() if k in keep}
-    else:
+    product = [n for n in S.PRODUCT_SIGNALS if a.signals is None or n in a.signals]
+    sigs = monthly_signals(frames, panel, product, refresh=a.refresh_signals) if product else {}
+    if not a.product_only:
         sigs.update(library_signals(frames, panel, a))
-    if a.blend:
-        sigs = {blend_name(a.blend): neutral_blend(sigs, a.blend, panel)}
-        a.signals = None
     return evaluate_all(a, uni, frames, missing, panel, sigs)
 
 
-def blend_name(components) -> str:
-    return "blend_neutral_" + "+".join(sorted(components))
-
-
-def neutral_blend(sigs: dict, components, panel) -> pd.DataFrame:
-    """The sector/size-neutral equal-weight blend of `components` (lighthouse/research/blend.py), over each month's
-    tested universe (members that traded)."""
-    from lighthouse.research import blend as B
-    unknown = [c for c in components if c not in sigs]
-    if unknown:
-        raise SystemExit(f"--blend: unknown signals {unknown}")
-    sics = store.read_json("research", "sic_codes", None) or {}
-    industries = B.industries_from_sic(sics, panel.prices.columns)
-    mcap = np.exp(-sigs["size"]) if "size" in sigs else None
-    if not any(industries.values()) or mcap is None:
-        raise SystemExit("--blend needs the SIC codes and market values of the library run (run it without "
-                         "--product-only first)")
-    mask = panel.investable
-    S.DESCRIPTIONS[blend_name(components)] = ("sector (FF49) and size neutral equal-weight blend of "
-                                              + ", ".join(sorted(components)))
-    return B.blend({c: sigs[c] for c in sorted(components)}, industries, mcap, mask)
+def _wanted(a, names) -> bool:
+    """Is any of `names` asked for (`--signals`; none given: all are)?"""
+    return a.signals is None or bool(set(a.signals) & set(names))
 
 
 def library_signals(frames, panel, a) -> dict:
-    """The signal library (fundamental, panel, positioning, event, text and 13F signals)."""
-    sigs = {}
-    from lighthouse.research import fundamental_signals as FS
-    from lighthouse.research import panel_signals as PS
-    from lighthouse.research import positioning as PO
-    fs = FS.monthly(frames, panel, refresh=a.refresh_signals)
-    mcap = fs.pop("market_cap")
-    sigs.update(fs)
-    sigs["size"] = -np.log(mcap.where(mcap > 0))                     # small minus big (Banz 1981)
-    sigs.update(PS.monthly(frames, panel, refresh=a.refresh_signals))
-    sigs.update(PO.monthly(frames, panel, market_cap=mcap, refresh=a.refresh_signals))
+    """The signal library: fundamental (SEC filings), FINRA short volume, the earnings reaction and the 10-K text.
+    With --signals, only the families that hold a requested signal are computed (no FINRA or 10-K download for a
+    fundamental signal)."""
     from lighthouse.research import event_signals as EV
-    from lighthouse.research import institutions as IN
-    sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text, eightk=not a.no_8k))
-    if not a.no_13f:
-        sigs.update(IN.monthly(frames, panel, refresh=a.refresh_signals))
-    for mod in (FS, PS, PO, EV, IN):
+    from lighthouse.research import fundamental_signals as FS
+    from lighthouse.research import positioning as PO
+    sigs = {}
+    if _wanted(a, FS.FUNDAMENTAL_SIGNALS):
+        sigs.update(FS.monthly(frames, panel, refresh=a.refresh_signals))
+        sigs.pop("market_cap")
+    if _wanted(a, PO.DESCRIPTIONS):
+        sigs.update(PO.monthly(frames, panel, refresh=a.refresh_signals))
+    if _wanted(a, EV.DESCRIPTIONS):
+        sigs.update(EV.monthly(frames, panel, refresh=a.refresh_signals, text=not a.no_text))
+    for mod in (FS, PO, EV):
         S.DESCRIPTIONS.update(mod.DESCRIPTIONS)
-    S.DESCRIPTIONS["size"] = "small size (minus log market value)"
     return sigs
+
+
+def config_for(name: str) -> dict:
+    """The logged configuration of a signal: harness.signal_config plus what changed its values since its first
+    trial (fundamental_signals.config_extra: the share-count method)."""
+    from lighthouse.research import fundamental_signals as FS
+    return H.signal_config(name, S.DESCRIPTIONS.get(name, ""), **FS.config_extra(name))
 
 
 def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
@@ -231,8 +174,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     dv = data_version(uni, frames, missing, panel)
     rows, tune_by = [], {}
     for name, sig in sigs.items():
-        cfg = {"signal": name, "universe": "sp500_pit", "quantiles": 5, "costs": "cs_spread+sqrt_impact@1m/100",
-               "borrow": 0.005, "description": S.DESCRIPTIONS.get(name, "")}
+        cfg = config_for(name)
         tune_by[name] = {}
         for rule in DELISTING_RULES:
             res = H.evaluate(panel, sig, name, rule, H.TUNING, costs, factors)
@@ -256,8 +198,7 @@ def evaluate_all(a, uni, frames, missing, panel, sigs) -> int:
     n_trials = log.trials()
     hrows, verdicts = [], []
     for name, sig in sigs.items():
-        cfg = {"signal": name, "universe": "sp500_pit", "quantiles": 5, "costs": "cs_spread+sqrt_impact@1m/100",
-               "borrow": 0.005, "description": S.DESCRIPTIONS.get(name, "")}
+        cfg = config_for(name)
         try:
             res = H.evaluate_holdout(panel, sig, name, cfg, log, dv, costs, factors, allow_repeat=a.allow_repeat,
                                      n_trials=n_trials, sr_std=sr_std)

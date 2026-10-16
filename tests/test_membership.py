@@ -64,12 +64,40 @@ def test_cohort_bounds_count_untested_members_as_lost():
                        "years": 10.0, "bh_cagr": [0.10, 0.0] * 2, "lighthouse_cagr": [0.05, 0.0] * 2,
                        "signals_cagr": [0.07, 0.0] * 2, "bh_sharpe": 0.5, "bh_mdd": -0.5, "signals_sharpe": 0.4,
                        "lighthouse_vol": 0.1, "lighthouse_sharpe": 0.3, "lighthouse_mdd": -0.2, "conservative_sharpe": 0.2,
-                       "trades": 5})
+                       "same_cagr": [0.04, 0.0] * 2, "same_sharpe": [0.35, 0.25] * 2, "same_mdd": -0.25, "trades": 5})
     s = summarize(df, members=4)
     w = (1.1 ** 10 + 1.0) / 2
     assert s.loc["exclude", "cohort_bh_cagr"] == pytest.approx(w ** 0.1 - 1)
+    assert s.loc["exclude", "cohort_same_cagr"] == pytest.approx(((1.04 ** 10 + 1.0) / 2) ** 0.1 - 1)
+    assert s.loc["exclude", "beat_same_sharpe"] == 1 and s.loc["exclude", "lower_mdd_than_same"] == 2
     assert s.loc["pessimistic", "cohort_bh_cagr"] == pytest.approx((w / 2) ** 0.1 - 1)    # 2 of 4 members worth nothing
     assert s.loc["pessimistic", "coverage"] == 0.5
+
+
+def test_pre_registered_timing_test_is_a_paired_sign_test():
+    """METHODOLOGY 8d: per stock, the full rule against the same exposure (CAGR, drawdown) and the plain trend rule
+    (Sharpe); a hypothesis holds in a cohort when the rule wins on more than half the stocks with p < 0.05."""
+    from scipy.stats import binomtest
+    from lighthouse.research.cohort import paired_sign_test, timing_test
+    n = 40
+    rng = np.random.default_rng(3)
+    base = rng.normal(0.08, 0.03, n)
+    df = pd.DataFrame({"ticker": [f"T{k}" for k in range(n)], "rule": "exclude",
+                       "lighthouse_cagr": base - 0.01, "same_cagr": base,                         # timing loses return
+                       "lighthouse_mdd": -0.25 + rng.normal(0, 0.01, n), "same_mdd": -0.40,       # ... and cuts drawdown
+                       "lighthouse_sharpe": 0.4 + np.r_[np.full(22, 0.01), np.full(18, -0.01)],   # 22 of 40: not enough
+                       "trend_sharpe": 0.4})
+    t = timing_test(df).set_index("hypothesis")
+    h1, h2, h3 = t.index
+    assert t.loc[h1, "wins"] == 0 and not t.loc[h1, "holds"]
+    assert t.loc[h2, "wins"] == n and t.loc[h2, "holds"] and t.loc[h2, "p_value"] < 1e-9
+    assert t.loc[h3, "wins"] == 22 and not t.loc[h3, "holds"]
+    assert t.loc[h3, "p_value"] == pytest.approx(binomtest(22, 40, 0.5).pvalue)
+    # ties and missing values are left out of the count
+    r = paired_sign_test(pd.Series([1.0, 2.0, np.nan, 3.0]), pd.Series([1.0, 1.0, 1.0, 1.0]))
+    assert (r["wins"], r["n"]) == (2, 2)
+    none = timing_test(df, rule="pessimistic")                          # no rows under that rule: nothing holds
+    assert (none["n"] == 0).all() and not none["holds"].any()
 
 
 def test_static_universe_says_it_is_biased():
@@ -86,6 +114,22 @@ def test_market_cap_from_cover_shares_and_as_traded_price():
     assert 5.5e11 < mc["AAPL"] < 7.0e11 and np.isnan(mc["NOPE"])
     u = mb.market_cap_universe(["AAPL"], ["2015-01-02", "2016-01-04"], {"AAPL": split_adj}, top_n=1, source="sample")
     assert u.members_on("2015-06-01") == ["AAPL"]
+
+
+def test_market_cap_after_a_split_uses_the_restated_count():
+    """AAPL on 15 September 2020, after the 4-for-1 split of 31 August and before the next 10-K: the latest cover page
+    (July 2020) counts pre-split shares; restated, the value is ~$1.97tn (unrestated it was a quarter of that), the
+    same as the memo's and the research signals' market value."""
+    px = pd.read_csv("data/sample/prices/AAPL.csv", index_col=0, parse_dates=True)["Close"]
+    from lighthouse.data import load_prices
+    from lighthouse.research import fundamental_signals as FS
+    from lighthouse.total_return import load_actions, price_only_close, to_units_of
+    split_adj = price_only_close(px, to_units_of(load_actions("AAPL", source="sample"), px.index[-1]))
+    mc = mb.market_cap_on("2020-09-15", ["AAPL"], {"AAPL": split_adj}, source="sample")["AAPL"]
+    assert 1.8e12 < mc < 2.2e12
+    df = load_prices("AAPL", source="sample", years=None)
+    df.attrs = {}
+    assert FS.daily_values("AAPL", df, source="sample")["market_cap"].loc["2020-09-15"] == pytest.approx(mc, rel=1e-9)
 
 
 def test_delisting_names_match_edgar_filers(monkeypatch):

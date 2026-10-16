@@ -1,7 +1,7 @@
 """Watchlist screener: analyse several tickers and rank the opportunities."""
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import pandas as pd
 
@@ -19,21 +19,27 @@ def screen(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, pa
     done = (lambda t, k, n: print(f"  analysed {t} ({k}/{n})", flush=True)) if progress else None
     results, errors = map_tickers(lambda t: analyze(t, profile, params, years=years, source=source, run_backtest_=with_backtest,
                                                     benchmark=benchmark), tickers, max_workers, source, done)
+    return rank(results, errors, tickers, with_backtest)
+
+
+def rank(results: Dict[str, object], errors: Dict[str, str], tickers: Optional[Iterable[str]] = None,
+         with_backtest: bool = False) -> pd.DataFrame:
+    """The ranking table of results already analysed ({ticker: AnalysisResult}, {ticker: error}), best score first;
+    `tickers` sets which rows appear (default: every result and error)."""
+    names = list(results) + list(errors) if tickers is None else list(tickers)
     rows: List[dict] = []
-    for t in dict.fromkeys(x.upper().strip() for x in tickers if x and x.strip()):
+    for t in dict.fromkeys(x.upper().strip() for x in names if x and x.strip()):
         try:
             if t in errors:
                 raise RuntimeError(errors[t])
             r = results[t]
-            d, f = r.decision, r.fundamentals
+            d = r.decision
             row = {
-                "ticker": t, "name": f.name or t, "verdict": d.verdict, "score": round(d.composite_score, 1),
-                "fundamental": None if d.fundamental_score is None else round(d.fundamental_score, 1),
+                "ticker": t, "name": r.name or t, "verdict": d.verdict, "score": round(d.composite_score, 1),
                 "technical": round(d.technical_score, 1), "regime": d.regime.label if d.regime else "n/a",
                 "position_pct": round(d.plan.position_pct, 1), "shares": d.plan.shares, "cost": round(d.plan.cost, 2),
                 "price": round(d.price, 2),
                 "stop": None if d.plan.stop_price is None else round(d.plan.stop_price, 2),
-                "pe": f.pe_trailing, "roe": f.roe, "rev_growth": f.revenue_growth, "sector": f.sector,
                 "data_source": r.prices.attrs.get("source"), "as_of": d.as_of, "error": "",
             }
             if with_backtest and r.backtest is not None:

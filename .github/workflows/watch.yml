@@ -1,0 +1,108 @@
+# The forward watch list (lighthouse/research/watch.py, docs/METHODOLOGY.md section 8c): after the close of each
+# month's last NYSE session, record the research near misses (FCF yield, short-sale volume, risk-factor similarity)
+# for every point-in-time S&P 500 member, and the outcomes of last month's snapshot. Watch-only: these signals did not
+# survive the research rule and carry no weight in any verdict or ticket.
+#
+# The schedule fires on days 28-31; each run stops after the first check (about a minute) unless the last finished
+# session is the month's last. A snapshot counts as forward evidence only if it is written before the next session's
+# open, so a failed run can be repeated by hand (Actions -> watch -> Run workflow) until then; a weekend run catches up
+# a Friday month end on its own.
+#
+# The journal lives on the `journal-data` branch, as journal.yml keeps it (restore, append, save). Both workflows use
+# the concurrency group `lighthouse-journal`, so they never write that branch at the same time.
+#
+# A month-end run reads Yahoo prices for ~500 members, each member's SEC company facts and filing list, the 10-Ks filed
+# since the last run (Item 1A) and five FINRA daily short-volume files, at the SEC's rate limit (lighthouse/http.py).
+# The first run, with an empty cache, takes about an hour; later ones less. data/cache is kept between runs with
+# actions/cache; GitHub drops a cache that is not used for 7 days, so the Sunday run only restores it.
+#
+# Settings (repository Settings -> Secrets and variables -> Actions):
+#   secret   LIGHTHOUSE_SEC_EMAIL     contact e-mail the SEC requires for EDGAR (without it only short volume is recorded)
+name: watch
+on:
+  schedule:
+    - cron: "40 23 28-31 * *"        # 23:40 UTC: after the 16:00 New York close in summer (20:00 UTC) and winter (21:00)
+    - cron: "40 23 * * 0"            # Sundays: restore the data cache so GitHub keeps it (and catch up a month end)
+  workflow_dispatch:
+permissions:
+  contents: write                    # push the journal to the journal-data branch
+concurrency:
+  group: lighthouse-journal          # the same group as journal.yml: one writer of the journal-data branch at a time
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Is the last finished session the month's last?
+        id: due
+        run: |
+          due=$(python -m lighthouse journal watch --due)
+          echo "due=$due" >> "$GITHUB_OUTPUT"
+          echo "watch snapshot due: $due"
+      - name: Restore the data cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/cache
+          key: lighthouse-watch-${{ github.run_id }}
+          restore-keys: lighthouse-watch-
+      - name: Restore the journal from the journal-data branch
+        id: restore
+        if: steps.due.outputs.due == 'true'
+        run: |
+          mkdir -p data/journal
+          # a journal-data branch without a readable journal stops the run: starting a new journal here would replace
+          # the real one on the branch when the run saves
+          if git show-ref --verify --quiet refs/remotes/origin/journal-data; then
+            git show origin/journal-data:lighthouse_journal.sqlite > data/journal/lighthouse_journal.sqlite
+            test -s data/journal/lighthouse_journal.sqlite
+          fi
+      - name: Record the watch snapshot and last month's outcomes
+        if: steps.due.outputs.due == 'true'
+        env:
+          LIGHTHOUSE_SEC_EMAIL: ${{ secrets.LIGHTHOUSE_SEC_EMAIL }}
+        run: python -m lighthouse journal watch --summary "$GITHUB_STEP_SUMMARY"
+      - name: Score and export
+        if: always() && steps.due.outputs.due == 'true'
+        run: |
+          python -m lighthouse journal score --out reports/journal | tee -a "$GITHUB_STEP_SUMMARY"
+          python -m lighthouse journal export --out reports/journal
+      - name: Save the journal to the journal-data branch
+        if: always() && steps.due.outputs.due == 'true' && steps.restore.outcome == 'success'
+        run: |
+          git config user.name "lighthouse-journal[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git show-ref --verify --quiet refs/remotes/origin/journal-data; then
+            git worktree add -B journal-data ../jd origin/journal-data
+          else
+            git worktree add --detach ../jd
+            git -C ../jd switch --orphan journal-data
+          fi
+          cp data/journal/lighthouse_journal.sqlite ../jd/
+          mkdir -p ../jd/reports && cp -r reports/journal/. ../jd/reports/
+          cd ../jd
+          git add -A
+          git diff --cached --quiet || git commit -q -m "watch: month end of $(date -u +%F)"
+          git push origin journal-data
+      - name: Save the data cache
+        if: always() && steps.due.outputs.due == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache
+          key: lighthouse-watch-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.due.outputs.due == 'true'
+        with:
+          name: watch-${{ github.run_id }}
+          path: |
+            data/journal/lighthouse_journal.sqlite
+            reports/journal/
+          retention-days: 30
