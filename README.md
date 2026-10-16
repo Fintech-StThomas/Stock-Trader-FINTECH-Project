@@ -59,7 +59,7 @@ python -m lighthouse trade MSFT AAPL JNJ XOM --cash 5000                    # wh
 python -m lighthouse memo MSFT                                              # the analyst memo alone
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 292 tests, runs offline
+python -m pytest                # 291 tests, runs offline
 ```
 
 ```python
@@ -89,15 +89,18 @@ EDGAR in `LIGHTHOUSE_SEC_EMAIL` (sent to sec.gov only).
 
 ## The web app
 
-`streamlit run app.py` starts a point-and-click site with five tabs:
+`streamlit run app.py` starts a point-and-click site with four tabs:
 
 | Tab | What you can do |
 |---|---|
-| **Analyse a stock** | the verdict dial and four cards (Lighthouse score, technical score, market weather, the memo's stance), then five sub-tabs: **plan & ticket** (how the score is built, a position plan sized from your cash with a *what-if* sizer, the trade ticket with its *when to get out* table and the rules' record on this stock), **analyst memo** (the fundamental case from the SEC filings; save the thesis to follow it), **technicals** (the six beacons, a price / volume / RSI / MACD chart with low-lag price bands and the backtested entries and exits), **backtest** (against the same exposure never traded, buy & hold and the S&P 500; deep evaluation with layers, the plain trend rule, sensitivity heatmap and walk-forward) and **data** (sources, cleaning notes, every indicator row, downloads) |
+| **Analyse a stock** | the verdict dial and four cards (Lighthouse score, technical score, market weather, the memo's stance), then five sub-tabs: **plan & ticket** (how the score is built, a position plan sized from your cash with a *what-if* sizer, the trade ticket with its *when to get out* table and the rules' record on this stock), **analyst memo** (the fundamental case from the SEC filings), **technicals** (the six beacons, a price / volume / RSI / MACD chart with low-lag price bands and the backtested entries and exits), **backtest** (against the same exposure never traded, buy & hold and the S&P 500; deep evaluation with layers, the plain trend rule, sensitivity heatmap and walk-forward) and **data** (sources, cleaning notes, every indicator row, downloads) |
 | **Find trades** | pick a pre-built universe (a sideways-scrolling row: mega caps, dividend & defensive, each sector, semiconductors, sector and index ETFs, all large caps) or type your own; the scan ranks every ticker (select a row to jump to its full analysis) and funds the best setups from your cash, one ticket each, within a total-risk cap |
 | **Portfolio** | allocate your own basket with three methods, or let Lighthouse build one for a goal; whole-share orders, risk report (volatility, VaR, expected shortfall, beta, risk contributions, correlations, stress tests) and a walk-forward test of every method |
-| **Journal & theses** | the theses you follow (checked against new filings, with post-mortems), the forward decision journal and its scorecard, and the watch-only research signals |
 | **How it works** | the method, verdict bands, risk presets, what the research found and the full user guide |
+
+The theses you follow, the forward decision journal and the watch-only research signals run from the command line and
+the scheduled GitHub workflows (`python -m lighthouse thesis`, `python -m lighthouse journal`; `docs/USER_GUIDE.md`);
+their app views were archived in October 2026.
 
 Every chart is interactive (hover, zoom, PNG download) and every table can be sorted; all numbers download as CSV or
 Markdown. The sidebar's *time machine* answers "what would Lighthouse have said on this date?" (the memo then uses only
@@ -198,7 +201,7 @@ data/sample/           bundled real historical data: prices, SEC filings (facts,
 reports/examples/      the MSFT example (report, memo, charts) and the cross-ticker and cohort evaluations
 reports/research/      the research harness's experiment log, hold-out log, results and verdicts
 docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · NEXT_SESSION.md
-tests/                 292 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded
+tests/                 291 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded
                        SEC and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 

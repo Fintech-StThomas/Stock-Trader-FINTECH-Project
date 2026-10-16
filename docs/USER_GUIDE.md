@@ -60,8 +60,9 @@ Five sub-tabs:
   beacons (valuation, quality and growth against industry peers or sector norms), earnings-quality and balance-sheet
   flags, capital allocation, industry metrics for banks, REITs, insurers and software companies, business segments,
   the catalyst calendar, the variant view, the **criteria that would prove the thesis wrong** and a pre-mortem.
-  *Save the thesis to follow it* puts those criteria in the journal; the Journal tab checks them against each new 10-Q
-  or 10-K. An ETF, a fund or a company that does not file with the SEC has no memo, and the tab says so.
+  To follow a thesis, save it from the command line (`python -m lighthouse memo TICKER --open-thesis`); `python -m
+  lighthouse thesis check` tests those criteria against each new 10-Q or 10-K. An ETF, a fund or a company that does
+  not file with the SEC has no memo, and the tab says so.
 * **Technicals**: the six technical beacons with their reading, light (🟢 bullish, 🟡 neutral, 🔴 bearish, ⚪
   unavailable), vote (−1…+1), weight and points; and the price chart: close, 50/200-day averages and **price bands**
   that follow the price (a trend filter ± 2 standard deviations of the closes around it over 20 sessions, about 1
@@ -158,15 +159,18 @@ Every portfolio shows:
 Judge performance by the walk-forward test. The back-cast of today's weights is shown for risk only: a goal portfolio picks
 stocks *because* of their recent strength, so their recent past flatters them.
 
-## Journal & theses
+## Theses, the decision journal and the watch list (command line)
 
-* **Theses you follow**: every thesis saved from a memo, its return since, the distance to the memo's value, and
-  whether it is stale (a filing has arrived since the memo, or it is more than 100 days old). *Check every open thesis
-  now* tests the price against each thesis every time, and the other criteria when a new 10-Q or 10-K has been filed.
-  Closing a thesis writes its post-mortem.
+Their app views were archived in October 2026; they run from the command line and the scheduled GitHub workflows.
+
+* **Theses you follow**: `python -m lighthouse memo TICKER --open-thesis` saves a memo's thesis and its kill criteria;
+  `python -m lighthouse thesis list` shows each one's return since, the distance to the memo's value and whether it is
+  stale (a filing has arrived since the memo, or it is more than 100 days old); `thesis check` tests the price every
+  time and the other criteria when a new 10-Q or 10-K has been filed; `thesis close ID --reason "..."` writes the
+  post-mortem.
 * **Decision journal**: every verdict and ticket the scheduled run records (`python -m lighthouse journal run`, GitHub
-  Actions after the close), never edited afterwards, and what happened next: the forward test of the rules, which
-  cannot contain look-ahead.
+  Actions after the close), never edited afterwards, and what happened next (`journal score`, `journal export`): the
+  forward test of the rules, which cannot contain look-ahead.
 * **Watch-only signals**: the research near misses recorded at each month end (below).
 
 ## Command line
@@ -215,7 +219,7 @@ day it prints that nothing is due and writes nothing, and a snapshot written aft
 not scored. It needs live data (Yahoo prices, SEC EDGAR with your contact e-mail, FINRA) and takes up to an hour with
 an empty cache. `journal score` adds a watch-only section once the next month's returns are recorded (rank IC with its
 Newey-West t, the top fifth against the average stock before and after costs, turnover, the forward rule's status and
-how many months a convincing result would take); the app's Journal tab shows the same. The scheduled workflow
+how many months a convincing result would take). The scheduled workflow
 `.github/workflows/watch.yml` does this every month on GitHub, appending to the same journal as the daily run.
 
 ## Changing the rules without programming

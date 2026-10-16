@@ -1,9 +1,9 @@
 # Handoff: where the Lighthouse work stopped (16 October 2026)
 
 Branch `claude/ecstatic-wright-3w8w59`, started from `main` at 9c98e9a after pull request #6 (Phases 4-8) was merged.
-No pull request is open for it yet: ask the user before opening one, and again before merging once CI passes. **The
-watch workflow only runs once this branch is on `main`**: GitHub runs scheduled workflows from the default branch
-only, and the first forward snapshot is due after the close of 30 October 2026.
+The user approved opening its pull request and merging it once CI passes (16 October 2026); after the merge, start
+any new work on a new branch from `main`. The watch workflow runs from `main` (GitHub runs scheduled workflows from
+the default branch only); the first forward snapshot is due after the close of 30 October 2026.
 
 ## What the last sessions did (details: METHODOLOGY §8-8d and §11, seventh and eighth sessions)
 
@@ -20,10 +20,11 @@ only, and the first forward snapshot is due after the close of 30 October 2026.
     portfolio methods equal weight / risk parity / minimum variance; SEC EDGAR the only fundamentals source.
   * Tier 3: one cover-page reader (`pit.cover_shares`) and one split restatement (`total_return.restate_shares`) behind
     every market value (memo, research signals, membership); the `run_backtest(start=...)` pandas-3 bug fixed.
-  * App: five tabs. *Analyse a stock* builds the analyst memo with every analysis (peers opt-in in the sidebar) and
+  * App: four tabs. *Analyse a stock* builds the analyst memo with every analysis (peers opt-in in the sidebar) and
     shows it next to the verdict in sub-tabs (plan & ticket, memo, technicals, backtest, data); *Find trades* merges the
-    trade desk and the watchlist; *Journal & theses* holds coverage, the decision journal and the watch list; the
-    Research tab is gone and *How it works* summarises the research from its result files.
+    trade desk and the watchlist; *Portfolio*; *How it works* summarises the research from its result files. The
+    Research tab is gone, and the coverage, journal and watch-list views were archived at the user's request (they
+    run from the command line and the scheduled workflows; the views are in the git history at commit eedfdfd).
 * **Research** (eighth session, live data, SEC contact e-mail approved for that session):
   * Pre-registered timing test (METHODOLOGY §8d, committed and pushed as 3ee8756 before the run): on the 1996 and 2009
     S&P 500 cohorts the rule did **not** earn more than its own average exposure held without trading (H1 rejected),
@@ -36,13 +37,9 @@ only, and the first forward snapshot is due after the close of 30 October 2026.
 
 ## Open items (the user's choice)
 
-1. **H3's pre-registered consequence, for the user to decide**: a plain 200-day trend rule did about as well as the
-   six-beacon rule on Sharpe (median 0.27 vs 0.28 in 1996, 0.32 vs 0.33 in 2009), with more return when fully invested
-   and much deeper drawdowns. Simplify the verdict's trading rule to the trend rule (the beacons would stay as the
-   explanation), keep the current rule, or leave it open. Nothing changed in the product.
-2. **Get the watch list running before 30 October 2026**: open and merge the pull request (the user decides), check that
-   the repository secret `LIGHTHOUSE_SEC_EMAIL` exists (without it only short volume is recorded), and look at the
-   first run's summary (Actions -> watch).
+1. **Check the watch list's first run**: the repository secret `LIGHTHOUSE_SEC_EMAIL` must exist (without it only
+   short volume is recorded); after the close of 30 October 2026 look at the run's summary (Actions -> watch).
+2. (Decided 16 October 2026: the trading rule stays as it is; §8d.)
 3. **The forward rule's thresholds** (36 months, t >= 2, one annual look, at most one month end in six missing or late)
    were proposed before any forward data: the user may change them now, never after seeing forward results.
 4. **Live checks not run**: the MSFT live memo after the valuation decisions (how far they move the $199 base case);
@@ -50,8 +47,8 @@ only, and the first forward snapshot is due after the close of 30 October 2026.
    lists carry the `cik` column. Each needs the user's approval of an SEC contact e-mail for that session.
 5. **A quarterly short-volume variant** (to cut its 60-66% monthly turnover) would be a new trial: log it in
    `reports/research/experiments.csv` first, then add it to the watch list under its own name.
-6. **Clean-up waiting for consent**: `/all_pd2.log` at the container root (80 bytes, written by a broken test pipeline),
-   the helper agents' worktrees under `.claude/worktrees/`, and the scratch caches. Nothing was deleted without asking.
+6. (Done 16 October 2026, with the user's consent: the stray log, the helper agents' worktrees and the scratch caches
+   were deleted.)
 
 ## Roadmap status (research-grade Lighthouse on free data, budget $0)
 
@@ -64,7 +61,7 @@ only, and the first forward snapshot is due after the close of 30 October 2026.
 | 5. Single-stock analyst toolkit | done | Point-in-time financials, linked model, WACC, bull/base/bear DCF, reverse DCF, valuation bands, SIC peers, industry metrics, segments, red flags, capital allocation, catalysts, memo; now part of every analysis in the app |
 | 6. Senior-analyst layer | done | Variant view, thesis tracker with kill criteria checked on new filings, coverage, conviction scale, post-mortems |
 | 7. Text without a paid LLM | done; the optional local LLM was removed in October 2026 | Deterministic text features (`lighthouse/text.py`) |
-| 8. App and docs | done; simplified in October 2026 | Five tabs; README, METHODOLOGY, DATA_AND_ML, USER_GUIDE, EXECUTIVE_SUMMARY, PITCH, this handoff |
+| 8. App and docs | done; simplified in October 2026 | Four tabs; README, METHODOLOGY, DATA_AND_ML, USER_GUIDE, EXECUTIVE_SUMMARY, PITCH, this handoff |
 
 Findings that still stand: the rule has no edge as a stock-timing tool (§8, §8d) and no signal from free data ranks
 the S&P 500 well enough to survive a hold-out (§8b); coverage of the delisted is the binding data gap (Yahoo prices 53%
@@ -93,7 +90,7 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on the branch the session is given;
   never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 python -m pytest` (CI runs Python 3.10 and 3.12; 292 tests), with an empty
+* Before every push: `LIGHTHOUSE_OFFLINE=1 python -m pytest` (CI runs Python 3.10 and 3.12; 291 tests), with an empty
   `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. CI's 3.10 job runs pandas 2 (pandas 3 needs
   Python 3.11): after re-recording data or touching dates, run the suite once under pandas 2 as well (a virtualenv with
   `pandas>=2.3,<3`).
@@ -126,6 +123,10 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
   alone, the fundamentals only in the analyst memo; the analyst memo is part of "Analyse a stock"; the six PNGs of the
   MSFT example deleted and the example rebuilt with HTML charts; the account e-mail approved as the SEC contact for
   that session's live runs (environment only, never in a file).
+* 16 October 2026: **keep the trading rule** after the timing test (§8d); **open and merge** the pull request once CI
+  passes; **clean up** the stray log, the agents' worktrees and the scratch caches; **archive the coverage and journal
+  views** of the app (the analyst memo stays inside *Analyse a stock*; its standalone tab had already been merged
+  into it).
 
 ## Running the research again (a fresh container re-downloads everything)
 

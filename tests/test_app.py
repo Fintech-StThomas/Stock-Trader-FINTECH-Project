@@ -34,7 +34,7 @@ def test_app_runs_an_analysis_offline():
     labels = [t.label for t in at.tabs]          # every tab, the Analyse tab's own sub-tabs included, in page order
     assert labels[0] == "📍 Analyse a stock" and labels[1:6] == ["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Technicals",
                                                                  "🧪 Backtest", "🗂️ Data"]
-    assert {"🎯 Find trades", "🧺 Portfolio", "📓 Journal & theses", "ℹ️ How it works"} <= set(labels)
+    assert {"🎯 Find trades", "🧺 Portfolio", "ℹ️ How it works"} <= set(labels)
     assert not any("Research" in str(t.label) for t in at.tabs)   # research is evidence, not a tab ...
     assert "Does the timing add anything?" in text                # ... read from its result files in How it works
 
@@ -149,59 +149,24 @@ def test_trade_and_portfolio_figures_build():
         f.to_json()
 
 
-def test_app_saves_the_memo_thesis_to_the_journal_offline(tmp_path, monkeypatch):
+def test_app_has_no_journal_views_and_never_writes_the_journal(tmp_path, monkeypatch):
+    """The theses, the decision journal and the watch list were archived from the app (October 2026): they run from the
+    command line and the scheduled workflows. Analysing a stock reads no journal and writes none, and the memo says
+    how to follow its thesis from the command line."""
     monkeypatch.setenv("LIGHTHOUSE_JOURNAL", str(tmp_path / "journal.sqlite"))
     at = AppTest.from_file(APP, default_timeout=300)
     at.run()
-    assert not at.exception
-    at.sidebar.selectbox(key="source").set_value("sample")
-    at.run()
-    text = " ".join(str(m.value) for m in at.info)
-    assert "No journal yet" in text or "No journal at" in text           # nothing saved: no file is created
-    assert not (tmp_path / "journal.sqlite").exists()
     at.sidebar.text_input(key="ticker").set_value("MSFT")
+    at.sidebar.selectbox(key="source").set_value("sample")
     at.sidebar.button(key="analyse").click()
     at.run()
     assert not at.exception, at.exception
+    labels = [str(t.label) for t in at.tabs]
+    assert not any(w in label for label in labels for w in ("Journal", "Coverage", "Theses", "Watch"))
     md = " ".join(str(m.value) for m in at.markdown)
-    assert "Investment memo" in md and "What would prove this wrong" in md
-    at.button(key="memo_save").click()
-    at.run()
-    assert not at.exception, at.exception
-    assert (tmp_path / "journal.sqlite").exists()
-    assert any("Thesis 1 saved" in str(x.value) for x in at.success)
-
-
-def test_app_journal_tab_shows_the_watch_list_as_watch_only(tmp_path, monkeypatch):
-    """A journal with three scored month ends of a watch signal: the Journal tab shows its forward score, labelled
-    watch-only (not a survivor, no weight)."""
-    import numpy as np
-    import pandas as pd
-    from lighthouse.journal import Journal
-    from lighthouse.research import watch as W
-    path = tmp_path / "journal.sqlite"
-    j = Journal(path)
-    rng = np.random.default_rng(1)
-    names = [f"T{k:02d}" for k in range(35)]
-    for d in ("2026-07-31", "2026-08-31", "2026-09-30", "2026-10-30"):
-        at = (pd.Timestamp(d) + pd.Timedelta(hours=22)).tz_localize("UTC").isoformat(timespec="seconds")
-        j.append_watch_rows([{"recorded_at": at, "as_of": d, "signal": "fcf_yield", "ticker": t, "value": float(v),
-                              "tradable": 1, "cost": 0.002, "config_hash": W.WATCH_SIGNALS["fcf_yield"].config_hash,
-                              "data_version": "{}", "code_version": "test", "run_id": "r"}
-                             for t, v in zip(names, rng.normal(size=len(names)))])
-        if d != "2026-10-30":
-            j.append_watch_outcomes([{"recorded_at": at, "as_of": d, "end_date": "x", "ticker": t, "ret_exclude": float(r),
-                                      "ret_pessimistic": float(r), "data_version": "{}", "code_version": "test",
-                                      "run_id": "r"} for t, r in zip(names, rng.normal(0.01, 0.05, len(names)))])
-    monkeypatch.setenv("LIGHTHOUSE_JOURNAL", str(path))
-    at = AppTest.from_file(APP, default_timeout=300)
-    at.run()
-    assert not at.exception, at.exception
-    md = " ".join(str(m.value) for m in at.markdown)
-    assert "Watch-only research signals (not survivors, no weight)" in md
-    assert "**fcf_yield** (forward rule): collecting: 3 forward month(s)" in md
-    shown = [df.value for df in at.dataframe if {"rule", "months", "ic_nw_t"} <= set(getattr(df.value, "columns", []))]
-    assert len(shown) == 1 and set(shown[0]["months"]) == {3} and set(shown[0]["signal"]) == {"fcf_yield"}
+    assert "Investment memo" in md and "Watch-only research signals" not in md
+    assert any("--open-thesis" in str(c.value) for c in at.caption)
+    assert not (tmp_path / "journal.sqlite").exists()
 
 
 def _lighthouse_modules() -> dict:

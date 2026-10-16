@@ -50,7 +50,7 @@ cash they can invest now and, optionally, the value of the stocks they already h
    or minimum variance on a shrunk covariance matrix, with VaR, expected shortfall, beta, risk contributions, stress
    tests and a walk-forward test of every method.
 
-It ships as a Colab/Jupyter notebook, a command-line tool and a point-and-click Streamlit app with five tabs. A
+It ships as a Colab/Jupyter notebook, a command-line tool and a point-and-click Streamlit app with four tabs. A
 non-programmer changes nothing but the inputs cell.
 
 ## Investment thesis and decision process
@@ -120,7 +120,7 @@ selection or timing (`docs/METHODOLOGY.md` §8-8d).
   liquidity, survivorship-aware cohorts, yardsticks that ask what the timing adds, a research hold-out evaluated once
   with the trial count behind every verdict, tests whose rule was written before the run, and a plain list of what
   we tried and rejected.
-* **Runs anywhere** — live data when online, bundled real data when offline; 292 automated tests.
+* **Runs anywhere** — live data when online, bundled real data when offline; 291 automated tests.
 
 ## Major limitations and risks
 

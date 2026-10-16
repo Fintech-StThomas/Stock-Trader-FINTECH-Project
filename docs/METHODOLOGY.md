@@ -441,7 +441,7 @@ written before them is upgraded when opened, without touching its rows):
 * A month is scored only once its outcome is recorded; nothing is scored early. The recorder writes nothing when fewer
   than 90% of the priced members have a price for the snapshot date (the feed has not published the close yet).
 
-**How it is scored** (`lighthouse/scorecard.score_watch`; `journal score`; the app's Journal tab): the harness's own
+**How it is scored** (`lighthouse/scorecard.score_watch`; `journal score`): the harness's own
 `evaluate` on the forward months, with the statistics of §8b: monthly Spearman IC with its Newey-West t (3 lags), the
 share of months with IC > 0, the top quintile minus the equal-weight universe before and after the cost model and at a
 flat 10 bps a side, the long-short spread with borrow, top-quintile turnover and coverage, under both delisting rules.
@@ -552,8 +552,9 @@ So, as written above: the timing does not add return over its own exposure, and 
 exposure is not established either (it did in 1996 and did the opposite in 2009). A plain 200-day trend rule did about
 as well on Sharpe (median 0.27 against the rule's 0.28 in 1996, 0.32 against 0.33 in 2009), with more return when
 invested in full (median CAGR 5.8% and 6.1% against 5.2% and 5.1%) and much deeper drawdowns (−55% and −49% against
-−30% and −29%). Whether to simplify the rule to it is put to the user (`docs/NEXT_SESSION.md`); nothing in the product
-changed.
+−30% and −29%). Whether to simplify the rule to it was put to the user, who decided on 16 October 2026 to **keep the
+current rule**: it is not worse than the trend rule, and its six beacons are what explains each verdict. Nothing in
+the product changed.
 
 *Robustness (not part of the pre-registered rule).* Some members' Yahoo series start long after the cohort date, most
 of them recycled tickers that belong to another company (ETS, MST, UK, STI, OM, GP in 1996; SNDK, STI in 2009). Leaving
@@ -820,6 +821,7 @@ the evidence each change rests on:
 | Two timing yardsticks in every backtest and the cohort runs: the rule's own exposure never traded, and a plain 200-day trend rule | §8d: pre-registered before the run; the timing showed no robust edge over either |
 | The matplotlib charts, the optional local LLM layer, the research code of the signals that failed and are not watched (13F, 8-K tone, insider Form 4, days to cover, industry and residual momentum, the blend, the price anomalies) and three one-off evaluation scripts removed; the app went from ten tabs to five | One chart stack (Plotly, also for saved reports: `TICKER_charts.html`); less code to keep honest. Their logged results stay in `reports/research/experiments.csv` |
 | `run_backtest(start=...)` failed under pandas 3 (an in-place update of a read-only view) | Fixed and tested (`valid = ...to_numpy(copy=True)`) |
+| The app's coverage, decision-journal and watch-list views archived (16 October 2026, the user's decision); four tabs remain | The theses, the journal and the watch list keep running from the command line and the scheduled workflows, with every forward rule unchanged; the views are in the git history (the app at commit eedfdfd) |
 
 ## 12. Speed
 
