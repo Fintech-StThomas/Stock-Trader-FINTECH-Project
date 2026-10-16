@@ -448,8 +448,8 @@ def test_months_needed_follow_from_the_logged_ic():
                 assert got["months_t2"] == math.inf
     # the numbers docs/METHODOLOGY.md section 8c quotes
     assert round(p.loc[("risk_similarity", "holdout"), "months_t2"]) == 82
-    assert round(p.loc[("fcf_yield", "tuning"), "months_t2"]) == 70
-    assert round(p.loc[("fcf_yield", "holdout"), "months_t2"]) == 770
+    assert round(p.loc[("fcf_yield", "tuning"), "months_t2"]) == 75
+    assert round(p.loc[("fcf_yield", "holdout"), "months_t2"]) == 801
     assert round(p.loc[("short_volume", "tuning"), "months_t2"]) == 34
     assert round(p.loc[("short_volume", "holdout"), "months_t2"]) == 123
 
@@ -459,8 +459,10 @@ def test_watch_signals_are_the_logged_trials():
     for name, spec in W.WATCH_SIGNALS.items():
         assert H.config_hash(name, spec.config) == spec.config_hash          # the configuration, hashed as logged
         logged = log[log["signal"] == name]
-        assert set(logged["config_hash"]) == {spec.config_hash}
-        assert json.loads(logged["config"].iloc[-1]) == spec.config
+        # the watched trial, and only the earlier trials it replaced before any forward snapshot (W.SUPERSEDED)
+        assert spec.config_hash in set(logged["config_hash"])
+        assert set(logged["config_hash"]) <= {spec.config_hash, *W.SUPERSEDED.get(name, ())}
+        assert json.loads(logged.loc[logged["config_hash"] == spec.config_hash, "config"].iloc[-1]) == spec.config
     from lighthouse.research import event_signals as EV
     from lighthouse.research import fundamental_signals as FS
     from lighthouse.research import positioning as PO

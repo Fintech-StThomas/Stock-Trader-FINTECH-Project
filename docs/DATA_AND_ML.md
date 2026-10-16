@@ -119,37 +119,32 @@ costs. It needs `scikit-learn` (and optionally `lightgbm`) as dependencies.
 
 Every signal Lighthouse could build from free data went through the same test (`docs/METHODOLOGY.md` §8b): does it rank
 the point-in-time S&P 500 by next month's return, after costs, in 2009-2017 (tuning) and again in 2018-2026 (a hold-out
-evaluated once), under both delisting rules, with the deflated Sharpe ratio counting every configuration tried?
+evaluated once), under both delisting rules, with the deflated Sharpe ratio counting every configuration tried (56)?
 
 | Group | Signals | Result |
 |---|---|---|
 | The product's own scores | six technical beacons, technical score, point-in-time fundamental score, composite | None survives; the technical beacons had negative ICs in 2009-2017 |
-| Fundamental (SEC XBRL, dated by filing) | SUE, GP/A, ROIC and its trend, accruals, Piotroski, Altman Z, Beneish, cash conversion, earnings / book / FCF / FCF-after-SBC / EBITDA yields, value vs own history, net issuance, shareholder yield | FCF yield and FCF yield after SBC passed tuning (IC t 2.3, 2.1) and kept their sign out of sample, too weakly to count (t 0.7) |
+| Fundamental (SEC XBRL, dated by filing) | SUE, GP/A, ROIC and its trend, accruals, Piotroski, Altman Z, Beneish, cash conversion, earnings / book / FCF / FCF-after-SBC / EBITDA yields, value vs own history, net issuance, shareholder yield | FCF yield and FCF yield after SBC passed tuning (IC t 2.2, 2.0) and kept their sign out of sample, too weakly to count (t 0.7); the same after the share counts were restated for splits |
 | Price and size | 12-1 momentum, low volatility, 1-month reversal, 52-week high, size | Size passed tuning (t 2.0) and reversed out of sample |
 | Panel | industry momentum, residual momentum | None |
 | Positioning (Form 4, FINRA) | insider buyers, insider net purchases, short-sale volume, days to cover | Short-sale volume ranks stocks in both periods but turns over too fast to trade monthly after costs |
 | Events and text (8-K, 10-K) | 3-day earnings reaction, earnings-release tone (half the members), 10-K similarity, risk-factor similarity, Loughran-McDonald tone, fog | Risk-factor similarity was significant only in the hold-out; the 10-K tone hypotheses had the wrong sign; the earnings-release tone had no IC out of sample |
 | Institutions (13F) | breadth of ownership | None |
 
-So **no signal carries weight in `lighthouse/decision.py`**, and the verdicts stay what they were: a risk-control rule,
-not a stock picker. The research harness, its experiment log and the hold-out guard stay in place for the next idea:
-a new signal is one more trial, and the forward journal (Phase 2) collects the out-of-sample data no backtest can.
+So **no signal carries weight in `lighthouse/decision.py`**: the verdict is a risk-control rule that reads prices, and
+the fundamentals live in the analyst memo. The code of the signals that failed and are not watched (price anomalies,
+panel momentum, insider and 13F signals, the 8-K tone, the blend) was removed in October 2026; their logged results
+stay in `reports/research/experiments.csv`. A few data fixes made after these runs (`docs/METHODOLOGY.md` §11, seventh
+session) touch a handful of names a month and were not re-run, except the share-count fix, which changed nothing.
 
-These results predate five data fixes made after them (`docs/METHODOLOGY.md` §11, seventh session), and they were not
-run again: every hold-out has been used, so a re-run would be a new trial. The fixes touch few member-months, each a few
-names in a month of 350-450: the insider signals of BRK-B and BF-B (about 200 and 213 month ends that read no insider
-activity, because their Form 4s name the other share class) and of the classes of GOOGL/GOOG, FOXA/FOX and NWSA/NWS;
-one short-volume window (October 2012, three sessions instead of five, Hurricane Sandy); XOM's filing-based signals
-(the earnings reaction, the 10-K text signals and the earnings-release tone, missing in almost all its months because
-its filing list held only the new holding company's filings); and possibly pre-2018 short-volume sessions cached
-without a facility whose download failed (not countable: the run's cache was not kept). Whether any verdict would
-change is not known without that new trial.
-
-The three near misses (FCF yield, short-sale volume, risk-factor similarity) are now collecting forward data as a
-watch-only list (`METHODOLOGY` §8c): recorded at every month end for every point-in-time member with the logged trial's
-configuration, scored only on snapshots written before the next open. It will be slow: at their hold-out ICs a
+The three near misses (FCF yield, short-sale volume, risk-factor similarity) collect forward data as a watch-only list
+(`METHODOLOGY` §8c), scored only on snapshots written before the next open. It will be slow: at their hold-out ICs a
 Newey-West t of 2 is about 7 years away for risk-factor similarity, 10 for short volume and decades for FCF yield, and
 even then the result only argues for a new pre-registered test.
+
+The rule's timing was tested the same way (`METHODOLOGY` §8d, pre-registered): on the 1996 and 2009 S&P 500 cohorts it
+did not earn more than its own average exposure held without trading, and its drawdown advantage over that exposure did
+not hold in both cohorts.
 
 ## 6. What free data can and cannot prove
 

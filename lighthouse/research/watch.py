@@ -7,7 +7,8 @@ weight: nothing in the verdicts, the tickets or lighthouse/decision.py reads thi
 (tests/test_watch.py checks it), and a good forward score does not change that. It can only make the case for a new
 pre-registered test, which is the user's decision.
 
-  fcf_yield        free cash flow / market value: passed tuning (IC +0.024, Newey-West t 2.3), hold-out +0.009 (t 0.7)
+  fcf_yield        free cash flow / market value: passed tuning (IC +0.023, Newey-West t 2.2), hold-out +0.009 (t 0.7)
+                   (the trial with the share count restated for splits, October 2026; SUPERSEDED keeps the first one)
   short_volume     minus the short share of FINRA-reported volume over the 5 sessions before the month's last: IC t 3.5
                    in tuning and 1.9 in the hold-out, but its top quintile turns over 60-66% a month
   risk_similarity  Item 1A (risk factors) similarity with the previous 10-K (Lazy Prices): flat in tuning, t 2.3 in the
@@ -50,6 +51,12 @@ MIN_SESSIONS = 260           # scripts/research_signals.load_inputs keeps series
 MIN_CURRENT = 0.90           # share of priced members whose prices must reach the snapshot date
 OUTCOME_LOOKBACK_DAYS = 45   # calendar window before a snapshot date that the outcome panel is built on
 TEXT_PROCESSES = 3           # 10-K parsing is CPU-bound: worker processes sharing the SEC rate (as the harness does)
+
+
+# earlier logged trials of a watched signal that its current configuration replaced before any forward snapshot was
+# recorded under them: fcf_yield's first trial used the pre-split share count between a split and the next filing
+# (METHODOLOGY section 8c)
+SUPERSEDED: Dict[str, Tuple[str, ...]] = {"fcf_yield": ("a86f74152373",)}
 
 
 # --------------------------------------------------------------------------- #
@@ -227,8 +234,8 @@ def risk_similarity_values(inp: WatchInputs, processes: int = TEXT_PROCESSES) ->
 
 WATCH_SIGNALS: Dict[str, WatchSignal] = {
     "fcf_yield": WatchSignal(
-        "fcf_yield", "FCF / market value", "a86f74152373", "long_short", fcf_yield_values,
-        "passed tuning (IC +0.024, NW t 2.3); hold-out IC +0.009 (t 0.7)"),
+        "fcf_yield", "FCF / market value", "dd05ff443270", "long_short", fcf_yield_values,
+        "passed tuning (IC +0.023, NW t 2.2); hold-out IC +0.009 (t 0.7)"),
     "short_volume": WatchSignal(
         "short_volume", "minus the short share of reported volume (5 sessions)", "84d37c55a0d9", "long_only",
         short_volume_values, "IC NW t 3.5 (tuning) and 1.9 (hold-out), but 60-66% monthly turnover"),

@@ -218,8 +218,10 @@ written = result.save(f"reports/{TICKER}")
 print("\\n".join(written))""")
 md("""## Limitations and risks (read before acting)
 
-* **Single-stock timing is hard.** On the 20 sample stocks the rule's timing mostly cut drawdowns: holding the same average
-  exposure without trading earned about as much. Judge it on drawdown and the regime table, not on total return alone.
+* **The timing has no demonstrated edge.** A test pre-registered before it was run (docs/METHODOLOGY.md §8d) found, on
+  every S&P 500 member of 1996 and of 2009, that holding the rule's own average exposure without trading earned more
+  than the rule on most stocks, and that its drawdown advantage over that exposure did not hold in both cohorts. What
+  the rule delivers is a position sized to your risk; judge it on that.
 * **No other signal survived.** Fundamental, quality, short-interest and text signals were tested on the point-in-time
   S&P 500 and failed their hold-out, so the verdict reads prices only and the memo is context, not a signal.
 * **The memo's inputs are assumptions**: sector norms, the DCF's growth fade and discount rate. It shows each one.

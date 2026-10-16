@@ -12,7 +12,7 @@ year-to-date values (3, 6, 9 months), and the fourth quarter only as the full ye
 differencing year-to-date values with the same start date, and dated by the later of the two filings.
 
 XBRL starts in 2009 for large companies and 2011 for everyone else; before a company's first XBRL filing its
-fundamentals are unknown (the backtest's fundamental gate is then off).
+fundamentals are unknown (the memo then has no statements to read).
 """
 from __future__ import annotations
 

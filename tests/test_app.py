@@ -35,7 +35,8 @@ def test_app_runs_an_analysis_offline():
     assert labels[0] == "📍 Analyse a stock" and labels[1:6] == ["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Technicals",
                                                                  "🧪 Backtest", "🗂️ Data"]
     assert {"🎯 Find trades", "🧺 Portfolio", "📓 Journal & theses", "ℹ️ How it works"} <= set(labels)
-    assert not any("Research" in str(t.label) for t in at.tabs)   # research is evidence, not a tab
+    assert not any("Research" in str(t.label) for t in at.tabs)   # research is evidence, not a tab ...
+    assert "Does the timing add anything?" in text                # ... read from its result files in How it works
 
 
 def test_app_without_filings_keeps_the_verdict_and_says_why_there_is_no_memo():

@@ -134,7 +134,8 @@ def _run(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, 
 def memo_problem(exc: Exception) -> str:
     """Why a stock has no memo, in words an investor can act on."""
     from lighthouse.http import ConfigurationError
-    if isinstance(exc, ConfigurationError):
+    # pit.load_statements turns a missing SEC contact e-mail into "no statements", with the reason in the message
+    if isinstance(exc, ConfigurationError) or "LIGHTHOUSE_SEC_EMAIL" in str(exc):
         return ("SEC EDGAR asks every program for a contact e-mail. Set the environment variable LIGHTHOUSE_SEC_EMAIL "
                 "(it is sent to sec.gov only) and restart the app, or choose the `sample` data source.")
     if isinstance(exc, DataUnavailable):
@@ -560,11 +561,12 @@ def render_result(res, memo_state) -> None:
     d, pl, prof = res.decision, res.decision.plan, res.profile
     m, why_no_memo = memo_state or (None, "press Analyse to build it")
     color = VERDICT_COLOR[d.verdict]
+    name = res.name if res.name and res.name != d.ticker else (m.profile.get("name") if m is not None else None) or d.ticker
 
     # ---- headline ---------------------------------------------------------
     h1, h2 = st.columns([3, 1.3])
     with h1:
-        st.markdown(f"<h2 style='margin:0 0 .3rem 0'>{_h(res.name or d.ticker)} <span class='lh-muted' style='font-weight:400'>({d.ticker})</span> "
+        st.markdown(f"<h2 style='margin:0 0 .3rem 0'>{_h(name)} <span class='lh-muted' style='font-weight:400'>({d.ticker})</span> "
                     f"<span class='lh-verdict' style='background:{color}'>{d.verdict}</span></h2>"
                     f"<p class='lh-muted' style='margin:0'>{_h(price_line(res) + ' · ' + prof.describe())}</p>", unsafe_allow_html=True)
         st.info(esc(pl.action), icon="🧭")
@@ -1313,8 +1315,19 @@ def research_summary() -> None:
                     f"{med['lighthouse_cagr'] * 100:.1f}% a year with a worst drawdown of {med['lighthouse_mdd'] * 100:.0f}%. "
                     "Holding the stock and cash in the rule's average proportion, never trading, earned "
                     f"{med['same_cagr'] * 100:.1f}% with {med['same_mdd'] * 100:.0f}%; buy and hold "
-                    f"{med['bh_cagr'] * 100:.1f}% with {med['bh_mdd'] * 100:.0f}%. The timing mostly cuts drawdowns; it "
-                    "does not add return. Every backtest shows that yardstick (*Same exposure, never traded*) next to the rule.")
+                    f"{med['bh_cagr'] * 100:.1f}% with {med['bh_mdd'] * 100:.0f}%. Every backtest shows that yardstick "
+                    "(*Same exposure, never traded*) next to the rule.")
+    tests = [os.path.join(here, "reports", "examples", f"cross_ticker_sp500_{d}_timing_test.csv") for d in ("1996-01-02", "2009-01-02")]
+    if all(os.path.exists(f) for f in tests):
+        t = pd.concat([pd.read_csv(f) for f in tests], ignore_index=True)
+        lines = []
+        for h, g in t[t["rule"] == "exclude"].groupby("hypothesis", sort=True):
+            runs = "; ".join(f"{str(r.cohort)[:4]}: the rule better on {r.wins} of {r.n} stocks "
+                             f"(p {'< 0.001' if r.p_value < 0.001 else f'{r.p_value:.3f}'})" for r in g.itertuples())
+            lines.append(f"{h}: {runs}. **{'Accepted' if g['holds'].all() else 'Not accepted'}**")
+        st.markdown("- **Does the timing add anything?** A test written down and committed before it was run (METHODOLOGY "
+                    "§8d), on every S&P 500 member of 1996 and of 2009 with prices; a hypothesis is accepted only if it "
+                    "holds in both cohorts:\n" + "\n".join("  - " + esc(x) for x in lines))
     log = os.path.join(here, "reports", "research", "experiments.csv")
     if os.path.exists(log):
         st.caption(f"{len(pd.read_csv(log)):,} configurations are logged in reports/research/experiments.csv (the trial "
