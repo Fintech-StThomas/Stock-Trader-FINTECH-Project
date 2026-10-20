@@ -308,8 +308,8 @@ with st.sidebar:
     horizon = st.radio("Investment horizon", ["long", "short"], key="horizon",
                        format_func=lambda h: "Long-term (6-24+ months)" if h == "long" else "Short-term (weeks to months)",
                        help="Long: monthly review, trend exits below the 200-day line. Short: weekly review, profit "
-                            "targets and an ATR trailing stop. The verdict reads prices only; the analyst memo gives the "
-                            "fundamental view.")
+                            "targets and an ATR trailing stop. The score blends fundamentals (SEC filings) and "
+                            "technicals: 60 / 40 long, 30 / 70 short.")
     risk = st.select_slider("Risk tolerance", ["conservative", "balanced", "aggressive"], value="balanced", key="risk",
                             help="Sets the maximum single position (10 / 20 / 35%), the volatility target (10 / 15 / 25%) and the stop distance.")
     max_loss = st.slider("Max acceptable loss per position (% of your whole account)", 0.5, 10.0, 2.0, 0.5, key="max_loss",
@@ -570,20 +570,24 @@ def render_result(res, memo_state) -> None:
     with h2:
         plotly(figure(res, "gauge", lambda: ix.score_gauge(d)), key="gauge")
 
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
+    f = res.fundamentals
     kpi(k1, "Lighthouse score", f"{d.composite_score:.0f} / 100", "verdict bands: ≥72 Strong Buy · ≥60 Buy · ≥45 Hold · ≥32 Reduce", color)
-    kpi(k2, "Technical score", f"{d.technical_score:.0f}", f"{prof.horizon}-term rule: trend, momentum, bands, volume, 52-week high")
+    kpi(k2, "Fundamental score", "n/a" if d.fundamental_score is None else f"{d.fundamental_score:.0f}",
+        f"weight {prof.fundamental_weight:.0%} · SEC filings to {f.as_of}" if f is not None else "no SEC filings: technical-only")
+    kpi(k3, "Technical score", f"{d.technical_score:.0f}", f"weight {prof.technical_weight:.0%} · {prof.horizon}-term rule")
     if d.regime:
-        kpi(k3, "Market weather", d.regime.label, f"{'−' if d.regime_penalty else ''}{d.regime_penalty:.0f} pts · S&P 500 {d.regime.benchmark_vs_sma * 100:+.1f}% vs 200-day",
+        kpi(k4, "Market weather", d.regime.label, f"{'−' if d.regime_penalty else ''}{d.regime_penalty:.0f} pts · S&P 500 {d.regime.benchmark_vs_sma * 100:+.1f}% vs 200-day",
             STATUS_COLOR_FOR_REGIME.get(d.regime.label))
     else:
-        kpi(k3, "Market weather", "n/a", "benchmark unavailable")
-    memo_kpi(k4, m, why_no_memo)
-    st.caption("The verdict, the position plan and the trade ticket come from the price rule alone, the one the Backtest "
-               "tab tests. The analyst memo is the fundamental case, read from the SEC filings: it sits next to the "
-               "verdict and never changes it.")
+        kpi(k4, "Market weather", "n/a", "benchmark unavailable")
+    memo_kpi(k5, m, why_no_memo)
+    st.caption(f"The Lighthouse score blends the fundamental score (from the SEC filings) and the technical score for your "
+               f"horizon ({prof.fundamental_weight:.0%} / {prof.technical_weight:.0%}), minus the market weather; the "
+               "backtest also skips entries while the fundamental score is below 35. The analyst memo goes further into "
+               "the business (DCF, peers, red flags) and does not change the score.")
 
-    t_plan, t_memo, t_tech, t_bt, t_data = st.tabs(["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Technicals",
+    t_plan, t_memo, t_tech, t_bt, t_data = st.tabs(["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Beacons & charts",
                                                      "🧪 Backtest", "🗂️ Data"])
     with t_plan:
         c1, c2 = st.columns([1.1, 1.4])
@@ -651,17 +655,28 @@ def ticket_section(res) -> None:
 @st.fragment
 def beacons_section(res) -> None:
     d = res.decision
-    st.markdown("#### Why: the technical beacons")
-    st.caption("Every signal votes between −1 (bearish) and +1 (bullish); together they make the technical score. Hover a "
-               "bar for the reading and the reason, filter by light to focus. The fundamental beacons are in the analyst memo.")
+    st.markdown("#### Why: the beacons")
+    st.caption("Every signal votes between −1 (bearish) and +1 (bullish). F = fundamental (from the SEC filings), T = "
+               "technical; each group makes its own score. Hover a bar for the reading and the reason, filter by light "
+               "to focus.")
     flt = st.segmented_control("Show", ["all", "bullish", "neutral", "bearish"], default="all", key="beacon_filter", label_visibility="collapsed")
     want = {"all": None, "bullish": "green", "neutral": "amber", "bearish": "red"}[flt or "all"]
-    shown = [b for b in d.technical_beacons if want is None or b.light == want]
+    shown = [b for b in d.beacons if want is None or b.light == want]
     if shown:
         plotly(figure(res, ("breakdown", tuple(b.key for b in shown)), lambda: ix.score_breakdown(d, beacons=shown)), key="breakdown")
     else:
         st.info("No beacon has that light right now.")
-    st.dataframe(beacon_frame(shown), hide_index=True, width="stretch", column_config=BEACON_COLUMNS)
+    colf, colt = st.columns(2)
+    with colf:
+        f = res.fundamentals
+        st.markdown(f"**Fundamental beacons** · {f.sector or 'sector n/a'} · SEC filings to {f.as_of}" if f is not None
+                    else "**Fundamental beacons** · no SEC filings")
+        st.dataframe(beacon_frame([b for b in d.fundamental_beacons if b in shown]), hide_index=True, width="stretch",
+                     column_config=BEACON_COLUMNS)
+    with colt:
+        st.markdown("**Technical beacons**")
+        st.dataframe(beacon_frame([b for b in d.technical_beacons if b in shown]), hide_index=True, width="stretch",
+                     column_config=BEACON_COLUMNS)
 
 
 @st.fragment
@@ -763,8 +778,8 @@ def memo_section(res, m, why: str) -> None:
     st.caption("Valuation (bull / base / bear DCF, reverse DCF, the stock's own valuation bands), the fundamental beacons "
                "(against industry peers when the sidebar asks for them, else sector norms), earnings-quality and "
                "balance-sheet checks, capital allocation, catalysts, the variant view and what would prove the thesis "
-               "wrong. Only filings made before the analysis date are used. No fundamental signal passed the research "
-               "hold-out (How it works), so the memo informs the decision and the price rule makes it.")
+               "wrong. Only filings made before the analysis date are used. The fundamental score in the Lighthouse "
+               "score comes from the same numbers; the memo's stance does not change the score.")
     if m is None:
         st.warning(esc(f"No analyst memo for {res.ticker}: {why}"), icon="📄")
         return
@@ -799,7 +814,14 @@ def data_section(res) -> None:
         st.markdown("**Cleaning report**")
         for n in rep.notes:
             st.write("• " + n)
-    t2, t3 = st.tabs(["Prices & indicators", "Market weather history"])
+    t1, t2, t3 = st.tabs(["Fundamental snapshot", "Prices & indicators", "Market weather history"])
+    with t1:
+        f = res.fundamentals
+        if f is None:
+            st.info("No SEC filings could be read for this ticker, so the score is technical-only.")
+        else:
+            snap = pd.DataFrame({"field": list(asdict(f).keys()), "value": [str(v) for v in asdict(f).values()]})
+            st.dataframe(snap[snap["field"] != "notes"], hide_index=True, width="stretch")
     with t2:
         cols = st.multiselect("Columns", list(res.indicators.columns), default=["Open", "High", "Low", "Close", "Volume", "sma_fast", "sma_slow", "rsi", "macd", "atr"], key="ind_cols")
         table = res.indicators[cols].tail(500).sort_index(ascending=False)
@@ -827,12 +849,12 @@ with tab_analyse:
         render_result(res, st.session_state.get("memo"))
     elif err is None:
         st.markdown("### Tell Lighthouse who you are, pick a ticker, press **Analyse**.")
-        st.markdown("You get a verdict from a tested price rule, a trade ticket sized to your maximum acceptable loss, an "
+        st.markdown("You get a verdict that blends the company's fundamentals and its price trend, a trade ticket sized to your maximum acceptable loss, an "
                     "analyst memo read from the company's SEC filings (valuation, peers, earnings quality and what would "
                     "prove the thesis wrong), and an honest backtest of the rule.")
         g1, g2, g3 = st.columns(3)
         g1.markdown("**1 · Who you are**\n\nHorizon, risk tolerance, the most you accept losing on one position, and your portfolio size (sidebar).")
-        g2.markdown("**2 · Press Analyse**\n\nLighthouse reads the prices and the market weather, scores 6 technical beacons and reads the filings for the memo.")
+        g2.markdown("**2 · Press Analyse**\n\nLighthouse reads the prices, the market weather and the SEC filings, and scores 10 fundamental and 6 technical beacons.")
         g3.markdown("**3 · Explore**\n\nThe plan and ticket, the memo, the charts, the backtest and the data, one tab each; download everything.")
         st.caption("No internet? Choose the `sample` data source in the sidebar: it ships with real historical data for 20 stocks.")
 
@@ -1167,7 +1189,7 @@ def research_summary() -> None:
         st.markdown(f"- **{len(v)} signals** were tested the same way on the point-in-time S&P 500 (members as they were, "
                     "delisted companies included): monthly rank IC with Newey-West t-statistics, quintile returns after "
                     "costs and Fama-French alphas, tuned on 2009-2017 with 2018 onward held out and looked at once. "
-                    f"**{int(v['survives'].astype(bool).sum())} survived**, so nothing beyond the price rule carries weight in a "
+                    f"**{int(v['survives'].astype(bool).sum())} survived**, so no research signal was added to the "
                     f"verdict. {near} passed the tuning period and failed the hold-out; three near misses are recorded "
                     "forward as watch-only signals by the scheduled `journal watch` run.")
     ct = os.path.join(here, "reports", "examples", "cross_ticker_evaluation.csv")
@@ -1203,9 +1225,9 @@ with tab_about:
     with a1:
         st.markdown("""
 1. **Collect & clean** daily prices and the S&P 500 (live sources first, then the cache, then the bundled sample pack), and the company's SEC filings for the memo.
-2. **Technical beacons** (6): trend, RSI, MACD, position in the low-lag price bands (%B), volume confirmation, 52-week-high proximity.
+2. **Beacons**: 10 fundamental (valuation, quality, growth from the SEC filings, against sector norms) and 6 technical (trend, RSI, MACD, position in the low-lag price bands (%B), volume confirmation, 52-week-high proximity).
 3. **Market weather**: Bull/Bear × Calm/Turbulent for the S&P 500 removes points, raises the entry bar and halves sizes in bear markets.
-4. **Decision**: technical score − market weather → verdict → position size from the *smallest* of three rules (max-loss, volatility target, concentration cap), paid from the **cash you have**.
+4. **Decision**: fundamental and technical scores blended by horizon (long 60 / 40, short 30 / 70) − market weather → verdict → position size from the *smallest* of three rules (max-loss, volatility target, concentration cap), paid from the **cash you have**.
 5. **Trade ticket**: an entry limit, a stop-loss and the exits (long-term buys: the backtest's own trend and signal exits; short-term trades: two take-profit levels in multiples of the risk, *R*, breakeven, trailing and time stops), each with its result and how often it happened on the stock's own history.
 6. **Analyst memo**: point-in-time statements from SEC EDGAR; a bull / base / bear DCF with a reverse DCF, the fundamental beacons against peers (by SIC code) or sector norms, earnings-quality and balance-sheet checks, industry metrics for banks, REITs, insurers and software, the variant view and the criteria that would break the thesis (followed from the command line: `python -m lighthouse thesis`).
 7. **Honest evaluation**: point-in-time backtest vs buy & hold, the same average exposure held without trading, and the S&P 500; layer attribution, sensitivity grid, walk-forward test.

@@ -1,7 +1,7 @@
 """
-The one-call pipeline: prices -> technicals -> regime -> decision -> backtest. The rule uses prices only; the
-fundamental analysis of the same stock is the analyst memo (lighthouse.analyst.memo.build, which reads the SEC
-filings), shown next to the verdict wherever a stock is analysed.
+The one-call pipeline: prices -> fundamentals (SEC filings) -> technicals -> regime -> decision -> backtest. The
+fundamental score is built from the same point-in-time numbers as the analyst memo (analyst.financials_as_of), and
+the backtest gates its entries on the score each statement gave on the day it was public.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from .backtest import BacktestResult, run_backtest, strategy_layers, sensitivity
 from .config import InvestorProfile, StrategyParams
 from .data import EXCHANGE_TZ, Quote, load_prices, load_benchmark, load_quote, load_risk_free, align, DataUnavailable
 from .decision import Decision, make_decision
+from .fundamentals import FundamentalSnapshot, StatementHistory, fundamental_beacons, fundamental_score, point_in_time_scores
 from .parallel import map_tickers
 from .regime import regime_table, latest_regime, RegimeSnapshot
 from .technicals import compute_indicators, technical_score, latest_beacons
@@ -33,6 +34,9 @@ class AnalysisResult:
     regimes: Optional[pd.DataFrame]
     decision: Decision
     backtest: Optional[BacktestResult]
+    fundamentals: Optional[FundamentalSnapshot] = None   # today's SEC numbers behind the fundamental beacons
+    statements: Optional[StatementHistory] = None        # SEC EDGAR statements with filing dates (None: unavailable)
+    pit_scores: Optional[pd.Series] = None               # the point-in-time fundamental score the backtest gates on
     warnings: List[str] = field(default_factory=list)
     extras: Dict[str, object] = field(default_factory=dict)   # layers / sensitivity / walk-forward when computed
     quote: Optional[Quote] = None              # the live price the orders are priced from (None: the last close)
@@ -56,7 +60,7 @@ class AnalysisResult:
     def evaluate(self, layers: bool = True, sensitivity: bool = True, walk_forward_test: bool = True) -> Dict[str, object]:
         """Run the deeper (slower) evaluations and cache them in `extras`."""
         bt_kwargs = dict(prices=self.prices, benchmark=self.benchmark, params=self.params, profile=self.profile,
-                         risk_free=self.risk_free)
+                         fundamentals_pit=self.pit_scores, risk_free=self.risk_free)
         if layers and "layers" not in self.extras:
             self.extras["layers"] = strategy_layers(**bt_kwargs)
         if sensitivity and "sensitivity" not in self.extras:
@@ -152,6 +156,10 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     if not np.isfinite(t_now):
         raise DataUnavailable(f"{ticker}: indicators are not fully defined on the last date; need more history")
 
+    snap, hist, pit = _fundamentals(ticker, prices, source, data_attrs.get("source"), p, warnings)
+    f_beacons = fundamental_beacons(snap) if snap is not None else []
+    f_now = fundamental_score(f_beacons) if f_beacons else None
+
     regimes = regime_table(bench, p) if bench is not None else None
     regime_now: Optional[RegimeSnapshot] = latest_regime(regimes, benchmark) if regimes is not None else None
 
@@ -174,7 +182,7 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
                                 f"{quote.note}")
 
     decision = make_decision(ticker, prices.index[-1], order_price, float(last["atr"]), float(last["sizing_vol"]),
-                             t_now, t_beacons, regime_now, prof, p, warnings,
+                             f_now, t_now, f_beacons + t_beacons, regime_now, prof, p, warnings,
                              sma_slow=float(last["sma_slow"]))
 
     # the T-bill rate for the Sharpe ratios, when the prices are current (live or a fresh cache); offline and sample
@@ -183,7 +191,7 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     bt = None
     if run_backtest_:
         try:
-            bt = run_backtest(prices, bench, p, prof, risk_free=risk_free)
+            bt = run_backtest(prices, bench, p, prof, pit, risk_free=risk_free)
         except ValueError as exc:
             warnings.append(f"Backtest skipped: {exc}")
 
@@ -192,7 +200,38 @@ def analyze(ticker: str, profile: Optional[InvestorProfile] = None, params: Opti
     return AnalysisResult(ticker=ticker, profile=prof, params=p, prices=prices, indicators=ind, technical_scores=tscores,
                           benchmark=bench, regimes=regimes, decision=decision, backtest=bt,
                           warnings=list(dict.fromkeys(warnings)), quote=quote, partial_bar=partial, risk_free=risk_free,
-                          name=name)
+                          name=name, fundamentals=snap, statements=hist, pit_scores=pit)
+
+
+def _fundamentals(ticker: str, prices: pd.DataFrame, source: str, price_source: Optional[str], params: StrategyParams,
+                  warnings: List[str]) -> Tuple[Optional[FundamentalSnapshot], Optional[StatementHistory], Optional[pd.Series]]:
+    """(today's fundamental snapshot, the statements, the point-in-time score series) from SEC EDGAR, or Nones when
+    the company has no filings to read (an ETF, a foreign issuer, no SEC contact e-mail or no connection). The snapshot
+    is the analyst memo's (financials_as_of on the last price, so a past `as_of` sees only the filings made by then)."""
+    from .analyst.financials import financials_as_of
+    from .analyst.memo import fundamental_snapshot
+    from .pit import load_statements
+    from .total_return import load_actions
+    from .universe import UNKNOWN_SECTOR, sector_of
+    src = "sample" if price_source == "sample" else source
+    hist = load_statements(ticker, source=src)
+    if hist.quarterly is None or hist.quarterly.empty or not hist.has_filing_dates:
+        warnings += [f"{ticker}: {n}" for n in hist.notes] or [f"{ticker}: no SEC filings to score"]
+        return None, None, None
+    actions = load_actions(ticker, source=src)
+    acts = None if actions.empty else actions
+    sector = sector_of(ticker, None)
+    sector = None if sector == UNKNOWN_SECTOR else sector
+    try:
+        snap = fundamental_snapshot(financials_as_of(ticker, hist, prices, acts), sector)
+    except ValueError as exc:                 # no quarter filed by the last price
+        warnings.append(f"{ticker}: no fundamental snapshot ({exc})")
+        snap = None
+    if acts is None:
+        warnings.append(f"{ticker}: no dividend or split history, so EDGAR's per-share numbers cannot be put in the "
+                        "price series' units; the backtest's P/E is left out.")
+    pit = point_in_time_scores(prices, hist, sector, params, actions=acts)
+    return snap, hist, pit
 
 
 def analyze_many(tickers: Iterable[str], profile: Optional[InvestorProfile] = None, params: Optional[StrategyParams] = None,

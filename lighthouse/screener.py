@@ -36,6 +36,7 @@ def rank(results: Dict[str, object], errors: Dict[str, str], tickers: Optional[I
             d = r.decision
             row = {
                 "ticker": t, "name": r.name or t, "verdict": d.verdict, "score": round(d.composite_score, 1),
+                "fundamental": None if d.fundamental_score is None else round(d.fundamental_score, 1),
                 "technical": round(d.technical_score, 1), "regime": d.regime.label if d.regime else "n/a",
                 "position_pct": round(d.plan.position_pct, 1), "shares": d.plan.shares, "cost": round(d.plan.cost, 2),
                 "price": round(d.price, 2),

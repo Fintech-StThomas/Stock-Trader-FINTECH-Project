@@ -30,15 +30,16 @@ def test_end_to_end_analysis_and_report(tmp_path):
     r = analyze("MSFT", prof, years=8, source="sample")
     d = r.decision
     assert d.verdict in {"Strong Buy", "Buy", "Hold", "Reduce", "Sell"}
-    assert 0 <= d.composite_score <= 100
-    assert d.composite_score == pytest.approx(max(0.0, min(100.0, d.technical_score - d.regime_penalty)))
-    assert all(b.group == "technical" for b in d.beacons)
+    assert 0 <= d.composite_score <= 100 and d.fundamental_score is not None
+    blend = prof.fundamental_weight * d.fundamental_score + prof.technical_weight * d.technical_score
+    assert d.composite_score == pytest.approx(max(0.0, min(100.0, blend - d.regime_penalty)))
+    assert {b.group for b in d.beacons} == {"fundamental", "technical"}
     assert d.plan.position_pct <= prof.max_position_pct
     assert r.backtest is not None and r.backtest.metrics["n_trades"] >= 1
     assert "Same exposure, never traded" in r.backtest.summary().index
     md = build_report(r)
-    for needle in ["Verdict", "Technical beacons", "Market weather", "Position plan", "Same exposure, never traded",
-                   "analyst memo", "Limitations"]:
+    for needle in ["Verdict", "Fundamental beacons", "Technical beacons", "Market weather", "Position plan",
+                   "Same exposure, never traded", "analyst memo", "Limitations"]:
         assert needle in md
     r.evaluate(layers=True, sensitivity=False, walk_forward_test=False)
     files = r.save(tmp_path, charts=True)
@@ -63,13 +64,15 @@ def test_screener_handles_failures():
     assert df["score"].dropna().is_monotonic_decreasing
 
 
-def test_the_rule_reads_prices_only(monkeypatch):
-    """The verdict, the ticket and the backtest need no fundamentals: an analysis never opens the SEC filings."""
-    from lighthouse import edgar, pit
-
-    def refuse(*a, **k):
-        raise AssertionError("the rule must not read SEC filings")
-    monkeypatch.setattr(pit, "load_statements", refuse)
-    monkeypatch.setattr(edgar, "company_facts", refuse)
-    r = analyze("AAPL", years=8, source="sample")
-    assert r.decision.verdict and r.backtest is not None
+def test_fundamentals_come_from_the_sec_filings_point_in_time():
+    """The fundamental score is built from SEC EDGAR as filed (the analyst memo's numbers); the backtest's gate uses
+    the score each statement gave from the session after its filing; a ticker without filings is technical-only."""
+    r = analyze("AAPL", years=12, source="sample")
+    assert r.decision.fundamental_score is not None and "SEC EDGAR" in r.fundamentals.source
+    pit = r.pit_scores.dropna()
+    first_filed = pd.to_datetime(r.statements.annual["filed"]).min()
+    assert len(pit) and pit.index[0] > first_filed                       # nothing before the first filing was public
+    assert "fund_score" in r.backtest.signals
+    idx = analyze("^GSPC", years=6, source="sample", run_backtest_=False)
+    assert idx.decision.fundamental_score is None and idx.fundamentals is None
+    assert any("technical-only" in w for w in idx.decision.warnings)

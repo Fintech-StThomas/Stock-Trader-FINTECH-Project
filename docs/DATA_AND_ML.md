@@ -131,8 +131,8 @@ evaluated once), under both delisting rules, with the deflated Sharpe ratio coun
 | Events and text (8-K, 10-K) | 3-day earnings reaction, earnings-release tone (half the members), 10-K similarity, risk-factor similarity, Loughran-McDonald tone, fog | Risk-factor similarity was significant only in the hold-out; the 10-K tone hypotheses had the wrong sign; the earnings-release tone had no IC out of sample |
 | Institutions (13F) | breadth of ownership | None |
 
-So **no signal carries weight in `lighthouse/decision.py`**: the verdict is a risk-control rule that reads prices, and
-the fundamentals live in the analyst memo. The code of the signals that failed and are not watched (price anomalies,
+So **no research signal was added to `lighthouse/decision.py`**: the verdict keeps its own fundamental and technical
+beacons (the user's choice, 16 October 2026), and the analyst memo goes further into the filings. The code of the signals that failed and are not watched (price anomalies,
 panel momentum, insider and 13F signals, the 8-K tone, the blend) was removed in October 2026; their logged results
 stay in `reports/research/experiments.csv`. A few data fixes made after these runs (`docs/METHODOLOGY.md` §11, seventh
 session) touch a handful of names a month and were not re-run, except the share-count fix, which changed nothing.

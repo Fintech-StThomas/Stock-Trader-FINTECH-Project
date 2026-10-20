@@ -1,8 +1,9 @@
 """
-Decision engine: the technical score for the investor's horizon, minus the
-market-regime headwind, mapped to a verdict, and the verdict turned into a
-concrete position plan (size, shares, stop, max loss). The verdict is what the
-backtest trades; the fundamental analysis is the analyst memo's (lighthouse.analyst).
+Decision engine: blend the Fundamental and Technical scores for the investor's
+horizon, apply the market-regime headwind, map the result to a verdict, and
+turn the verdict into a concrete position plan (size, shares, stop, max loss).
+The fundamental score comes from the SEC filings (the same numbers as the
+analyst memo); without them the score is technical-only, with a warning.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from .regime import RegimeSnapshot, regime_adjustments
 from .technicals import Beacon
 
 ACTION_TEXT = {
-    "Strong Buy": "Open or add to a position - the trend, momentum and market backdrop line up.",
+    "Strong Buy": "Open or add to a position - the evidence lines up across fundamentals, technicals and the market backdrop.",
     "Buy":        "Open a position at the suggested size; the balance of evidence is positive.",
     "Hold":       "Keep an existing position but do not add new money; the evidence is mixed.",
     "Reduce":     "Trim an existing position (about half) and do not buy; the evidence leans negative.",
@@ -61,6 +62,7 @@ class Decision:
     as_of: str
     price: float
     profile: InvestorProfile
+    fundamental_score: Optional[float]
     technical_score: float
     regime: Optional[RegimeSnapshot]
     regime_penalty: float
@@ -69,6 +71,10 @@ class Decision:
     beacons: List[Beacon]
     plan: PositionPlan
     warnings: List[str] = field(default_factory=list)
+
+    @property
+    def fundamental_beacons(self) -> List[Beacon]:
+        return [b for b in self.beacons if b.group == "fundamental"]
 
     @property
     def technical_beacons(self) -> List[Beacon]:
@@ -82,9 +88,14 @@ class Decision:
 # --------------------------------------------------------------------------- #
 # Scoring
 # --------------------------------------------------------------------------- #
-def composite_score(technical: float, regime_penalty: float = 0.0) -> float:
-    """The Lighthouse score: the horizon's technical score minus the regime headwind, on 0-100."""
-    return float(np.clip(technical - regime_penalty, 0.0, 100.0))
+def composite_score(fundamental: Optional[float], technical: float, profile: InvestorProfile,
+                    regime_penalty: float = 0.0) -> float:
+    """Horizon-weighted blend, minus the regime headwind, on 0-100. Missing fundamentals -> technical only."""
+    if fundamental is None or (isinstance(fundamental, float) and np.isnan(fundamental)):
+        blended = technical
+    else:
+        blended = profile.fundamental_weight * fundamental + profile.technical_weight * technical
+    return float(np.clip(blended - regime_penalty, 0.0, 100.0))
 
 
 def conviction_from_score(score: float) -> float:
@@ -215,20 +226,22 @@ def backtest_size_fraction(atr: float, realized_vol: float, score: float, profil
 # Assemble the decision
 # --------------------------------------------------------------------------- #
 def make_decision(ticker: str, as_of, price: float, atr: float, realized_vol: float,
-                  technical: float, beacons: List[Beacon],
+                  fundamental: Optional[float], technical: float, beacons: List[Beacon],
                   regime: Optional[RegimeSnapshot], profile: InvestorProfile,
                   params: Optional[StrategyParams] = None, warnings: Optional[List[str]] = None,
                   sma_slow: Optional[float] = None) -> Decision:
     p = params or StrategyParams()
     adj = regime_adjustments(regime.is_bear if regime else False, regime.is_turbulent if regime else False, p)
-    score = composite_score(technical, adj["score_penalty"])
+    score = composite_score(fundamental, technical, profile, adj["score_penalty"])
     verdict = verdict_from_score(score)
     warns = list(warnings or [])
+    if fundamental is None:
+        warns.append("Fundamental data unavailable: the score is technical-only and should be treated with extra caution.")
     if adj["block_entries"] and verdict in {"Buy", "Strong Buy"}:
         verdict = "Hold"
         warns.append("Market is Bear / Turbulent: new entries are blocked by the regime rule, so the verdict is capped at Hold.")
     plan = size_position(price, atr, realized_vol, score, verdict, profile, adj["size_multiplier"], sma_slow, p)
     return Decision(ticker=ticker, as_of=str(as_of)[:10], price=float(price), profile=profile,
-                    technical_score=float(technical), regime=regime,
+                    fundamental_score=fundamental, technical_score=float(technical), regime=regime,
                     regime_penalty=adj["score_penalty"], composite_score=score, verdict=verdict,
                     beacons=beacons, plan=plan, warnings=warns)
