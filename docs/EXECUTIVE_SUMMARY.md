@@ -122,7 +122,7 @@ selection or timing (`docs/METHODOLOGY.md` §8-8d).
   liquidity, survivorship-aware cohorts, yardsticks that ask what the timing adds, a research hold-out evaluated once
   with the trial count behind every verdict, tests whose rule was written before the run, and a plain list of what
   we tried and rejected.
-* **Runs anywhere** — live data when online, bundled real data when offline; 292 automated tests.
+* **Runs anywhere** — live data when online, bundled real data when offline; 293 automated tests.
 
 ## Major limitations and risks
 

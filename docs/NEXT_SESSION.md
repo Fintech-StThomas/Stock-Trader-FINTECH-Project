@@ -38,8 +38,8 @@ the default branch only); the first forward snapshot is due after the close of 3
 
 ## Open items (the user's choice)
 
-1. **Check the watch list's first run**: the repository secret `LIGHTHOUSE_SEC_EMAIL` must exist (without it only
-   short volume is recorded); after the close of 30 October 2026 look at the run's summary (Actions -> watch).
+1. **Check the watch list's first run**: the scheduled runs now send the default contact e-mail when the
+   `LIGHTHOUSE_SEC_EMAIL` secret is absent; after the close of 30 October 2026 look at the run's summary (Actions -> watch).
 2. (Decided 16 October 2026: the trading rule stays as it is; §8d.)
 3. **The forward rule's thresholds** (36 months, t >= 2, one annual look, at most one month end in six missing or late)
    were proposed before any forward data: the user may change them now, never after seeing forward results.
@@ -91,7 +91,7 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on the branch the session is given;
   never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 python -m pytest` (CI runs Python 3.10 and 3.12; 292 tests), with an empty
+* Before every push: `LIGHTHOUSE_OFFLINE=1 python -m pytest` (CI runs Python 3.10 and 3.12; 293 tests), with an empty
   `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. CI's 3.10 job runs pandas 2 (pandas 3 needs
   Python 3.11): after re-recording data or touching dates, run the suite once under pandas 2 as well (a virtualenv with
   `pandas>=2.3,<3`).
@@ -101,8 +101,9 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
   is run, as §8d was; results are reported whatever they show, and nothing is chosen after the run.
 * $0 budget: free sources and free keys only (FRED, Alpaca paper); read terms, respect rate limits, keep large data in
   the gitignored `data/cache/` as Parquet, never commit large data; research universe about 500 names.
-* SEC EDGAR: User-Agent with the contact e-mail from `LIGHTHOUSE_SEC_EMAIL` (sent to sec.gov only, never written into
-  any file), under 10 requests a second (`lighthouse/http.py` enforces 8). The user approves the e-mail per session.
+* Contact e-mail: lota.inc0@gmail.com (`http.DEFAULT_CONTACT_EMAIL`, the user's decision, 20 October 2026) goes with
+  every request (`From` header; the SEC, Wikipedia, FINRA and nd.edu User-Agents); `LIGHTHOUSE_SEC_EMAIL` replaces it.
+  SEC EDGAR stays under 10 requests a second (`lighthouse/http.py` enforces 8). yfinance's own requests are not ours.
 * No look-ahead: every new signal gets a truncation test; anything filed or published on a date is used from the next
   session. Never invent data. Tests run offline only. Never skip, weaken or quarantine a test.
 * Every logged signal's hold-out has been used (`reports/research/holdout_log.csv`); looking again needs
@@ -131,8 +132,10 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
 * 16 October 2026 (later): **fundamentals back in the score** (60/40 long, 30/70 short) and the backtest's fundamental
   gate restored, from SEC EDGAR only (the memo's point-in-time numbers; 10 beacons). The 20-stock sample is back to its
   pre-simplification numbers (Sharpe 0.470, CAGR 7.3%, 9 of 20 ahead of buy-and-hold); the cohort runs and the §8d
-  timing test were on the price-only rule and were not re-run (live data, about an hour). The deployed app needs the
-  `LIGHTHOUSE_SEC_EMAIL` secret, or every live score is technical-only.
+  timing test were on the price-only rule and were not re-run (live data, about an hour).
+* 20 October 2026: **the analyst memo fills without setup**: lota.inc0@gmail.com is the default contact e-mail on
+  every request (live memos and scores had been empty without the `LIGHTHOUSE_SEC_EMAIL` secret); the app keeps no
+  failed memo in its cache, and an analysis whose filings failed to load is run again once the memo reads them.
 
 ## Running the research again (a fresh container re-downloads everything)
 

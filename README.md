@@ -60,7 +60,7 @@ python -m lighthouse trade MSFT AAPL JNJ XOM --cash 5000                    # wh
 python -m lighthouse memo MSFT                                              # the analyst memo alone
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 292 tests, runs offline
+python -m pytest                # 293 tests, runs offline
 ```
 
 ```python
@@ -85,8 +85,9 @@ port.table(); port.risk["var95_1d_usd"]; port.comparison   # orders, risk, walk-
 ```
 
 No internet? Set `LIGHTHOUSE_OFFLINE=1` (or `--source sample`): the bundled pack holds real Microsoft OHLCV 1986-2017,
-19 other S&P 500 stocks and the index to 2022, with the SEC filings of all 20. Live memos need a contact e-mail for SEC
-EDGAR in `LIGHTHOUSE_SEC_EMAIL` (sent to sec.gov only).
+19 other S&P 500 stocks and the index to 2022, with the SEC filings of all 20. Every request carries the project's contact
+e-mail (lota.inc0@gmail.com, which SEC EDGAR requires), so live memos and fundamentals need no setup;
+`LIGHTHOUSE_SEC_EMAIL` replaces it.
 
 ## The web app
 
@@ -113,8 +114,7 @@ The app runs as-is on [Streamlit Community Cloud](https://share.streamlit.io):
 
 1. Sign in at https://share.streamlit.io with your GitHub account.
 2. *Create app* → *Deploy a public app from GitHub* → repository `lotainc0/Stock-Trader-FINTECH-Project`, branch `main`, main file `app.py`.
-3. For live memos, add `LIGHTHOUSE_SEC_EMAIL = "you@example.com"` under *Advanced settings* → *Secrets*.
-4. Press *Deploy*. The first build installs `requirements.txt`; after that the app is live at a `*.streamlit.app` URL you can share.
+3. Press *Deploy*. The first build installs `requirements.txt`; after that the app is live at a `*.streamlit.app` URL you can share.
 
 Later pushes to `main` reach the running app without a restart; `app.py` notices that the `lighthouse` package changed on disk
 and loads the new code. If a page still shows an error right after a push, *Manage app* → ⋮ → *Reboot app* starts it fresh.
@@ -204,7 +204,7 @@ data/sample/           bundled real historical data: prices, SEC filings (facts,
 reports/examples/      the MSFT example (report, memo, charts) and the cross-ticker and cohort evaluations
 reports/research/      the research harness's experiment log, hold-out log, results and verdicts
 docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · NEXT_SESSION.md
-tests/                 292 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded
+tests/                 293 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded
                        SEC and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 

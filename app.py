@@ -134,25 +134,28 @@ def _run(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, 
 
 def memo_problem(exc: Exception) -> str:
     """Why a stock has no memo, in words an investor can act on."""
-    from lighthouse.http import ConfigurationError
-    # pit.load_statements turns a missing SEC contact e-mail into "no statements", with the reason in the message
-    if isinstance(exc, ConfigurationError) or "LIGHTHOUSE_SEC_EMAIL" in str(exc):
-        return ("SEC EDGAR asks every program for a contact e-mail. Set the environment variable LIGHTHOUSE_SEC_EMAIL "
-                "(it is sent to sec.gov only) and restart the app, or choose the `sample` data source.")
     if isinstance(exc, DataUnavailable):
-        return f"{exc}. ETFs, funds and companies that do not file with the SEC have no memo."
+        return (f"{exc}. ETFs, funds and companies that do not file quarterly statements with the SEC have no memo; "
+                "for a US company this is a connection problem: press Analyse again to retry.")
     return f"{type(exc).__name__}: {exc}"
 
 
 @st.cache_resource(show_spinner=False, ttl=LIVE_TTL, max_entries=100)
-def _memo(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, as_of, nonce, peers, _result):
-    """The analyst memo of an analysis, under the same key as `_run` (so a cached analysis and its memo go together).
-    Returns (memo, None) or (None, why there is none): the verdict stands without it."""
+def _memo_cached(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, as_of, nonce, peers,
+                 _result):
     from lighthouse.analyst import memo as memo_mod
+    # a failure raises, and Streamlit caches no exceptions: the next Analyse reads the filings again
+    return memo_mod.build(ticker, as_of=as_of, source=source, result=_result, peers=peers, peer_norms=True)
+
+
+def _memo(*key):
+    """The analyst memo of an analysis, under the same key as `_run` (so a cached analysis and its memo go together).
+    Returns (memo, None) or (None, why there is none): the verdict stands without it. Only a built memo is cached."""
     try:
-        return memo_mod.build(ticker, as_of=as_of, source=source, result=_result, peers=peers, peer_norms=True), None
+        return _memo_cached(*key), None
     except Exception as exc:  # noqa: BLE001
         return None, memo_problem(exc)
+
 
 @st.cache_resource(show_spinner=False, ttl=LIVE_TTL, max_entries=400)
 def _light(ticker, horizon, risk, max_loss, cash, holdings, years, source, nonce=0):
@@ -401,6 +404,14 @@ if run:
     if res is not None:
         with st.spinner(f"Reading {ticker}'s SEC filings for the analyst memo ..."):
             st.session_state["memo"] = _memo(*key, memo_peers, res)
+        if res.statements is None and st.session_state["memo"][0] is not None:
+            # the filings loaded for the memo but not for the score (a dropped connection): score them too
+            with st.spinner(f"Adding {ticker}'s fundamentals to the score ..."):
+                _run.clear(*key)
+                res = _run(*key)
+                st.session_state["result"] = res
+                _memo_cached.clear(*key, memo_peers, res)
+                st.session_state["memo"] = _memo(*key, memo_peers, res)
     if res is not None and deep and "layers" not in res.extras:
         with st.status("Deep evaluation: layer attribution, sensitivity grid and walk-forward test ...", expanded=False) as status:
             res.evaluate()

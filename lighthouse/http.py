@@ -1,12 +1,15 @@
 """
 Polite HTTP for the free data sources: one place that knows each host's rules.
 
+* Every request carries the project's contact e-mail (CONTACT_EMAIL, lota.inc0@gmail.com; LIGHTHOUSE_SEC_EMAIL
+  overrides it) in the standard `From` header, so no host ever has to guess who is calling.
 * SEC EDGAR asks for a descriptive User-Agent with a contact e-mail and at most 10 requests per second; it answers
-  403 "Request Rate Threshold Exceeded" (or 429) when a client goes faster. The e-mail is read from the environment
-  variable LIGHTHOUSE_SEC_EMAIL (or SEC_USER_AGENT for a full custom string) and is sent to SEC hosts only.
+  403 "Request Rate Threshold Exceeded" (or 429) when a client goes faster. The User-Agent carries the contact e-mail
+  (SEC_USER_AGENT replaces the whole string), so EDGAR, the analyst memo and the fundamental score always load.
 * FRED's CDN stalls on custom or browser-like User-Agents and answers requests' default in under a second, so FRED
-  (and the other public CSV hosts) keep the library default.
-* Wikipedia asks for a User-Agent that identifies the tool; the project URL is used, never an e-mail address.
+  (and the other public CSV hosts) keep the library default User-Agent (with the `From` header).
+* Wikipedia asks for a User-Agent that identifies the tool and a way to reach its operator: the project URL and the
+  contact e-mail.
 
 Every request is rate-limited per host (thread-safe, so parallel loaders share the budget), retried with exponential
 backoff on throttling and server errors (honouring Retry-After), and refused outright in offline mode
@@ -24,12 +27,28 @@ from urllib.parse import urlparse
 from .data import DataUnavailable, offline_mode
 
 PROJECT_URL = "https://github.com/lotainc0/Stock-Trader-FINTECH-Project"
-PROJECT_UA = f"Lighthouse/1.3 (+{PROJECT_URL})"
+DEFAULT_CONTACT_EMAIL = "lota.inc0@gmail.com"
+
+
+def contact_email() -> str:
+    """The e-mail every request carries: LIGHTHOUSE_SEC_EMAIL when it holds an address, else the project's."""
+    email = os.environ.get("LIGHTHOUSE_SEC_EMAIL", "").strip()
+    return email if "@" in email else DEFAULT_CONTACT_EMAIL
+
+
+def project_user_agent() -> str:
+    return f"Lighthouse/1.3 (+{PROJECT_URL}; {contact_email()})"
+
+
+def contact_headers() -> Dict[str, str]:
+    """Headers for requests made outside `fetch` (the Stooq and FRED CSVs): the contact e-mail, nothing else."""
+    return {"From": contact_email()}
+
 RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
 class ConfigurationError(RuntimeError):
-    """A setting the user must provide (for example the SEC contact e-mail) is missing."""
+    """A setting the user must provide is missing (kept for callers; the SEC contact e-mail now has a default)."""
 
 
 class HTTPStatusError(DataUnavailable):
@@ -43,16 +62,11 @@ class HTTPStatusError(DataUnavailable):
 
 
 def sec_user_agent() -> str:
-    """The User-Agent the SEC requires: a name and a contact e-mail, from the environment."""
+    """The User-Agent the SEC requires: a name and a contact e-mail (never missing: see `contact_email`)."""
     custom = os.environ.get("SEC_USER_AGENT", "").strip()
-    if custom:
+    if custom and "@" in custom:
         return custom
-    email = os.environ.get("LIGHTHOUSE_SEC_EMAIL", "").strip()
-    if not email or "@" not in email:
-        raise ConfigurationError(
-            "SEC EDGAR requires a contact e-mail in the User-Agent. Set LIGHTHOUSE_SEC_EMAIL=you@example.com "
-            "(or SEC_USER_AGENT='Your Name you@example.com') before loading EDGAR data.")
-    return f"Lighthouse research tool {email}"
+    return f"Lighthouse research tool {contact_email()}"
 
 
 @dataclass
@@ -68,12 +82,12 @@ class HostPolicy:
 SEC_RATE = min(float(os.environ.get("LIGHTHOUSE_SEC_RATE", "8") or 8), 8.0)
 POLICIES: Dict[str, HostPolicy] = {
     "sec.gov": HostPolicy(rate=SEC_RATE, user_agent=sec_user_agent),
-    "wikipedia.org": HostPolicy(rate=2.0, user_agent=lambda: PROJECT_UA),
-    "finra.org": HostPolicy(rate=4.0, user_agent=lambda: PROJECT_UA),
+    "wikipedia.org": HostPolicy(rate=2.0, user_agent=project_user_agent),
+    "finra.org": HostPolicy(rate=4.0, user_agent=project_user_agent),
     "dartmouth.edu": HostPolicy(rate=2.0, user_agent=None),
     "stlouisfed.org": HostPolicy(rate=2.0, user_agent=None),
     "githubusercontent.com": HostPolicy(rate=4.0, user_agent=None),
-    "nd.edu": HostPolicy(rate=1.0, user_agent=lambda: PROJECT_UA),
+    "nd.edu": HostPolicy(rate=1.0, user_agent=project_user_agent),
     "alpaca.markets": HostPolicy(rate=3.0, user_agent=None),     # paper trading: 200 requests/minute per key
     "localhost": HostPolicy(rate=50.0, user_agent=None),         # a local Ollama server (optional text reading)
 }
@@ -131,13 +145,12 @@ def fetch(url: str, params: Optional[dict] = None, *, timeout: float = 30.0, ret
     """GET (or POST) `url` under its host's policy and return the `requests.Response` (status 2xx).
 
     Raises DataUnavailable offline or after the retries, HTTPStatusError (a DataUnavailable with the `status`) for a
-    non-retryable HTTP error, ConfigurationError when the host needs a setting (the SEC contact e-mail) that is
-    missing."""
+    non-retryable HTTP error."""
     if offline_mode():
         raise DataUnavailable(f"offline mode (LIGHTHOUSE_OFFLINE=1): not fetching {url}")
     pol = policy_for(url)
     host = (urlparse(url).hostname or "").lower()
-    h = {"Accept-Encoding": pol.accept_encoding}
+    h = {"Accept-Encoding": pol.accept_encoding, **contact_headers()}
     if pol.user_agent is not None:
         h["User-Agent"] = pol.user_agent()
     h.update(headers or {})

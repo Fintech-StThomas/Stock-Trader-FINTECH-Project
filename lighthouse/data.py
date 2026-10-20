@@ -384,7 +384,8 @@ def _from_stooq(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
     import requests
     sym = STOOQ_SYMBOLS.get(ticker.upper(), f"{ticker.lower()}.us")
     url = (f"https://stooq.com/q/d/l/?s={sym}&d1={start.strftime('%Y%m%d')}&d2={end.strftime('%Y%m%d')}&i=d")
-    r = requests.get(url, timeout=20)
+    from .http import contact_headers
+    r = requests.get(url, timeout=20, headers=contact_headers())
     r.raise_for_status()
     text = r.text.strip()
     if not text.startswith("Date") or len(text.splitlines()) < 3:
@@ -652,8 +653,9 @@ def load_risk_free(source: str = "auto", refresh: bool = False) -> Optional[pd.S
         if source != "cache":
             try:
                 import requests
+                from .http import contact_headers
                 # requests' own User-Agent: FRED's CDN stalled (read timeouts) on custom or browser-like ones
-                r = requests.get(FRED_TBILL_URL, timeout=15)
+                r = requests.get(FRED_TBILL_URL, timeout=15, headers=contact_headers())
                 r.raise_for_status()
                 s = _parse_fred_csv(r.text)
                 if len(s) > 250:

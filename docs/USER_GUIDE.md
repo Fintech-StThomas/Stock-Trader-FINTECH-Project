@@ -19,9 +19,9 @@ hold-out on the point-in-time S&P 500, `docs/METHODOLOGY.md` §8b; the user chos
 | **Web app** | everyone: interactive charts, trade tickets, the memo, portfolios, downloads | `pip install -r requirements.txt` then `streamlit run app.py` (or the hosted Streamlit Cloud link in the README) |
 | **Command line** | power users, batch runs, saving reports | see *Command line* below |
 
-Live analyst memos need a contact e-mail for SEC EDGAR, which asks every program for one: set the environment variable
-`LIGHTHOUSE_SEC_EMAIL=you@example.com` before starting (it is sent to sec.gov only). Without it the verdict and the
-ticket still work and the memo says why it is missing; the bundled sample pack has the filings of its 20 stocks.
+SEC EDGAR asks every program for a contact e-mail; Lighthouse sends the project's (lota.inc0@gmail.com) with every
+request, so the live analyst memo and the fundamental score load with no setup (`LIGHTHOUSE_SEC_EMAIL` replaces the
+address). The bundled sample pack has the filings of its 20 stocks.
 
 ## The inputs
 
@@ -234,7 +234,7 @@ labels in `lighthouse/universe.py`. The CLI accepts one-off overrides: `--params
 
 * **"could not load prices"**: no internet, or Yahoo is rate-limiting. Retry in a minute, or use `--source stooq`, or `--source sample` for the bundled tickers (`MSFT`, `AAPL`, `JNJ`, `XOM`, `JPM`, `UNH`, `KO`, `PG`, `PFE`, `WMT`, `HD`, `GE`, `CVX`, `LLY`, `BAC`, `AMD`, `MRK`, `PEP`, `BBY`, `RRC`).
 * **"No analyst memo"**: the ticker has no SEC filings (an ETF, a fund, a foreign company), or EDGAR could not be read
-  (no `LIGHTHOUSE_SEC_EMAIL`, or no connection). The verdict and the ticket do not need the memo.
+  (no connection: press Analyse again, a failed memo is not kept). The verdict and the ticket do not need the memo.
 * **"Prices are from …"** on a ticket: the data is not today's (offline pack or cache). Refresh with live data before placing an order.
 * **"Today's session is still trading"**: during market hours the unfinished daily bar is left out of the signals; orders are priced from the live quote. Yahoo quotes can lag by up to 15 minutes on some exchanges, so confirm the price with your broker.
 * **"Left out MSFT: data ends 2017-11-10"** in the portfolio builder: the offline MSFT file ends earlier than the others, so it is excluded rather than cutting everyone's history short.

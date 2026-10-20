@@ -169,6 +169,31 @@ def test_app_has_no_journal_views_and_never_writes_the_journal(tmp_path, monkeyp
     assert not (tmp_path / "journal.sqlite").exists()
 
 
+def test_app_scores_fundamentals_the_memo_could_read(monkeypatch):
+    """A dropped connection that left the score without the SEC filings is not kept: once the memo reads the filings,
+    the analysis is run again with them, and a failed memo is not cached either."""
+    import lighthouse.engine as engine
+    real, calls = engine._fundamentals, []
+
+    def flaky(*a, **k):
+        calls.append(1)
+        return (None, None, None) if len(calls) == 1 else real(*a, **k)
+
+    monkeypatch.setattr(engine, "_fundamentals", flaky)
+    st.cache_resource.clear()
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    at.sidebar.text_input(key="ticker").set_value("MSFT")
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.sidebar.button(key="analyse").click()
+    at.run()
+    assert not at.exception, at.exception
+    memo, why = at.session_state["memo"]
+    assert memo is not None and why is None
+    assert len(calls) == 2 and at.session_state["result"].statements is not None
+    st.cache_resource.clear()
+
+
 def _lighthouse_modules() -> dict:
     return {n: m for n, m in sys.modules.items() if n == "lighthouse" or n.startswith("lighthouse.")}
 

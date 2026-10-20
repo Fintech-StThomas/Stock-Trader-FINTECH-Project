@@ -108,8 +108,8 @@ def test_bulk_statement_data_set_parser():
 def test_http_rules(monkeypatch):
     monkeypatch.delenv("LIGHTHOUSE_SEC_EMAIL", raising=False)
     monkeypatch.delenv("SEC_USER_AGENT", raising=False)
-    with pytest.raises(http.ConfigurationError):
-        http.sec_user_agent()
+    assert http.sec_user_agent().endswith(http.DEFAULT_CONTACT_EMAIL)              # never missing: EDGAR always loads
+    assert http.policy_for("https://en.wikipedia.org/x").user_agent().endswith(f"{http.DEFAULT_CONTACT_EMAIL})")
     monkeypatch.setenv("LIGHTHOUSE_SEC_EMAIL", "analyst@example.com")
     assert http.sec_user_agent().endswith("analyst@example.com")
     assert http.policy_for("https://data.sec.gov/x").rate <= 10
@@ -130,6 +130,7 @@ def test_http_retries_on_throttling(monkeypatch):
 
     class S:
         def request(self, *a, **k):
+            assert k["headers"]["From"] == "analyst@example.com"
             calls.append(k["headers"].get("User-Agent"))
             return R(403, "Request Rate Threshold Exceeded") if len(calls) < 3 else R(200, "ok")
 
