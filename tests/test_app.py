@@ -29,10 +29,10 @@ def test_app_runs_an_analysis_offline():
     assert any("Strong Buy" in str(m.value) or "Buy" in str(m.value) for m in at.markdown)
     # the analysis carries its analyst memo (from the bundled SEC filings), next to the verdict and outside the score
     assert "Analyst memo (fundamentals)" in text and "Investment memo" in text and "What would prove this wrong" in text
-    assert "aria-label='Fundamental score'" in text          # the fundamental score is part of the verdict ...
-    assert "**Fundamental beacons**" in text and "**Technical beacons**" in text   # ... with its beacons beside the technical ones
+    assert "Fundamental beacons" in text                       # the memo is where the fundamental beacons live now
+    assert "aria-label='Fundamental score'" not in text      # no fundamental score card next to the verdict
     labels = [t.label for t in at.tabs]          # every tab, the Analyse tab's own sub-tabs included, in page order
-    assert labels[0] == "📍 Analyse a stock" and labels[1:6] == ["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Beacons & charts",
+    assert labels[0] == "📍 Analyse a stock" and labels[1:6] == ["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Technicals",
                                                                  "🧪 Backtest", "🗂️ Data"]
     assert {"🎯 Find trades", "🧺 Portfolio", "ℹ️ How it works"} <= set(labels)
     assert not any("Research" in str(t.label) for t in at.tabs)   # research is evidence, not a tab ...

@@ -18,7 +18,7 @@ exposure without timing (return, drawdown) and against the plain trend rule (Sha
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Optional
 
 import numpy as np
@@ -36,7 +36,6 @@ class CohortInputs:
     benchmark: pd.DataFrame                    # the market index (regime)
     risk_free: Optional[pd.Series] = None      # daily T-bill (None: params.risk_free_rate)
     data_end: Optional[pd.Timestamp] = None    # the end of the data (a series ending well before it is delisted)
-    pit: Dict[str, pd.Series] = field(default_factory=dict)   # point-in-time fundamental scores per member (the gate)
 
 
 def evaluate_member(ticker: str, inp: CohortInputs, start, rule: str, params: Optional[StrategyParams] = None) -> Optional[dict]:
@@ -56,16 +55,14 @@ def evaluate_member(ticker: str, inp: CohortInputs, start, rule: str, params: Op
     px.attrs = {"ticker": ticker}
     bench = bench.copy()
     bench.attrs = {}
-    pit = inp.pit.get(ticker)
-    pit = pit.reindex(px.index) if pit is not None else None
     out: Dict[str, object] = {"ticker": ticker, "rule": rule, "delisted": delisted,
                               "last_price": str(inp.frames[ticker].index[-1].date())}
     try:
-        bal = run_backtest(px, bench, p, InvestorProfile(horizon="long", risk="balanced"), pit, start=start,
+        bal = run_backtest(px, bench, p, InvestorProfile(horizon="long", risk="balanced"), start=start,
                            risk_free=inp.risk_free)
         sig = run_backtest(px, bench, p, InvestorProfile(horizon="long", risk="balanced"), use_regime=True,
                            use_stops=False, sizing="full", start=start, risk_free=inp.risk_free)
-        cons = run_backtest(px, bench, p, InvestorProfile(horizon="long", risk="conservative"), pit, start=start,
+        cons = run_backtest(px, bench, p, InvestorProfile(horizon="long", risk="conservative"), start=start,
                             risk_free=inp.risk_free)
         trend = trend_rule(px, p, InvestorProfile(horizon="long", risk="balanced"), start=start,
                            risk_free=inp.risk_free)
@@ -85,8 +82,7 @@ def evaluate_member(ticker: str, inp: CohortInputs, start, rule: str, params: Op
                 "same_cagr": same["cagr"], "same_vol": same["volatility"], "same_sharpe": same["sharpe"],
                 "same_mdd": same["max_drawdown"],
                 "trend_cagr": t["cagr"], "trend_sharpe": t["sharpe"], "trend_mdd": t["max_drawdown"],
-                "trend_trades": int(t["n_trades"]), "trend_exposure": t["exposure"],
-                "fundamentals": bool(pit is not None and pit.notna().any())})
+                "trend_trades": int(t["n_trades"]), "trend_exposure": t["exposure"]})
     return out
 
 

@@ -2,7 +2,7 @@
 *As of 2017-11-10 · price $83.87 · market value $647.0bn · SIC 7372 Services-Prepackaged Software*
 
 ## Recommendation: **HOLD**
-At $83.87, the probability-weighted DCF value is $77.88 (-7%); the base case (revenue growth fading from 10.1% to 3.0%, operating margin 26.4%) is worth $80.34. The price implies 7.8% revenue growth a year for five years at today's margin. The rule-based signals say Strong Buy (score 72/100).
+At $83.87, the probability-weighted DCF value is $77.88 (-7%); the base case (revenue growth fading from 10.1% to 3.0%, operating margin 26.4%) is worth $80.34. The price implies 7.8% revenue growth a year for five years at today's margin. The rule-based signals say Strong Buy (score 83/100).
 
 *Buy when the probability-weighted value is at least 15% above the price, the bull case gains at least 1.5x what the bear case loses, no check is red and the rule-based signal is not Reduce or Sell; avoid when the value is more than 25% below the price (15% with a red flag or a Reduce / Sell signal); otherwise hold. A DCF that fades growth to the long-run rate calls most fast growers expensive: read the reverse DCF next to it.*
 

@@ -5,7 +5,7 @@ Every stock in the offline sample pack (20 S&P 500 names, data to 2022, or 2017 
 history with the long-horizon rule:
 
   signals_*       technical signals + market-regime filter, fully invested when in (no stop, no sizing)
-  lighthouse_*    the full product, balanced profile (regime, point-in-time fundamental gate, exits, vol-targeted size)
+  lighthouse_*    the full product, balanced profile (regime, exits, vol-targeted size)
   conservative_*  the full product, conservative profile
   same_*          the balanced product's average exposure held without timing (stock and cash in a fixed mix)
   trend_*         the plain 200-day trend rule on the same engine (in when the review-day close is above the SMA)
@@ -141,22 +141,8 @@ def cohort(date: str, workers: int) -> int:
     bench = load_benchmark("^GSPC", years=None, start=start - pd.Timedelta(days=int(365.25 * 1.3)))
     bench.attrs = {}
     rf = load_risk_free()
-    pit = {}
-    if os.environ.get("LIGHTHOUSE_SEC_EMAIL") or os.environ.get("SEC_USER_AGENT"):   # the fundamental gate needs EDGAR
-        from lighthouse.fundamentals import point_in_time_scores
-        from lighthouse.pit import load_statements
-        from lighthouse.total_return import load_actions
-        from lighthouse.universe import SECTORS
-        for t in sorted(frames):
-            h = load_statements(t)
-            if h.has_filing_dates:
-                acts = load_actions(t)
-                pit[t] = point_in_time_scores(frames[t], h, SECTORS.get(t), StrategyParams(),
-                                              actions=None if acts.empty else acts)
-    else:
-        print("no LIGHTHOUSE_SEC_EMAIL: the cohort runs without the fundamental gate")
     data_end = bench.index[-1]
-    inputs = CohortInputs(frames=frames, benchmark=bench, risk_free=rf, data_end=data_end, pit=pit)
+    inputs = CohortInputs(frames=frames, benchmark=bench, risk_free=rf, data_end=data_end)
     jobs = [(t, start, rule) for t in sorted(frames) for rule in DELISTING_RULES]
     ctx = mp.get_context("fork")
     with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_init, initargs=(inputs,)) as pool:

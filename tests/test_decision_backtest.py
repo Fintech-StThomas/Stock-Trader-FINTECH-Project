@@ -26,27 +26,10 @@ def test_verdict_bands():
     assert verdict_from_score(10) == "Sell"
 
 
-def test_composite_blend_and_penalty():
-    """The Lighthouse score blends the fundamental and technical scores by horizon, minus the market weather."""
-    prof = InvestorProfile(horizon="long")
-    assert composite_score(80, 60, prof) == pytest.approx(0.6 * 80 + 0.4 * 60)
-    assert composite_score(80, 60, InvestorProfile(horizon="short")) == pytest.approx(0.3 * 80 + 0.7 * 60)
-    assert composite_score(None, 60, prof) == 60                                 # no SEC filings: technical only
-    assert composite_score(80, 60, prof, regime_penalty=8) == pytest.approx(72 - 8)
-    assert composite_score(0, 0, prof, regime_penalty=20) == 0 and composite_score(100, 120, prof) == 100
-
-
-def test_fundamental_gate_blocks_entries_while_the_point_in_time_score_is_low(prices, benchmark):
-    p, prof = StrategyParams(), InvestorProfile()
-    free = run_backtest(prices, benchmark, p, prof)
-    assert free.metrics["n_trades"] >= 1
-    low = pd.Series(10.0, index=prices.index)                                    # below the gate (35) every day
-    assert run_backtest(prices, benchmark, p, prof, low).metrics["n_trades"] == 0
-    assert run_backtest(prices, benchmark, p, prof, low, use_fundamental_gate=False).metrics["n_trades"] >= 1
-    unknown = pd.Series(np.nan, index=prices.index)                              # unknown: no gate
-    assert run_backtest(prices, benchmark, p, prof, unknown).metrics["n_trades"] == free.metrics["n_trades"]
-    layers = strategy_layers(prices, benchmark, p, prof, low)
-    assert layers.loc["+ fundamental gate (point-in-time)", "n_trades"] == 0
+def test_score_is_the_technical_score_minus_the_regime_penalty():
+    assert composite_score(60) == 60
+    assert composite_score(72, regime_penalty=8) == pytest.approx(64)
+    assert composite_score(5, regime_penalty=20) == 0 and composite_score(120) == 100
 
 
 def test_position_sizing_respects_every_cap():

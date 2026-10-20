@@ -16,8 +16,7 @@ the default branch only); the first forward snapshot is due after the close of 3
   * Tier 1: one chart stack (Plotly; saved reports write `TICKER_charts.html`), no local-LLM layer, the research code of
     the failed and unwatched signals removed (their logged rows stay), three one-off scripts removed, `memo.py` renamed
     `cache.py`, this file now holds the roadmap.
-  * Tier 2: the verdict read prices only (score = technical − weather; no fundamental gate; reversed on 16 October,
-    below); no short tickets;
+  * Tier 2: the verdict reads prices only (score = technical − weather; no fundamental gate); no short tickets;
     portfolio methods equal weight / risk parity / minimum variance; SEC EDGAR the only fundamentals source.
   * Tier 3: one cover-page reader (`pit.cover_shares`) and one split restatement (`total_return.restate_shares`) behind
     every market value (memo, research signals, membership); the `run_backtest(start=...)` pandas-3 bug fixed.
@@ -91,7 +90,7 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
   avoid `rm`, even in scratch space.
 * Commit and push work in progress after each step (sessions get interrupted). Work on the branch the session is given;
   never push to `main`. Ask the user before opening the PR and again before merging once CI passes.
-* Before every push: `LIGHTHOUSE_OFFLINE=1 python -m pytest` (CI runs Python 3.10 and 3.12; 292 tests), with an empty
+* Before every push: `LIGHTHOUSE_OFFLINE=1 python -m pytest` (CI runs Python 3.10 and 3.12; 291 tests), with an empty
   `LIGHTHOUSE_CACHE_DIR` so a live cache cannot leak into the offline tests. CI's 3.10 job runs pandas 2 (pandas 3 needs
   Python 3.11): after re-recording data or touching dates, run the suite once under pandas 2 as well (a virtualenv with
   `pandas>=2.3,<3`).
@@ -128,11 +127,6 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
   passes; **clean up** the stray log, the agents' worktrees and the scratch caches; **archive the coverage and journal
   views** of the app (the analyst memo stays inside *Analyse a stock*; its standalone tab had already been merged
   into it).
-* 16 October 2026 (later): **fundamentals back in the score** (60/40 long, 30/70 short) and the backtest's fundamental
-  gate restored, from SEC EDGAR only (the memo's point-in-time numbers; 10 beacons). The 20-stock sample is back to its
-  pre-simplification numbers (Sharpe 0.470, CAGR 7.3%, 9 of 20 ahead of buy-and-hold); the cohort runs and the §8d
-  timing test were on the price-only rule and were not re-run (live data, about an hour). The deployed app needs the
-  `LIGHTHOUSE_SEC_EMAIL` secret, or every live score is technical-only.
 
 ## Running the research again (a fresh container re-downloads everything)
 
