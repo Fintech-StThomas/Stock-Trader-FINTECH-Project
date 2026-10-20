@@ -25,15 +25,10 @@ RISK_PRESETS: Dict[str, Dict[str, float]] = {
     "aggressive":   {"max_position_pct": 35.0, "target_vol": 0.25, "stop_atr_multiple": 2.0},
 }
 
-# Horizon presets: how the Lighthouse score blends fundamentals and technicals. Long-term investors are buying the
-# business (fundamentals dominate); short-term investors are trading price behaviour (technicals dominate). Restored
-# on 16 October 2026 at the user's request, after a day without fundamentals in the score (docs/METHODOLOGY.md §2).
-HORIZON_WEIGHTS: Dict[str, Tuple[float, float]] = {
-    #          (fundamental, technical)
-    "long":  (0.60, 0.40),
-    "short": (0.30, 0.70),
-}
-HORIZONS: Tuple[str, ...] = tuple(HORIZON_WEIGHTS)
+# Horizons: the long one reviews monthly with a trend exit, the short one weekly with ATR stops and R targets. The
+# verdict is the rule's technical score in both; fundamentals are the analyst memo's (lighthouse.analyst), not a
+# weight in the rule: a fundamental gate cost return in every test (docs/METHODOLOGY.md section 8).
+HORIZONS: Tuple[str, ...] = ("long", "short")
 
 # Stops: a long-term investor needs room for normal pull-backs, so the ATR stop multiple
 # from the risk preset is scaled up for the long horizon.
@@ -114,14 +109,6 @@ class InvestorProfile:
         return self.account_value * self.max_loss_pct / 100.0
 
     @property
-    def fundamental_weight(self) -> float:
-        return HORIZON_WEIGHTS[self.horizon][0]
-
-    @property
-    def technical_weight(self) -> float:
-        return HORIZON_WEIGHTS[self.horizon][1]
-
-    @property
     def technical_weights(self) -> Dict[str, float]:
         return TECHNICAL_WEIGHTS[self.horizon]
 
@@ -198,8 +185,6 @@ class StrategyParams:
     bear_entry_penalty: float = 10.0        # extra points required to enter in a bear market
     bear_size_multiplier: float = 0.5       # position scaling in a bear market
     block_entries_in_bear_turbulent: bool = True
-    fundamental_gate_min: float = 35.0      # point-in-time fundamental score below this blocks new entries
-    reporting_lag_days: int = 90            # an undated statement becomes usable this long after its period end
     # --- regime ------------------------------------------------------------------
     regime_sma: int = 200
     regime_vol_window: int = 21

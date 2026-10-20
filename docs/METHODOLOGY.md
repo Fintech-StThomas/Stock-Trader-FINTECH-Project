@@ -21,14 +21,13 @@ This document exists so that the team can defend every number in the product. It
 | Risk-free rate | The 3-month Treasury bill (FRED `DTB3`, secondary market, daily) from FRED's public CSV endpoint (no API key), cached like prices; a day without a value takes the last published one. Used for the Sharpe and Sortino ratios of every backtest and walk-forward test on current prices; the portfolio builder's rate input defaults to the latest value. Offline and on the sample pack: a fixed 2% | T-bills paid ~0% in 2020-21 and ~4-5% in 2023-26: a fixed 2% overstated Sharpe ratios in high-rate years and understated them near zero. Over the ten years to October 2026 it averaged 2.4%, so live Sharpe ratios fall by ~0.02-0.03 (MSFT's rule 0.74 → 0.71). Uninvested cash in the backtests earns the same rate (§6) |
 | Order price | "Buy now" tickets and the position plan are priced from the feed's latest quote with its timestamp and market state (Yahoo chart metadata: `regularMarketPrice`, `regularMarketTime`, trading periods); the last close when there is none, when it is older than the data, or when it is more than 25% from the close (a split or a bad tick) | The decision is made on finished sessions, the order on the price you can trade at. Yahoo quotes can lag by up to 15 minutes on some exchanges |
 
-## 2. Fundamental beacons
+## 2. Fundamental beacons (the analyst memo)
 
-The beacons are computed on the SEC filings as filed, the same point-in-time numbers as the analyst memo
-(`analyst.financials_as_of` → `analyst.memo.fundamental_snapshot`), against the sector norms below; the memo also
-scores them against the medians of industry peers when it finds peers. The snapshot has no forward P/E and no PEG (free
-data has no consensus estimates) and leaves out earnings stability (EDGAR's annual EPS is as reported, so a split would
-read as a collapse): those three drop out and the weights re-normalise, so 10 of the 13 beacons vote. A ticker without
-SEC filings (an ETF, a foreign issuer, no SEC contact e-mail) gets a technical-only score, with a warning.
+Since October 2026 these beacons are computed only in the analyst memo, on the memo's point-in-time numbers
+(`analyst.memo.fundamental_snapshot`), against the medians of the industry peers when the memo finds peers and against
+the sector norms below otherwise. They are not part of the Lighthouse score. The memo's snapshot has no forward P/E and
+no PEG (free data has no consensus estimates) and leaves out earnings stability (EDGAR's annual EPS is as reported, so a
+split would read as a collapse): those three drop out and the weights re-normalise.
 
 Each beacon votes in [−1, +1]. Group score = mean of available beacons; fundamental score = 50 + 50 × (0.40 valuation + 0.35 quality + 0.25 growth), re-normalised when a group is empty.
 
@@ -50,13 +49,13 @@ Each beacon votes in [−1, +1]. Group score = mean of available beacons; fundam
 
 Sector norms (`SECTOR_NORMS`) are approximate long-run medians for the 11 GICS sectors and are explicitly assumptions the user can edit. Growth uses annual statements first (stable) and Yahoo's quarterly year-on-year figures as a fallback.
 
-**In the score, and in the backtest's gate.** The Lighthouse score is 0.60·F + 0.40·T (long horizon) or 0.30·F +
-0.70·T (short) minus the weather penalty, and the backtest enters only when the point-in-time fundamental score (each
-annual statement usable from the session after its SEC filing; `fundamentals.point_in_time_scores`) is at least 35, or
-unknown. The evidence does not favour them: the gate costs a little return on the 20 sample stocks (Sharpe 0.483
-without it, 0.470 with it, §8), and on the point-in-time S&P 500 neither the fundamental score nor any fundamental
-signal survived the research hold-out (§8b). The user took them out of the score on 15 October 2026 and put them back
-on 16 October 2026: a verdict on a business should look at the business, and both sets of numbers are published.
+**Why they left the score.** Until October 2026 the score was 0.60·F + 0.40·T (long horizon) or 0.30·F + 0.70·T
+(short) minus the weather penalty, and the backtest entered only when the point-in-time fundamental score (each annual
+statement usable from the session after its SEC filing) was at least 35. Once real filing-dated fundamentals fed it,
+the gate cost return on the 20 sample stocks (Sharpe 0.401 → 0.383, §8), and on the point-in-time S&P 500 neither the
+fundamental score nor any fundamental signal survived the research hold-out (§8b). The user chose to make the verdict
+the rule's alone (15 October 2026): the score is exactly what the backtests test, and the fundamentals inform the
+investor in the memo, next to the verdict.
 
 ## 3. Technical beacons
 
@@ -129,7 +128,7 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 ## 5. Decision and position plan
 
-* Lighthouse score = 0.60·F + 0.40·T (long) or 0.30·F + 0.70·T (short) − weather penalty. Missing fundamentals → technical only, with a warning (§2; price-only from 15 to 16 October 2026).
+* Lighthouse score = technical score − weather penalty (until October 2026 a blend with the fundamental score, §2).
 * Verdict bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell. Bands are symmetric around 50 with a wider Hold zone so small changes do not flip the verdict.
 * Exit level: long horizon = 200-day SMA × (1 − 8%); short horizon = 2.5× ATR(14) trailing (2.0 aggressive, 3.0 conservative). The live plan and the backtest use the same exit, so what the user sees is what was tested.
 * The investor gives **cash available to invest now** and the value of stocks already held. Risk limits (max loss, concentration
@@ -145,7 +144,7 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 * Long-only, one stock, capital = the "sleeve" allocated to it.
 * Review day: last trading day of the month (long) or week (short). Daily reviews were tested and rejected (more trades, lower Sharpe).
-* Enter when trend beacon > 0, technical score ≥ 60 (+10 in a bear market), not Bear/Turbulent, point-in-time fundamental score ≥ 35 if known (§2).
+* Enter when trend beacon > 0, technical score ≥ 60 (+10 in a bear market), not Bear/Turbulent (until October 2026 also a point-in-time fundamental score ≥ 35 when known, §2).
 * Exit when score ≤ 35 (long) / 40 (short), close < 200-SMA × 0.92 (long) / 0.97 (short), or the ATR stop (short, checked daily).
 * Size: volatility target / 60-day realised vol × regime multiplier, re-balanced on review days when the target moves by more than 10 points.
 * Fills at the next day's open (close when no open data). Costs per side (`cost_model = "liquidity"`, `lighthouse/costs.py`):
@@ -175,7 +174,7 @@ Reasoning: the 200-day rule is the simplest widely studied market-timing filter 
 
 ## 8. Results and interpretation
 
-See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced (with the fundamental gate) CAGR 7.3%, vol 12.2%, Sharpe 0.47, max DD −27%; conservative vol 8.5%, max DD −18%; the balanced rule's average exposure (43%) held without trading 8.0%, Sharpe 0.50, −33%; the plain 200-day trend rule 9.3%, Sharpe 0.41, −59%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe than buy-and-hold in 9/20, than the same exposure in 9/20, than the trend rule in 14/20. Without the gate (the price-only rule of 15-16 October 2026): 7.6%, 12.6%, 0.48, −28%; Sharpe better on 11 stocks, worse on 4.
+See `reports/examples/cross_ticker_evaluation.csv` (20 stocks, 1990-2022). Rebuilt by `scripts/cross_ticker_evaluation.py`. Averages: buy-and-hold CAGR 13.3%, vol 33.5%, Sharpe 0.50, max DD −69%; Lighthouse balanced (price-only rule, since October 2026) CAGR 7.6%, vol 12.6%, Sharpe 0.48, max DD −28%; conservative vol 8.8%, max DD −19%; the balanced rule's average exposure (46%) held without trading 8.2%, Sharpe 0.50, −35%; the plain 200-day trend rule 9.3%, Sharpe 0.41, −59%. Lower drawdown and volatility in 20/20 stocks; higher Sharpe than buy-and-hold in 8/20, than the same exposure in 8/20, than the trend rule in 16/20.
 
 What changed the published numbers this session, one step at a time (20 sample stocks, balanced, averages):
 
@@ -186,8 +185,7 @@ What changed the published numbers this session, one step at a time (20 sample s
 | + uninvested cash earns the risk-free rate (2% offline) | 7.4% | 0.476 | −27% | 9 |
 | + stops as resting orders (71 stop-order exits) | 7.3% | 0.471 | −27% | 9 |
 | + liquidity-scaled costs | 7.3% | 0.470 | −27% | 9 |
-| Fundamental gate removed: the price-only rule (15 October 2026) | 7.6% | 0.483 | −28% | 8 |
-| Fundamental gate and blend restored, the user's decision (16 October 2026, now) | 7.3% | 0.470 | −27% | 9 |
+| Fundamental gate removed: the price-only rule (October 2026, now) | 7.6% | 0.483 | −28% | 8 |
 
 The largest change is the cash: the rule spends much of its time partly or wholly in cash, which used to earn nothing
 while the Sharpe ratio subtracted 2% a year for it. Liquidity costs barely move these numbers because 19 of the 20
@@ -204,8 +202,7 @@ the cross-sectional harness (§8b), not for this gate. The gate was removed in O
 S&P 500 member on DATE, from DATE until today or until its prices stop, with live Yahoo prices, the S&P 500 regime,
 the FRED T-bill for Sharpe ratios and for uninvested cash, resting stop orders and liquidity-scaled costs
 (`reports/examples/cross_ticker_sp500_<DATE>.csv`, `_summary.csv` and `_timing_test.csv`; re-run 15 October 2026 with
-the price-only rule, data to 14 October 2026; not re-run since the fundamental gate came back on 16 October: with the
-gate the 14 October runs had average Sharpe ratios of 0.24 and 0.30). Medians per stock, `exclude` rule:
+the price-only rule, data to 14 October 2026). Medians per stock, `exclude` rule:
 
 | Cohort | Members | With prices (coverage) | Buy & hold: CAGR / Sharpe / max DD | Lighthouse balanced: CAGR / Sharpe / max DD | Same exposure, never traded | Plain 200-day trend rule | Beat buy & hold (Sharpe / CAGR) | Lower drawdown than buy & hold |
 |---|---|---|---|---|---|---|---|---|
@@ -557,8 +554,7 @@ as well on Sharpe (median 0.27 against the rule's 0.28 in 1996, 0.32 against 0.3
 invested in full (median CAGR 5.8% and 6.1% against 5.2% and 5.1%) and much deeper drawdowns (−55% and −49% against
 −30% and −29%). Whether to simplify the rule to it was put to the user, who decided on 16 October 2026 to **keep the
 current rule**: it is not worse than the trend rule, and its six beacons are what explains each verdict. Nothing in
-the product changed then; on 16 October 2026 the user put the fundamentals back into the score and the gate (§2), so
-the rule tested here (price-only) differs from today's by the gate; the test has not been run again.
+the product changed.
 
 *Robustness (not part of the pre-registered rule).* Some members' Yahoo series start long after the cohort date, most
 of them recycled tickers that belong to another company (ETS, MST, UK, STI, OM, GP in 1996; SNDK, STI in 2009). Leaving
@@ -817,8 +813,7 @@ the evidence each change rests on:
 
 | Change | Why |
 |---|---|
-| The verdict read prices only: score = technical score − weather; the fundamental gate left the backtest (reversed on 16 October 2026, next row) | No fundamental signal survived §8b and the gate cost return (§2, §8). The fundamentals moved to the analyst memo |
-| 16 October 2026, the user's decision: the fundamentals are back in the score (60/40 long, 30/70 short) and in the backtest's gate, from the SEC filings only (the memo's numbers) | "A verdict on a business should look at the business." The 20-stock sample is back to its pre-simplification numbers exactly (Sharpe 0.470, 9 of 20 ahead of buy-and-hold); the app shows the fundamental score card and the fundamental bars beside the technical ones |
+| The verdict reads prices only: score = technical score − weather; the fundamental gate left the backtest | No fundamental signal survived §8b and the gate cost return (§2, §8). The fundamentals moved to the analyst memo, which the app builds with every analysis and shows beside the verdict, never in it |
 | Short tickets removed | They lost on the 2009 cohort under both exit plans, and no backtest covered them (§9) |
 | Portfolio methods: equal weight, risk parity, minimum variance (inverse volatility, maximum Sharpe and HRP removed) | Maximum Sharpe never beat 1/N in the walk-forward tests; estimation error eats the gain (§10) |
 | Yahoo's fundamentals snapshot removed; SEC EDGAR is the only fundamentals source | Undated figures next to filing-dated ones (§1) |
@@ -874,4 +869,4 @@ for 8 stocks), and a cold live scan, which is bound by Yahoo's response time (fu
 * **Different market conditions?** The regime table shows the rule loses roughly half as much as buy-and-hold in Bear/Turbulent markets and keeps 60-65% exposure in Bull/Calm markets.
 * **Sensitivity?** Sharpe across 25 threshold pairs on Microsoft ranged 0.08-0.20 (median 0.16, default 0.18); the biggest sensitivity is the review frequency and the stop design, which is why both are documented above.
 * **Biggest weaknesses?** The timing has no demonstrated edge (§8d); whipsaw losses in long sideways markets; the memo's sector norms and DCF inputs are assumptions; fundamentals only from 2009; survivorship in the free price data; no tax modelling.
-* **What did GenAI contribute?** Code scaffolding, indicator implementations and the experiment harness. The team decided the customer, the signals, the weights, the exit design, what to reject (shorts, estimation-heavy portfolios), what to pre-register, and how to present results honestly.
+* **What did GenAI contribute?** Code scaffolding, indicator implementations and the experiment harness. The team decided the customer, the signals, the weights, the exit design, what to reject (fundamentals in the score, shorts, estimation-heavy portfolios), what to pre-register, and how to present results honestly.

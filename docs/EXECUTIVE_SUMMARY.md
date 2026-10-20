@@ -29,9 +29,8 @@ cash they can invest now and, optionally, the value of the stocks they already h
 3. **Market weather** — the S&P 500 is classified Bull/Bear (above/below its 200-day average) and Calm/Turbulent
    (realised volatility vs. its one-year norm). Bear markets cost points and halve new positions; Bear/Turbulent
    blocks new entries.
-4. **The decision** — Composite = 60% fundamental + 40% technical for long-term investors (30/70 for short-term),
-   minus the weather penalty, mapped to **Strong Buy / Buy / Hold / Reduce / Sell**; the fundamental score comes from
-   ten beacons on the SEC filings against sector norms. The position plan takes the *smallest* size allowed by three independent rules — the investor's max-loss
+4. **The decision** — the technical score minus the weather penalty, mapped to **Strong Buy / Buy / Hold / Reduce /
+   Sell**. The position plan takes the *smallest* size allowed by three independent rules — the investor's max-loss
    limit, a volatility target and a concentration cap — scales it by conviction and pays it from the cash available.
    It states the shares to buy, the exit level and the worst-case dollar loss.
 5. **Trade ticket** — limit entry, stop-loss and the exits (long-term buys ride the trend until a month-end close
@@ -43,7 +42,7 @@ cash they can invest now and, optionally, the value of the stocks they already h
    model, bull / base / bear DCFs and the growth the price implies, the stock's own valuation bands, fundamental
    beacons against industry peers or sector norms, earnings-quality and balance-sheet checks, industry metrics (banks,
    REITs, software, insurers), business segments, a catalyst calendar, the variant view, and a thesis whose kill
-   criteria are checked on every new filing. Its stance sits next to the verdict and does not change the score.
+   criteria are checked on every new filing. It sits next to the verdict and never changes it.
 7. **Honest evidence** — a point-in-time backtest of the trading rule against buy-and-hold, the S&P 500 and two
    yardsticks for timing (the rule's own average exposure held without trading, and a plain 200-day trend rule), with
    layer attribution, a threshold-sensitivity grid, an out-of-sample test and a breakdown by market regime.
@@ -56,17 +55,17 @@ non-programmer changes nothing but the inputs cell.
 
 ## Investment thesis and decision process
 
-**We buy quality businesses when the market agrees with us.** Fundamentals decide *what* deserves capital
-(profitable, reasonably valued, growing companies); technicals decide *when* (price above its 200-day trend, momentum
-confirming, not blocked by a hostile market). Risk management decides *how much*: no single idea may cost more than
-the investor's stated maximum loss. The memo sets the price against the business: what it is worth on
+**The rule decides when and how much; the memo explains what you would own.** Lighthouse buys a stock when its trend
+is up and momentum confirms, and the market is not hostile; it sizes the position so that no single idea can cost
+more than the investor's stated maximum loss. The memo sets the price against the business: what it is worth on
 three explicit scenarios, what growth the price already assumes, and the measurable facts that would prove a thesis
 wrong.
 
-What the evidence says about the fundamentals, honestly: on the point-in-time S&P 500, 2009-2026, no fundamental,
-quality, earnings, short-interest or text signal survived a hold-out tested once (`docs/METHODOLOGY.md` §8b), and the
-backtest's fundamental gate costs a little return on the sample stocks (Sharpe 0.470 with it, 0.483 without). We keep
-them in the score because a verdict on a business should look at the business; the numbers are published either way.
+Why the verdict reads prices only: we tested whether fundamentals help rank stocks. On the point-in-time S&P 500,
+2009-2026, no fundamental, quality, earnings, short-interest or text signal survived a hold-out tested once
+(`docs/METHODOLOGY.md` §8b), and a fundamental gate in the trading rule cost return on the sample stocks. So the
+fundamentals inform the investor in the memo and stay out of the score, and the score is exactly what the backtests
+test.
 
 The trading rule is deliberately slow for long-term investors: reviewed **monthly**, enter when the trend is up and
 the technical score is at least 60, exit when the score falls to 35 or the price closes 8% below its 200-day average.
@@ -75,8 +74,8 @@ Short-term investors get a weekly review and an ATR trailing stop.
 ## Key results (what we found, honestly)
 
 Example: Microsoft, long-term balanced investor, $25,000 of cash, 2% max loss (offline sample, as of November 2017):
-**Strong Buy, score 72** (fundamental 65, technical 83, market Bull/Calm). Plan: 20 shares ≈ $1,677 (6.8% of the
-account), exit level $64.73, worst case $383 — the max-loss rule limited the size because the exit sits 23% below the price. The memo,
+**Strong Buy, score 83** (technical 83, market Bull/Calm). Plan: 26 shares ≈ $2,181 (8.8% of the account), exit level
+$64.73, worst case $498 — the max-loss rule limited the size because the exit sits 23% below the price. The memo,
 from the filings public that day, says **hold**: a probability-weighted value of $77.88 (−7%), and the price implies
 7.8% revenue growth a year for five years, close to the company's own trend.
 
@@ -87,20 +86,19 @@ resting orders, next-day fills, uninvested cash earning 2%; `reports/examples/cr
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
 | Lighthouse signals + regime, fully invested when in | 10.9% | — | 0.47 | −55% |
-| **Lighthouse, balanced profile (vol-targeted)** | 7.3% | 12.2% | 0.47 | **−27%** |
-| Lighthouse, conservative profile | 5.8% | 8.5% | 0.47 | −18% |
-| The balanced rule's average exposure (43%), never traded | 8.0% | 13.0% | 0.50 | −33% |
+| **Lighthouse, balanced profile (vol-targeted)** | 7.6% | 12.6% | 0.48 | **−28%** |
+| Lighthouse, conservative profile | 6.0% | 8.8% | 0.48 | −19% |
+| The balanced rule's average exposure (46%), never traded | 8.2% | 13.8% | 0.50 | −35% |
 | Plain 200-day trend rule | 9.3% | — | 0.41 | −59% |
 
 Lighthouse cut the maximum drawdown and the volatility of **every one of the 20 stocks** and kept the balanced
 profile's realised volatility below its 15% target. It did **not** beat buy-and-hold on raw return, and the
 honest yardstick shows why: holding the stock and cash in the rule's own average proportion, never trading, earned a
-little more (8.0% against 7.3% a year) with a deeper drawdown (−33% against −27%). The timing buys a smaller drawdown,
+little more (8.2% against 7.6% a year) with a deeper drawdown (−35% against −28%). The timing buys a smaller drawdown,
 not extra return. It does beat a
-plain 200-day trend rule on Sharpe on 14 of the 20 stocks.
+plain 200-day trend rule on Sharpe on 16 of the 20 stocks.
 
-Survivorship-aware tests are harsher (run on the price-only rule of 15 October, before the fundamental gate
-came back). On every S&P 500 member of 2 January 1996 (260 of 487 with free prices) the
+Survivorship-aware tests are harsher. On every S&P 500 member of 2 January 1996 (260 of 487 with free prices) the
 balanced rule's median Sharpe was 0.28 against buy-and-hold's 0.37; on the members of 2 January 2009 (331 of 498), 0.33
 against 0.48. A test we pre-registered (its rule committed before the run) asked whether the timing adds anything, and
 it does not: holding the rule's own average exposure without trading earned more on 73% (1996) and 88% (2009) of the
@@ -122,7 +120,7 @@ selection or timing (`docs/METHODOLOGY.md` §8-8d).
   liquidity, survivorship-aware cohorts, yardsticks that ask what the timing adds, a research hold-out evaluated once
   with the trial count behind every verdict, tests whose rule was written before the run, and a plain list of what
   we tried and rejected.
-* **Runs anywhere** — live data when online, bundled real data when offline; 292 automated tests.
+* **Runs anywhere** — live data when online, bundled real data when offline; 291 automated tests.
 
 ## Major limitations and risks
 

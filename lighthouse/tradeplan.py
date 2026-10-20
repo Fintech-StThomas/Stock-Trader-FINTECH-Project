@@ -750,13 +750,10 @@ def _has_real_ohlc(df: pd.DataFrame) -> bool:
 # --------------------------------------------------------------------------- #
 def _historical_conditions(result, side: str) -> np.ndarray:
     """Point-in-time version of `evaluate_setup` (actionable only) for every date."""
-    ind, p, prof = result.indicators, result.params, result.profile
+    ind, p = result.indicators, result.params
     _check_side(side)
     tech = result.technical_scores.reindex(ind.index).to_numpy(dtype=float)
     trend = beacon_scores(ind, p)["trend"].to_numpy(dtype=float)
-    pit = getattr(result, "pit_scores", None)
-    pit = pit.reindex(ind.index).to_numpy(dtype=float) if pit is not None else np.full(len(ind), np.nan)
-    blended = np.where(np.isfinite(pit), prof.fundamental_weight * pit + prof.technical_weight * tech, tech)
     if result.regimes is not None:
         rt = result.regimes.reindex(ind.index.union(result.regimes.index)).ffill().reindex(ind.index)
         known = rt["regime"].notna().to_numpy()
@@ -765,7 +762,7 @@ def _historical_conditions(result, side: str) -> np.ndarray:
     else:
         bear = turb = np.zeros(len(ind), dtype=bool)
     penalty = np.where(bear, p.bear_score_penalty, 0.0) + np.where(turb, p.turbulent_score_penalty, 0.0)
-    composite = np.clip(blended - penalty, 0.0, 100.0)
+    composite = np.clip(tech - penalty, 0.0, 100.0)
     with np.errstate(invalid="ignore"):
         cond = (composite >= 60.0) & (trend > 0) & ~(bear & turb)
     return cond & np.isfinite(tech) & np.isfinite(trend)

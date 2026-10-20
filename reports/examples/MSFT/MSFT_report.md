@@ -1,31 +1,14 @@
 # Lighthouse report: MSFT
 *Signals as of 2017-11-10 · price $83.87 (close) · investor: long-term, balanced risk, $25,000 cash to invest, max loss 2.0% of the account per position*
 
-## Verdict: **Strong Buy** — Lighthouse score 72 / 100
-Open or add to a position - the evidence lines up across fundamentals, technicals and the market backdrop.
+## Verdict: **Strong Buy** — Lighthouse score 83 / 100
+Open or add to a position - the trend, momentum and market backdrop line up.
 
 ### How the score is built
-- Fundamental score **65** × weight 60% = 38.8
-- Technical score **83** × weight 40% = 33.3
+- Technical score **83** (long-term weights of the six beacons below)
 - Market-weather adjustment: **0** (Bull / Calm)
-- **Lighthouse score = 72.2** → Strong Buy (bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)
-- The analyst memo (`python -m lighthouse memo` or the app's Analyse tab) goes further into the business: the DCF, peers, red flags and what would prove the thesis wrong.
-
-### Fundamental beacons (score 65)
-*Technology · data: SEC EDGAR XBRL, point in time (2017-11-10)*
-
-| signal | reading | light | vote | weight | points | why |
-|---|---|---|---|---|---|---|
-| Price / Earnings (trailing) | P/E 28.0 vs Technology ~28 | 🟡 | -0.00 | 13% | -0.0 | Trailing P/E of 28.0 is above the typical Technology multiple (~28): you pay more per dollar of earnings than for a typical peer. |
-| Price / Book | P/B 7.22 vs ~7.0 | 🟡 | -0.05 | 13% | -0.3 | Price-to-book of 7.22 is above the Technology norm; for asset-light companies this is a secondary check. |
-| EV / EBITDA | EV/EBITDA 23.6 vs ~20 | 🔴 | -0.36 | 13% | -2.4 | Enterprise value per dollar of operating cash earnings, which is capital-structure neutral, is above the sector norm. |
-| Return on equity | ROE 25.8% | 🟢 | +1.00 | 7% | +3.5 | Return on equity above 20% signals a business that compounds shareholder capital efficiently. |
-| Operating margin | op. margin 26.4% vs ~22.0% | 🟢 | +0.29 | 7% | +1.0 | Operating margin is above the Technology norm, which suggests pricing power or cost advantages. |
-| Debt / Equity | D/E 0.86 | 🟡 | +0.14 | 7% | +0.5 | Debt below equity: a balance sheet that can absorb a downturn. |
-| Free-cash-flow yield | FCF yield 5.0% | 🟢 | +0.66 | 7% | +2.3 | Free cash flow relative to market value: above 5% is a genuine cash return; below 1% means the price relies on future growth rather than cash generated today. |
-| Current ratio | current ratio 3.12 | 🟢 | +0.50 | 7% | +1.7 | Short-term assets cover short-term liabilities. |
-| Revenue growth (YoY) | revenue 10.1% | 🟢 | +0.34 | 12% | +2.1 | Double-digit revenue growth: demand for the product is expanding. |
-| EPS growth (YoY) | EPS 39.4% | 🟢 | +1.00 | 12% | +6.2 | Earnings per share are growing faster than the market's long-run ~8%. |
+- **Lighthouse score = 83.3** → Strong Buy (bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)
+- The verdict is the trading rule's, from prices: the business itself (valuation, quality, the DCF, peers, red flags) is the analyst memo's view (`python -m lighthouse memo` or the app's Analyse tab).
 
 ### Technical beacons (score 83)
 | signal | reading | light | vote | weight | points | why |
@@ -41,13 +24,13 @@ Open or add to a position - the evidence lines up across fundamentals, technical
 Market weather is Bull / Calm: the S&P 500 is above its 200-day average (up-trend) and realised volatility (5%) is near or below its one-year norm (7%).
 
 ### Position plan
-- Buy **20 shares** near $83.87 = **$1,677** of your $25,000 cash (6.8% of the $25,000 account); $23,323 stays in cash.
-- Exit level **$64.73** (22.8% below): worst case ≈ $383 (1.53% of the account, limit 2%) if the stop fills at its price; an overnight gap through the stop can lose more.
+- Buy **26 shares** near $83.87 = **$2,181** of your $25,000 cash (8.8% of the $25,000 account); $22,819 stays in cash.
+- Exit level **$64.73** (22.8% below): worst case ≈ $498 (1.99% of the account, limit 2%) if the stop fills at its price; an overnight gap through the stop can lose more.
 - Size was limited by the **max-loss rule**.
   - Exit level 22.8% below the current price at $64.73 (200-day SMA minus 8% buffer).
   - Max-loss rule: losing 2% of the account ($500) at the stop caps the position at 8.8% of the account.
   - Volatility rule: 16% realised vol vs a 15% target caps the position at 93.9% of the account.
-  - Scaled by conviction 0.78 (score 72) and market-regime multiplier 1.
+  - Scaled by conviction 1.00 (score 83) and market-regime multiplier 1.
 
 ### How this rule behaved in the past (2007-08-30 → 2017-11-10)
 Long-only, reviewed monthly at the close, filled at the next open; costs: commission + Corwin-Schultz half spread (floor 5 bps) + square-root impact; stops: resting orders (gaps fill at the open); cash earns the risk-free rate. Returns are for the capital allocated to this stock. Sharpe and Sortino use a fixed 2% a year (no T-bill series: offline or sample data).
@@ -67,7 +50,6 @@ Long-only, reviewed monthly at the close, filled at the next open; costs: commis
 |---|---|---|---|---|---|---|---|
 | Technical signals only (fully invested) | 5.9% | 19.6% | 0.29 | -35.9% | 6 | 50.0% | 73.9% |
 | + market regime filter | 5.9% | 19.6% | 0.29 | -35.9% | 6 | 50.0% | 73.9% |
-| + fundamental gate (point-in-time) | 5.9% | 19.6% | 0.29 | -35.9% | 6 | 50.0% | 73.9% |
 | + volatility-targeted sizing (full Lighthouse) | 2.0% | 11.8% | 0.06 | -32.7% | 8 | 37.5% | 45.1% |
 | Same exposure, never traded | 7.9% | 12.6% | 0.51 | -29.7% | n/a | n/a | 45.1% |
 | Plain 200-day trend rule | 7.2% | 18.9% | 0.36 | -40.1% | 11 | 36.4% | 66.6% |
@@ -98,8 +80,7 @@ Long-only, reviewed monthly at the close, filled at the next open; costs: commis
 - Prices: sample; 2,821 trading days 2006-08-30 → 2017-11-10.
 
 ### Limitations you should know
-- Sector norms are long-run approximations, not live peer data; a cheap stock in an expensive sector can still be expensive. The backtest's fundamental gate uses SEC filings as first reported, from the day after each was filed.
-- On the point-in-time S&P 500 neither the technical nor the fundamental scores ranked stocks usefully (docs/METHODOLOGY.md section 8b): it is a risk-control rule, not a stock picker.
+- The rule uses prices only; on the point-in-time S&P 500 no technical beacon ranked stocks usefully (docs/METHODOLOGY.md section 8b): it is a risk-control rule, not a stock picker.
 - The backtest is long-only; costs are estimated from the stock's own spread and volume, stops rest as orders (an overnight gap fills at the open), and it ignores taxes. Run `python -m lighthouse memo` for the analyst view.
 - Past behaviour of a rule is evidence about its *design*, not a promise about its future returns.
 - Lighthouse is a decision-support tool, not investment advice.

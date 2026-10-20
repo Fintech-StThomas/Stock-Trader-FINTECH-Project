@@ -4,12 +4,11 @@ Lighthouse answers four questions for **you** specifically: *should I buy this s
 cash I have, where would I be wrong (and where do I take profit), and what does the business behind the stock look like
 in its own filings?* It also splits money across several stocks.
 
-Two parts work side by side. **The verdict** (the score, the position plan and the trade ticket) blends the company's
-fundamentals from its SEC filings (valuation, quality, growth) with its technicals (trend, momentum, price bands,
-volume) by your horizon, and adjusts for the market's weather; it is what the backtests test. **The analyst memo** goes
-further into the same filings: a DCF, peers, earnings quality, the balance sheet and what would prove the thesis
-wrong. Its stance sits next to the verdict and does not change the score. (No fundamental signal survived the research
-hold-out on the point-in-time S&P 500, `docs/METHODOLOGY.md` §8b; the user chose to keep fundamentals in the score.)
+Two parts work side by side. **The rule** (the verdict, the position plan and the trade ticket) reads prices only: the
+trend, momentum, price bands, volume and the market's weather. It is the part the backtests test. **The analyst memo**
+reads the company's SEC filings as they were filed: valuation, peers, earnings quality, the balance sheet and what
+would prove the thesis wrong. It sits next to the verdict and never changes it, because none of the fundamental
+signals Lighthouse tested on the point-in-time S&P 500 survived its hold-out (`docs/METHODOLOGY.md` §8b).
 
 ## Three ways to run it
 
@@ -43,8 +42,8 @@ $500 at its stop, but it can never cost more than the $5,000 of cash.
 
 ## Analyse a stock
 
-The headline shows the verdict and five cards: the **Lighthouse score** (0-100: ≥72 Strong Buy · ≥60 Buy · ≥45 Hold ·
-≥32 Reduce · <32 Sell), the **fundamental** and **technical scores** it blends, the **market weather** (Bull/Bear × Calm/Turbulent for
+The headline shows the verdict and four cards: the **Lighthouse score** (0-100: ≥72 Strong Buy · ≥60 Buy · ≥45 Hold ·
+≥32 Reduce · <32 Sell), the **technical score** it comes from, the **market weather** (Bull/Bear × Calm/Turbulent for
 the S&P 500, and the points it removed) and the **analyst memo's stance** (buy / hold / avoid, with its weighted value
 against the price; not part of the score). The price line under the name says where the order price comes from: the
 signals use *finished* sessions only, and "buy now" orders are priced from the latest quote and its time, or the last
@@ -52,7 +51,7 @@ close when there is none (offline, or the time machine). Warnings say what to kn
 
 Five sub-tabs:
 
-* **Plan & ticket**: how the score is built (fundamental × weight + technical × weight − market weather), the **position plan** (how many shares
+* **Plan & ticket**: how the score is built (technical score − market weather), the **position plan** (how many shares
   to buy with your cash, the exit level, the worst-case loss and *which rule limited the size*: max loss, volatility
   target, concentration cap or your cash), a *what-if* sizer, and the **trade ticket** (below). Hold means keep what you
   own; Reduce means trim about half; Sell means exit.
@@ -64,7 +63,7 @@ Five sub-tabs:
   To follow a thesis, save it from the command line (`python -m lighthouse memo TICKER --open-thesis`); `python -m
   lighthouse thesis check` tests those criteria against each new 10-Q or 10-K. An ETF, a fund or a company that does
   not file with the SEC has no memo, and the tab says so.
-* **Beacons & charts**: the fundamental (F) and technical (T) beacons as one bar chart and two tables, each with its reading, light (🟢 bullish, 🟡 neutral, 🔴 bearish, ⚪
+* **Technicals**: the six technical beacons with their reading, light (🟢 bullish, 🟡 neutral, 🔴 bearish, ⚪
   unavailable), vote (−1…+1), weight and points; and the price chart: close, 50/200-day averages and **price bands**
   that follow the price (a trend filter ± 2 standard deviations of the closes around it over 20 sessions, about 1
   session behind the price instead of the ~10 of classic Bollinger Bands; past prices only), volume, RSI and MACD, with
@@ -226,7 +225,8 @@ how many months a convincing result would take). The scheduled workflow
 ## Changing the rules without programming
 
 All settings are in `lighthouse/config.py`: risk presets, beacon weights, verdict bands and the `StrategyParams`
-dataclass (indicator windows, thresholds, review frequency, costs). The sector norms the fundamental beacons use are in `lighthouse/fundamentals.py` (`SECTOR_NORMS`). Trade-management defaults are in `TradeSettings`
+dataclass (indicator windows, thresholds, review frequency, costs). The sector norms the memo's fundamental beacons use
+without peers are in `lighthouse/fundamentals.py` (`SECTOR_NORMS`). Trade-management defaults are in `TradeSettings`
 (`lighthouse/tradeplan.py`), goal presets in `GOALS` (`lighthouse/portfolio.py`) and the large-cap universe with sector
 labels in `lighthouse/universe.py`. The CLI accepts one-off overrides: `--params '{"entry_score": 65}'`.
 
