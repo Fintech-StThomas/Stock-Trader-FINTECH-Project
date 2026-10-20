@@ -23,10 +23,11 @@ the [analyst memo](reports/examples/MSFT/MSFT_memo.md) and the
    bands (%B around a trend filter, ~1 session of lag), volume confirmation (OBV), 52-week-high proximity.
 3. **Market weather** — Bull/Bear × Calm/Turbulent regime of the S&P 500 that removes points, raises the entry bar and
    halves sizes in bear markets.
-4. **Decision** — technical score − market weather → verdict → position size from the *smallest* of three rules (your
-   max-loss limit, a volatility target, a concentration cap), paid from the **cash you have available** (risk limits are
-   a % of your whole account). The rule reads prices only: every fundamental and alternative signal tested on the
-   point-in-time S&P 500 failed its hold-out, so none carries weight.
+4. **Decision** — the fundamental score (10 beacons from the SEC filings, against sector norms) and the technical
+   score blended by horizon (long 60 / 40, short 30 / 70), minus market weather → verdict → position size from the
+   *smallest* of three rules (your max-loss limit, a volatility target, a concentration cap), paid from the **cash you
+   have available** (risk limits are a % of your whole account). The backtest also skips entries while the
+   point-in-time fundamental score is below 35. No research signal was added: none survived its hold-out.
 5. **Trade tickets** — limit entry, stop-loss and the exits (long-term buys: the backtest's month-end trend and signal
    exits, no fixed target; short-term trades: two take-profit levels in multiples of the risk (R), breakeven and
    trailing stops, a time stop), a cap on total open risk, and the record of those exact rules on each stock's own
@@ -59,13 +60,13 @@ python -m lighthouse trade MSFT AAPL JNJ XOM --cash 5000                    # wh
 python -m lighthouse memo MSFT                                              # the analyst memo alone
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 291 tests, runs offline
+python -m pytest                # 292 tests, runs offline
 ```
 
 ```python
 from lighthouse import analyze, InvestorProfile
 r = analyze("MSFT", InvestorProfile.from_cash(5_000, holdings_value=20_000, horizon="long", risk="balanced", max_loss_pct=2))
-print(r.decision.headline())     # e.g. MSFT: STRONG BUY (Lighthouse score 83/100) for a long-term, balanced investor
+print(r.decision.headline())     # e.g. MSFT: STRONG BUY (Lighthouse score 72/100) for a long-term, balanced investor
 print(r.report())                # the full plain-English report
 r.backtest.summary()             # the rule vs the same exposure never traded vs buy & hold vs the S&P 500
 
@@ -93,7 +94,7 @@ EDGAR in `LIGHTHOUSE_SEC_EMAIL` (sent to sec.gov only).
 
 | Tab | What you can do |
 |---|---|
-| **Analyse a stock** | the verdict dial and four cards (Lighthouse score, technical score, market weather, the memo's stance), then five sub-tabs: **plan & ticket** (how the score is built, a position plan sized from your cash with a *what-if* sizer, the trade ticket with its *when to get out* table and the rules' record on this stock), **analyst memo** (the fundamental case from the SEC filings), **technicals** (the six beacons, a price / volume / RSI / MACD chart with low-lag price bands and the backtested entries and exits), **backtest** (against the same exposure never traded, buy & hold and the S&P 500; deep evaluation with layers, the plain trend rule, sensitivity heatmap and walk-forward) and **data** (sources, cleaning notes, every indicator row, downloads) |
+| **Analyse a stock** | the verdict dial and five cards (Lighthouse score, fundamental score, technical score, market weather, the memo's stance), then five sub-tabs: **plan & ticket** (how the score is built, a position plan sized from your cash with a *what-if* sizer, the trade ticket with its *when to get out* table and the rules' record on this stock), **analyst memo** (the fundamental case from the SEC filings), **beacons & charts** (the 10 fundamental and 6 technical beacons as bars and tables, a price / volume / RSI / MACD chart with low-lag price bands and the backtested entries and exits), **backtest** (against the same exposure never traded, buy & hold and the S&P 500; deep evaluation with layers, the plain trend rule, sensitivity heatmap and walk-forward) and **data** (sources, cleaning notes, every indicator row, downloads) |
 | **Find trades** | pick a pre-built universe (a sideways-scrolling row: mega caps, dividend & defensive, each sector, semiconductors, sector and index ETFs, all large caps) or type your own; the scan ranks every ticker (select a row to jump to its full analysis) and funds the best setups from your cash, one ticket each, within a total-risk cap |
 | **Portfolio** | allocate your own basket with three methods, or let Lighthouse build one for a goal; whole-share orders, risk report (volatility, VaR, expected shortfall, beta, risk contributions, correlations, stress tests) and a walk-forward test of every method |
 | **How it works** | the method, verdict bands, risk presets, what the research found and the full user guide |
@@ -128,17 +129,19 @@ next-day fills, cash at 2% (`reports/examples/cross_ticker_evaluation.csv`, rebu
 |---|---|---|---|---|
 | Buy & hold | 13.3% | 33.5% | 0.50 | −69% |
 | Lighthouse signals + regime (fully invested when in) | 10.9% | — | 0.47 | −55% |
-| **Lighthouse balanced (vol-targeted)** | 7.6% | 12.6% | 0.48 | **−28%** |
-| Lighthouse conservative | 6.0% | 8.8% | 0.48 | −19% |
-| Same exposure as balanced, never traded (46% in the stock) | 8.2% | 13.8% | 0.50 | −35% |
+| **Lighthouse balanced (vol-targeted)** | 7.3% | 12.2% | 0.47 | **−27%** |
+| Lighthouse conservative | 5.8% | 8.5% | 0.47 | −18% |
+| Same exposure as balanced, never traded (43% in the stock) | 8.0% | 13.0% | 0.50 | −33% |
 | Plain 200-day trend rule (fully invested above the SMA) | 9.3% | — | 0.41 | −59% |
 
-Lower drawdown and volatility than buy-and-hold in **20 of 20** stocks; a higher Sharpe ratio than buy-and-hold in 8
-of 20, than the same exposure without timing in 8 of 20, than the plain trend rule in 16 of 20. Those 20 stocks are
+Lower drawdown and volatility than buy-and-hold in **20 of 20** stocks; a higher Sharpe ratio than buy-and-hold in 9
+of 20, than the same exposure without timing in 9 of 20, than the plain trend rule in 14 of 20. (Without the
+fundamental gate, the price-only rule of 15-16 October: 7.6%, Sharpe 0.48, −28%.) Those 20 stocks are
 today's survivors, which flatters every rule.
 
 On **every S&P 500 member at a past date**, followed until today or until its prices stop
-(`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, historical membership; medians per stock):
+(`scripts/cross_ticker_evaluation.py --cohort DATE`, live data, historical membership; medians per stock; run on the
+price-only rule of 15 October, before the fundamental gate came back):
 
 | Cohort (members with prices / all) | Buy & hold Sharpe | Lighthouse balanced Sharpe | Same exposure, never traded | Plain 200-day trend rule | Beats buy & hold (Sharpe) | Equal-weight cohort, a year: buy & hold → Lighthouse |
 |---|---|---|---|---|---|---|
@@ -153,8 +156,8 @@ is the risk you asked for, mostly through sizing. Nor do its scores pick stocks:
 them ranked next month's returns, before or after costs, and neither did any of 37 further signals built from free data
 (value, quality, earnings, momentum, insider and short-sale activity, 13F breadth, 10-K and earnings-release text):
 three passed the 2009-2017 test and none the 2018-2026 hold-out, also after a fix to their share counts (56 trials
-logged). So none carries weight in the verdict; the fundamentals are in the memo, beside it (`docs/METHODOLOGY.md`
-§8-8d, `docs/DATA_AND_ML.md` §5-6).
+logged). So no research signal was added to the verdict; its own fundamental and technical beacons stay, by the user's
+choice (`docs/METHODOLOGY.md` §2, §8-8d, `docs/DATA_AND_ML.md` §5-6).
 
 ## Repository map
 
@@ -201,7 +204,7 @@ data/sample/           bundled real historical data: prices, SEC filings (facts,
 reports/examples/      the MSFT example (report, memo, charts) and the cross-ticker and cohort evaluations
 reports/research/      the research harness's experiment log, hold-out log, results and verdicts
 docs/                  EXECUTIVE_SUMMARY.md · METHODOLOGY.md · PITCH.md · USER_GUIDE.md · DATA_AND_ML.md · NEXT_SESSION.md
-tests/                 291 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded
+tests/                 292 pytest tests, offline (indicators, scoring, sizing, no-look-ahead, parsers on recorded
                        SEC and FINRA excerpts, research harness, analyst toolkit, trade tickets, portfolios, pipeline, app)
 ```
 

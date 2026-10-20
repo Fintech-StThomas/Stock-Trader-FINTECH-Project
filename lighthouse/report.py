@@ -78,13 +78,27 @@ def build_report(result, include_backtest: bool = True) -> str:
 
     # score composition
     L.append("### How the score is built")
-    L.append(f"- Technical score **{d.technical_score:.0f}** ({prof.horizon}-term weights of the six beacons below)")
+    if d.fundamental_score is not None:
+        L.append(f"- Fundamental score **{d.fundamental_score:.0f}** × weight {prof.fundamental_weight:.0%} = "
+                 f"{d.fundamental_score * prof.fundamental_weight:.1f}")
+        L.append(f"- Technical score **{d.technical_score:.0f}** × weight {prof.technical_weight:.0%} = "
+                 f"{d.technical_score * prof.technical_weight:.1f}")
+    else:
+        L.append(f"- Technical score **{d.technical_score:.0f}** (fundamentals unavailable, weight 100%)")
     if d.regime is not None:
         L.append(f"- Market-weather adjustment: **{('−' + format(d.regime_penalty, '.0f')) if d.regime_penalty else '0'}** ({d.regime.label})")
     L.append(f"- **Lighthouse score = {d.composite_score:.1f}** → {d.verdict} "
              f"(bands: ≥72 Strong Buy, ≥60 Buy, ≥45 Hold, ≥32 Reduce, else Sell)")
-    L.append("- The verdict is the trading rule's, from prices: the business itself (valuation, quality, the DCF, peers, "
-             "red flags) is the analyst memo's view (`python -m lighthouse memo` or the app's Analyse tab).\n")
+    L.append("- The analyst memo (`python -m lighthouse memo` or the app's Analyse tab) goes further into the business: "
+             "the DCF, peers, red flags and what would prove the thesis wrong.\n")
+
+    # fundamentals
+    f = getattr(result, "fundamentals", None)
+    L.append(f"### Fundamental beacons ({'score ' + format(d.fundamental_score, '.0f') if d.fundamental_score is not None else 'unavailable'})")
+    if f is not None:
+        L.append(f"*{f.sector or 'sector n/a'} · data: {f.source} ({f.as_of})*\n")
+    L.append(beacon_table(d.fundamental_beacons) + "\n" if d.fundamental_beacons else
+             "_No SEC filings could be scored for this ticker; the score is technical-only._\n")
 
     # technicals
     L.append(f"### Technical beacons (score {d.technical_score:.0f})")
@@ -169,7 +183,10 @@ def build_report(result, include_backtest: bool = True) -> str:
     L.append("")
     L.append("### Limitations you should know")
     L += [
-        "- The rule uses prices only; on the point-in-time S&P 500 no technical beacon ranked stocks usefully "
+        "- Sector norms are long-run approximations, not live peer data; a cheap stock in an expensive sector can still "
+        "be expensive. The backtest's fundamental gate uses SEC filings as first reported, from the day after each was "
+        "filed.",
+        "- On the point-in-time S&P 500 neither the technical nor the fundamental scores ranked stocks usefully "
         "(docs/METHODOLOGY.md section 8b): it is a risk-control rule, not a stock picker.",
         "- The backtest is long-only; costs are estimated from the stock's own spread and volume, stops rest as orders (an "
         "overnight gap fills at the open), and it ignores taxes. Run `python -m lighthouse memo` for the analyst view.",
@@ -337,7 +354,7 @@ def _fundamental_view_lines(fv) -> List[str]:
          f"*Norms: {fv.source}. Fundamental score {score(fv.score)} {head}"
          + (f" ({score(fv.sector_score)} against the sector norms for {fv.sector or 'the overall market'})"
             if fv.peer_based else "")
-         + ". The rule-based verdict does not read them (it reads prices only); P/E, P/B, EV/EBITDA and operating "
+         + ". The rule-based verdict keeps the sector norms it was tested with; P/E, P/B, EV/EBITDA and operating "
            "margin are scored against the norms, the other beacons against fixed bands.*\n",
          beacon_table(fv.beacons) + "\n"]
     return L

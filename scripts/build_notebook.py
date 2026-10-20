@@ -103,10 +103,10 @@ print(weather.describe())
 regimes["regime"].value_counts(normalize=True).round(3)""")
 md("""## 5 · The decision
 
-**Lighthouse score = technical score − market-weather penalty**, mapped to a verdict
-(≥72 Strong Buy · ≥60 Buy · ≥45 Hold · ≥32 Reduce · else Sell). The rule reads prices only: every fundamental and
-alternative signal Lighthouse tested on the point-in-time S&P 500 failed its pre-registered hold-out (docs/METHODOLOGY.md §8),
-so none carries weight. The position plan takes the *smallest* size allowed by three independent rules — your max-loss
+**Lighthouse score = w_F × Fundamental + w_T × Technical − market-weather penalty** (long 60 / 40, short 30 / 70), mapped
+to a verdict (≥72 Strong Buy · ≥60 Buy · ≥45 Hold · ≥32 Reduce · else Sell). The fundamental score comes from ten beacons
+on the company's SEC filings (the same numbers as the analyst memo) against sector norms; the backtest skips entries while
+its point-in-time value is below 35. The position plan takes the *smallest* size allowed by three independent rules — your max-loss
 limit, a volatility target and a concentration cap — then scales it by conviction.""")
 code("""from lighthouse import analyze
 result = analyze(TICKER, profile, params, years=YEARS, source=DATA_SOURCE)
@@ -133,8 +133,8 @@ md("""## 6 · The analyst memo: the fundamental case
 The memo reads the company's **SEC filings as they were filed** (nothing filed after the analysis date) and builds the
 case a human analyst would write: a bull / base / bear DCF and the growth the price implies, the fundamental beacons
 against sector norms (or industry peers by SIC code with `peers=True`, slower), earnings-quality and balance-sheet checks,
-capital allocation, catalysts, the variant view and the measurable criteria that would prove the thesis wrong. It sits
-next to the verdict and never changes it.""")
+capital allocation, catalysts, the variant view and the measurable criteria that would prove the thesis wrong. Its
+stance sits next to the verdict and does not change the score.""")
 code("""from IPython.display import Markdown
 from lighthouse.analyst import memo as analyst_memo
 memo = analyst_memo.build(TICKER, result=result, source=DATA_SOURCE, peers=False, peer_norms=True)
@@ -223,7 +223,7 @@ md("""## Limitations and risks (read before acting)
   than the rule on most stocks, and that its drawdown advantage over that exposure did not hold in both cohorts. What
   the rule delivers is a position sized to your risk; judge it on that.
 * **No other signal survived.** Fundamental, quality, short-interest and text signals were tested on the point-in-time
-  S&P 500 and failed their hold-out, so the verdict reads prices only and the memo is context, not a signal.
+  S&P 500 and failed their hold-out; the verdict keeps its own fundamental beacons by choice, not on that evidence.
 * **The memo's inputs are assumptions**: sector norms, the DCF's growth fade and discount rate. It shows each one.
 * **Costs are simple** (5 bps commission + 5 bps slippage per side), taxes are ignored, the strategy backtest checks stops at the close.
 * **Not investment advice.** Lighthouse is a decision-support tool: it shows you the evidence and its reasoning; the decision is yours.

@@ -300,7 +300,7 @@ def decision_row(result, plan, run_id: str = "", note: str = "") -> Dict[str, ob
     return {
         "recorded_at": _now(), "as_of": d.as_of, "ticker": d.ticker, "horizon": plan.horizon, "risk": prof.risk,
         "side": plan.side, "verdict": d.verdict, "status": plan.status, "composite": d.composite_score,
-        "technical": d.technical_score, "regime": plan.regime, "price": plan.price,
+        "fundamental": d.fundamental_score, "technical": d.technical_score, "regime": plan.regime, "price": plan.price,
         "priced_from": plan.priced_from, "entry_limit": plan.entry_limit, "stop": plan.stop, "target1": t1, "target2": t2,
         "trend_exit": plan.trend_exit_level, "signal_exit": plan.signal_exit_score, "exit_style": plan.exit_style,
         "time_stop": plan.time_stop_days, "shares": plan.shares, "notional": plan.notional, "risk_usd": plan.dollars_at_risk,
