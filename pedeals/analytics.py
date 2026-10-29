@@ -104,7 +104,7 @@ def buy_and_build(deals: pd.DataFrame) -> pd.DataFrame:
         ds = [date.fromisoformat(x) for x in g["published_date"] if x]
         gaps = [(b - c).days for c, b in zip(ds, ds[1:])]
         tags = Counter(t for ts in _split(g["rationale_tags"]) for t in ts)
-        rows.append({"platform": platform, "sponsor": sponsor, "add_ons": len(g),
+        rows.append({"platform": platform, "platform_key": g[key].iloc[0], "sponsor": sponsor, "add_ons": len(g),
                      "companies_acquired": int(g["n_targets"].clip(lower=1).sum()), "first": g["published_date"].iloc[0],
                      "last": g["published_date"].iloc[-1],
                      "median_days_between": float(np.median(gaps)) if gaps else math.nan,
@@ -200,6 +200,10 @@ def md_table(df: pd.DataFrame, index: bool = False, pct: tuple = ()) -> str:
     return "\n".join([head, sep, *body])
 
 
+def _short(text: str, n: int = 260) -> str:
+    return text if len(text) <= n else text[:n].rsplit(" ", 1)[0] + " …"
+
+
 def _v(x) -> str:
     return "—" if x is None or (isinstance(x, float) and math.isnan(x)) or str(x).strip() == "" else str(x)
 
@@ -278,7 +282,7 @@ def research_brief(deals: pd.DataFrame, industry: str, question: str = "") -> st
     lines += ["", "**The deals, with the evidence:**", ""]
     for r in a.sort_values("published_date", ascending=False).itertuples():
         lines.append(f"- {r.published_date} · **{r.buyer}** ({r.sponsor}) acquired **{r.target}**"
-                     f"{f' ({r.target_state})' if r.target_state else ''}: {_v(r.rationale)[:260]} [source]({r.url})")
+                     f"{f' ({r.target_state})' if r.target_state else ''}: {_short(_v(r.rationale))} [source]({r.url})")
     lines += ["", "**Supported by this evidence:** which capabilities peer platforms chose to buy and how they "
               "described them. **Needs further research:** whether those add-ons improved margins, growth or "
               "returns (operating results, management interviews, lender data), deals the firms did not announce, "

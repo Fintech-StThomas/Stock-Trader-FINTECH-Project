@@ -2,7 +2,7 @@
 
 > CACHED DATA: built from pages saved by `python -m pedeals collect` (fetch time in `collected_at`); the live sites may have changed since.
 
-Period: published 2023-01-01 to 2026-10-13 · pages collected 2026-10-29 to 2026-10-29 · built 2026-10-29 · fingerprint `5d1411853226c0bc`
+Period: published 2023-01-01 to 2026-10-13 · pages collected 2026-10-29 to 2026-10-29 · built 2026-10-29 · fingerprint `d5e0683fc0f5e0b2`
 
 185 articles from 4 firms; **115 deal announcements** in the period (115 unique deals), 33 other news items (people, funds, awards) set aside.
 
@@ -19,12 +19,12 @@ Period: published 2023-01-01 to 2026-10-13 · pages collected 2026-10-29 to 2026
 
 | tag | deals | share_of_deals_with_rationale |
 |---|---|---|
-| Technology / capability | 45 | 58% |
-| Product / service expansion | 42 | 55% |
-| Customers / channels | 40 | 52% |
-| Geographic reach | 37 | 48% |
-| Talent / leadership | 20 | 26% |
-| Capacity / scale | 10 | 13% |
+| Technology / capability | 43 | 56% |
+| Product / service expansion | 43 | 56% |
+| Customers / channels | 39 | 51% |
+| Geographic reach | 36 | 47% |
+| Talent / leadership | 18 | 23% |
+| Capacity / scale | 13 | 17% |
 
 ## Platforms building fastest
 

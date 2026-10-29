@@ -673,16 +673,19 @@ def state_code(loc: str) -> str:
 
 # ----------------------------------------------------------------------------- 5. rationale, price, status
 def rationale(art: Article, targets: List[str]) -> Tuple[str, List[str]]:
-    picked = []
+    """Up to two sentences that say why: a deal-related sentence with a rationale verb. The release's own statements
+    come before quotations (a CEO's quote is kept only when nothing else explains the deal); datelines are removed."""
     first = targets[0] if targets else ""
+    plain, quoted = [], []
     for s in sentences(art.body):
+        s = strip_dateline(s)
         if RATIONALE_VERBS.search(s) and (re.search(r"\b(acqui\w*|partnership|combination|transaction|investment|"
                                                      r"together|addition|merger|join\w*|this|will)\b", s, re.I)
                                           or (first and mentions(s, first))):
             if not UNDISCLOSED.search(s) and len(s) > 40:
-                picked.append(s)
-        if len(picked) == 2:
-            break
+                is_quote = s.startswith(("“", '"')) or bool(re.search(r"\b(?:said|says|commented|added|stated|noted)\b", s) and "“" in s)
+                (quoted if is_quote else plain).append(s)
+    picked = (plain + quoted)[:2]
     text = " ".join(picked)
     tags = [tag for tag, stems in RATIONALE_TAGS.items() if stems_in(text, stems)]
     return text, tags

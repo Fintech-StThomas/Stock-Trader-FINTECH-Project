@@ -3,11 +3,12 @@ Lighthouse - the web app.
 
     streamlit run app.py
 
-Four tabs. Analyse a stock: the rule's verdict and trade ticket, the analyst memo read from the SEC filings (valuation,
+Five tabs. Analyse a stock: the rule's verdict and trade ticket, the analyst memo read from the SEC filings (valuation,
 peers, earnings quality, what would prove the thesis wrong), the technical beacons and charts, the backtest and the
 data behind them. Find trades: rank a universe and fund its best setups from your cash. Portfolio: allocate a basket
 or build one for a goal, with a risk report and a walk-forward test. How it works: the method and what the research
-behind it found. The theses, the forward decision journal and the watch list run from the command line and the
+behind it found. PE deals: a separate product (the pedeals package) that reads private-equity firms' deal
+announcements into an evidence-backed deal record. The theses, the forward decision journal and the watch list run from the command line and the
 scheduled workflows (`python -m lighthouse thesis`, `journal`); their app views were archived in October 2026.
 Every chart is interactive (hover for the reason behind every mark, zoom, PNG download) and every number can be
 downloaded as CSV or Markdown.
@@ -34,9 +35,15 @@ def _reload_lock() -> threading.Lock:
     return threading.Lock()
 
 
+PACKAGES = ("lighthouse", "pedeals")     # the stock engine and the PE deal product, both reloaded when they change
+
+
 def _lighthouse_is_stale() -> bool:
-    pkg = sys.modules.get("lighthouse")
-    return pkg is not None and (not hasattr(pkg, "source_changed") or pkg.source_changed())
+    for name in PACKAGES:
+        pkg = sys.modules.get(name)
+        if pkg is not None and (not hasattr(pkg, "source_changed") or pkg.source_changed()):
+            return True
+    return False
 
 
 def _drop_stale_lighthouse() -> None:
@@ -45,9 +52,10 @@ def _drop_stale_lighthouse() -> None:
     with _reload_lock():
         if not _lighthouse_is_stale():   # another session reloaded it while this one waited
             return
-        for name in [n for n in list(sys.modules) if n == "lighthouse" or n.startswith("lighthouse.")]:   # list(): one atomic read
+        for name in [n for n in list(sys.modules) if n.split(".")[0] in PACKAGES]:   # list(): one atomic read
             del sys.modules[name]
         import lighthouse  # noqa: F401 - under the lock, so a concurrent session never finds half a package
+        import pedeals  # noqa: F401
         st.cache_data.clear()      # last: it also drops the lock, and later sessions must already see fresh code
         st.cache_resource.clear()
 
@@ -67,6 +75,7 @@ from lighthouse.screener import rank as rank_results  # noqa: E402
 from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_ideas, signed_usd,  # noqa: E402
                                   TIME_STOP_DEFAULT, StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
+from pedeals import app_view as pe_view  # noqa: E402
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
                    menu_items={"About": "Lighthouse turns a ticker and a few facts about you into an explainable Buy / Hold / Sell "
@@ -407,7 +416,8 @@ if run:
             status.update(label="Deep evaluation complete", state="complete")
 
 # ----------------------------------------------------------------------------- tabs
-tab_analyse, tab_find, tab_port, tab_about = st.tabs(["📍 Analyse a stock", "🎯 Find trades", "🧺 Portfolio", "ℹ️ How it works"])
+tab_analyse, tab_find, tab_port, tab_pe, tab_about = st.tabs(["📍 Analyse a stock", "🎯 Find trades", "🧺 Portfolio",
+                                                              "🤝 PE deals", "ℹ️ How it works"])
 
 # ============================================================================= ANALYSE
 STATUS_COLOR_FOR_REGIME = {"Bull / Calm": VERDICT_COLOR["Strong Buy"], "Bull / Turbulent": VERDICT_COLOR["Hold"],
@@ -1176,6 +1186,10 @@ def portfolio_tab() -> None:
 
 with tab_port:
     portfolio_tab()
+
+# ============================================================================= PE DEALS (a separate product: pedeals)
+with tab_pe:
+    pe_view.render()
 
 # ============================================================================= HOW IT WORKS
 def research_summary() -> None:

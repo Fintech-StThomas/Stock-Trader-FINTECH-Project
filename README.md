@@ -90,13 +90,14 @@ EDGAR in `LIGHTHOUSE_SEC_EMAIL` (sent to sec.gov only).
 
 ## The web app
 
-`streamlit run app.py` starts a point-and-click site with four tabs:
+`streamlit run app.py` starts a point-and-click site with five tabs:
 
 | Tab | What you can do |
 |---|---|
 | **Analyse a stock** | the verdict dial and five cards (Lighthouse score, fundamental score, technical score, market weather, the memo's stance), then five sub-tabs: **plan & ticket** (how the score is built, a position plan sized from your cash with a *what-if* sizer, the trade ticket with its *when to get out* table and the rules' record on this stock), **analyst memo** (the fundamental case from the SEC filings), **beacons & charts** (the 10 fundamental and 6 technical beacons as bars and tables, a price / volume / RSI / MACD chart with low-lag price bands and the backtested entries and exits), **backtest** (against the same exposure never traded, buy & hold and the S&P 500; deep evaluation with layers, the plain trend rule, sensitivity heatmap and walk-forward) and **data** (sources, cleaning notes, every indicator row, downloads) |
 | **Find trades** | pick a pre-built universe (a sideways-scrolling row: mega caps, dividend & defensive, each sector, semiconductors, sector and index ETFs, all large caps) or type your own; the scan ranks every ticker (select a row to jump to its full analysis) and funds the best setups from your cash, one ticket each, within a total-risk cap |
 | **Portfolio** | allocate your own basket with three methods, or let Lighthouse build one for a goal; whole-share orders, risk report (volatility, VaR, expected shortfall, beta, risk contributions, correlations, stress tests) and a walk-forward test of every method |
+| **PE deals** | a separate product, *PE Deal Intelligence* (below): private-equity deal announcements as an evidence-backed deal record, with a deal finder, a buy-and-build tracker, an add-on research brief, a new-deal digest and its validation |
 | **How it works** | the method, verdict bands, risk presets, what the research found and the full user guide |
 
 The theses you follow, the forward decision journal and the watch-only research signals run from the command line and
@@ -118,6 +119,28 @@ The app runs as-is on [Streamlit Community Cloud](https://share.streamlit.io):
 
 Later pushes to `main` reach the running app without a restart; `app.py` notices that the `lighthouse` package changed on disk
 and loads the new code. If a page still shows an error right after a push, *Manage app* → ⋮ → *Reboot app* starts it fresh.
+
+## PE Deal Intelligence (a separate product in the same dashboard)
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lotainc0/Stock-Trader-FINTECH-Project/blob/main/notebooks/PE_Deal_Intelligence.ipynb)
+
+For a portfolio operations manager at a lower-middle-market sponsor: which add-ons are peer sponsors' platforms buying,
+why do they say they bought them, and how fast do they build? The `pedeals` package collects the news pages of four
+peer firms (Tonka Bay, Goldner Hawn, Huron Capital, Align Capital Partners) politely (robots.txt, crawl delays), tells
+deals from other news, and extracts publisher, buyer and its relationship to the publisher, target, transaction type,
+the target's industry (apart from its customers'), location, stated rationale, status and disclosure gaps, each field
+next to the sentence it came from. 115 deal announcements since 2023; on 38 held-out hand-labelled pages, deal
+detection, type, buyer and target were all correct and industry 87%. It runs offline on the saved pages (marked as
+cached data).
+
+```bash
+python -m pedeals build        # parse + extract the saved pages -> data/pe_deals/output/ (CSV, JSON, Markdown brief)
+python -m pedeals validate     # accuracy (held-out vs development), consistency, repeatability
+python -m pedeals collect      # refresh from the live sites (slow by design)
+```
+
+Method, data dictionary, validation and limitations: [docs/PE_DEALS.md](docs/PE_DEALS.md); executive summary draft:
+[docs/PE_DEALS_EXECUTIVE_SUMMARY.md](docs/PE_DEALS_EXECUTIVE_SUMMARY.md).
 
 ## Results in one table
 

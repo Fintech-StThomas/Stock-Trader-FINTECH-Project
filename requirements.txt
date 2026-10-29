@@ -5,6 +5,7 @@ yfinance>=0.2.40
 requests>=2.28
 pyarrow>=14
 lxml>=4.9
+beautifulsoup4>=4.12
 streamlit>=1.49
 plotly>=5.18
 pytest>=7.0

@@ -34,7 +34,7 @@ Deal vs other news (held-out): precision 100%, recall 100% (30 deals found, 0 fa
 | duplicate deal ids | 0 |
 | deal with a type but no buyer and no target | 0 |
 
-Repeatability: two builds from the same saved pages are identical (fingerprint `5d1411853226c0bc`).
+Repeatability: two builds from the same saved pages are identical (fingerprint `d5e0683fc0f5e0b2`).
 
 ## Mismatches, held-out (6)
 

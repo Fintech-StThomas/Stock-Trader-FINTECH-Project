@@ -116,8 +116,11 @@ def infer_ownership(df: pd.DataFrame) -> pd.DataFrame:
     it owned at the time: the publisher invested in it on or before this date, it made an add-on for the publisher,
     or the publisher sold it on or after this date. The deal becomes an add-on, flagged as inferred, with the other
     announcement as the evidence."""
-    owned_rows = df[df["is_deal"] & df["transaction_type"].isin(["Platform investment", "Growth / minority investment",
-                                                                    "Add-on acquisition", "Exit"])]
+    priority = {"Platform investment": 0, "Growth / minority investment": 0, "Add-on acquisition": 1, "Exit": 2}
+    owned_rows = df[df["is_deal"] & df["transaction_type"].isin(list(priority))]
+    # the clearest evidence first: the publisher's own investment, then dated add-ons, then a later sale
+    owned_rows = owned_rows.assign(_p=owned_rows["transaction_type"].map(priority),
+                                   _undated=owned_rows["published_date"].fillna("") == "").sort_values(["_p", "_undated", "published_date"])
     for i, r in df[df["is_deal"] & (df["transaction_type"] == "Unclear") & (df["buyer"] != "Unknown")].iterrows():
         for o in owned_rows[owned_rows["source"] == r["source"]].itertuples():
             if o.transaction_type == "Add-on acquisition":
