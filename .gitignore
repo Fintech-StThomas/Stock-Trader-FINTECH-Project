@@ -12,3 +12,4 @@ dist/
 .DS_Store
 .venv/
 data/journal/
+pe_deals_output/
