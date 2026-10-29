@@ -137,6 +137,22 @@ def infer_ownership(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def platform_keys(df: pd.DataFrame) -> pd.Series:
+    """One key per buying company within a sponsor: its short name when the release gives one (so "Marco Rubber &
+    Plastics" and, after its rename, "Marco Sealing Solutions" are one platform), else its name without suffixes;
+    names that contain one another ("Counsel Press" / "Counsel Press Inc") share the shorter key."""
+    keys = [f"{src}|{norm_name(short) or norm_name(b)}" for src, short, b in zip(df["source"], df["buyer_short"].fillna(""), df["buyer"].fillna(""))]
+    by_src: Dict[str, List[str]] = {}
+    for k in set(keys):
+        by_src.setdefault(k.split("|")[0], []).append(k.split("|", 1)[1])
+    out = []
+    for k in keys:
+        src, name = k.split("|", 1)
+        shorter = [n for n in by_src[src] if n and n != name and len(n) >= 4 and (name.startswith(n + " ") or name == n)]
+        out.append(f"{src}|{min(shorter, key=len) if shorter else name}")
+    return pd.Series(out, index=df.index)
+
+
 def _mark_duplicates(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["published_date", "url"]).reset_index(drop=True)
     df["duplicate_of"] = ""
@@ -246,6 +262,7 @@ def build_dataset(start: str = DEFAULT_START, pages_file: Path = PAGES_FILE, dis
                          for ok, p, m in zip(df["in_period"], pub, mod)]
     df = infer_ownership(df)
     df = _mark_duplicates(df)
+    df["platform_key"] = platform_keys(df)
 
     fails = pd.DataFrame(failures, columns=["source", "url", "stage", "reason", "fetched_at"])
     coverage = _coverage(df, fails, discovery_file, start)

@@ -1,0 +1,5 @@
+source,firm,hq,sitemap_urls,skipped_before_period,skipped_robots,pages_parsed,failed_pages,outside_period,articles_in_period,deals_in_period,non_deal_news_in_period,duplicates_marked,earliest_in_period,latest_in_period,collected_at
+tonkabay,Tonka Bay Equity Partners,"Minnetonka, MN",131,82,0,49,0,23,26,15,11,0,2023-01-04,2026-07-07,2026-10-29T15:08:33+00:00
+goldnerhawn,Goldner Hawn,"Minneapolis, MN",21,0,0,21,0,0,21,17,4,0,2024-01-05,2026-10-13,2026-10-29T15:03:53+00:00
+huron,Huron Capital,"Detroit, MI",195,167,0,28,0,11,17,13,4,0,2023-06-08,2026-07-01,2026-10-29T15:02:38+00:00
+align,Align Capital Partners,"Dallas, TX and Cleveland, OH",171,84,0,87,0,3,84,70,14,0,2023-01-05,2026-10-07,2026-10-29T15:07:34+00:00

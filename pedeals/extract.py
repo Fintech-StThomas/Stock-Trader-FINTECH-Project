@@ -738,7 +738,7 @@ def ownership(art: Article) -> Tuple[str, str]:
 
 
 # ----------------------------------------------------------------------------- the record
-BLANK = {"transaction_type": "", "type_evidence": "", "deal_status": "", "status_evidence": "", "buyer": "",
+BLANK = {"transaction_type": "", "type_evidence": "", "deal_status": "", "status_evidence": "", "buyer": "", "buyer_short": "",
          "buyer_role": "", "sponsor": "", "seller": "", "target": "", "n_targets": 0, "parties_evidence": "",
          "target_description": "", "description_source": "", "target_industry": "", "industry_evidence": "",
          "industry_ambiguous": False, "customer_markets": "", "target_location": "", "target_state": "",
@@ -779,6 +779,10 @@ def extract(art: Article, source: str, collected_at: str = "", url: str = "") ->
         buyer_role, sponsor, seller = UNKNOWN, firm, ""
 
     targets = p["targets"]
+    # the short name the release gives the buyer ("Marco Rubber & Plastics (“Marco”)"): it survives renames and
+    # suffix changes, so the buy-and-build tracker groups a platform's add-ons under one key
+    buyer_short = next((v for k, v in p["aliases"].items() if buyer and (k.startswith(buyer.split(",")[0]) or buyer.startswith(k.split(",")[0]))
+                        and v.lower() not in ("company", "the company", "firm")), "")
     desc, desc_src = describe_target(targets, p["aliases"], p["target_tail"], art, source, p["lead_sentence"])
     ind, ind_hits, ambiguous = industry_of(desc)
     loc, stc = location_of(targets, p["aliases"], desc, art.body)
@@ -807,7 +811,7 @@ def extract(art: Article, source: str, collected_at: str = "", url: str = "") ->
 
     rec.update({
         "transaction_type": ttype, "type_evidence": t_ev, "deal_status": st, "status_evidence": st_ev,
-        "buyer": buyer or UNKNOWN, "buyer_role": buyer_role, "sponsor": sponsor, "seller": seller,
+        "buyer": buyer or UNKNOWN, "buyer_short": buyer_short, "buyer_role": buyer_role, "sponsor": sponsor, "seller": seller,
         "target": "; ".join(targets) or UNKNOWN, "n_targets": len(targets), "parties_evidence": p["parties_evidence"],
         "target_description": desc, "description_source": desc_src, "target_industry": ind,
         "industry_evidence": ", ".join(ind_hits), "industry_ambiguous": ambiguous,

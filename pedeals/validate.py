@@ -31,6 +31,7 @@ from .collect import ROOT
 from .pipeline import canonical_url, norm_name
 
 LABELS_FILE = ROOT / "data" / "pe_deals" / "validation" / "reference_labels.csv"
+RESULTS_FILE = ROOT / "data" / "pe_deals" / "validation" / "results.md"
 # label column -> (program column, how to compare); deal-only fields are scored on articles labelled as deals
 FIELDS = {
     "is_deal": ("is_deal", "bool"),
@@ -90,13 +91,14 @@ class ValidationReport:
     repeatable: bool
     n_labels: int
     notes: List[str] = field(default_factory=list)
+    split: str = "held-out"
 
     def markdown(self) -> str:
         c = self.classification
-        lines = [f"## Validation against {self.n_labels} reference labels", "",
-                 "| Field | Labelled | Correct | Accuracy |", "|---|---|---|---|"]
+        lines = [f"## Validation against {self.n_labels} reference labels ({self.split})", "",
+                 "| Field | Labelled | Correct | Accuracy (95% interval) |", "|---|---|---|---|"]
         for r in self.summary.itertuples():
-            lines.append(f"| {r.field} | {r.n} | {r.correct} | {r.accuracy:.0%} |")
+            lines.append(f"| {r.field} | {r.n} | {r.correct} | {r.accuracy:.0%} ({r.ci_low:.0%}-{r.ci_high:.0%}) |")
         lines += ["", f"Deal vs other news: precision {c['precision']:.0%}, recall {c['recall']:.0%}, F1 {c['f1']:.0%} "
                       f"({c['tp']} deals found, {c['fp']} false alarms, {c['fn']} missed).", "",
                   "### Consistency checks (every record)", "", "| Check | Records failing |", "|---|---|"]
@@ -108,6 +110,17 @@ class ValidationReport:
                 lines.append(f"| {str(r.headline)[:60]} | {r.field} | {str(r.label)[:50]} | {str(r.program)[:50]} |")
         lines += [""] + [f"- {n}" for n in self.notes]
         return "\n".join(lines)
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple:
+    """95% Wilson score interval of an accuracy of k out of n (honest about small samples)."""
+    if not n:
+        return (math.nan, math.nan)
+    p = k / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return (max(0.0, c - h), min(1.0, c + h))
 
 
 def load_labels(path: Path = LABELS_FILE) -> pd.DataFrame:
@@ -139,8 +152,12 @@ def consistency_checks(ds) -> pd.DataFrame:
     return pd.DataFrame([{"check": k, "failing": int(pd.Series(v).sum())} for k, v in checks.items()])
 
 
-def evaluate(ds, labels: pd.DataFrame = None) -> ValidationReport:
+def evaluate(ds, labels: pd.DataFrame = None, split: str = "held-out") -> ValidationReport:
+    """Score the dataset against the labels of one split: "held-out" (labelled after the rules were frozen: the
+    accuracy to quote), "development" (the labels the rules were tuned on: in-sample, optimistic) or "all"."""
     labels = load_labels() if labels is None else labels
+    if split != "all" and "split" in labels.columns:
+        labels = labels[labels["split"] == split]
     rec = ds.records.assign(_cu=ds.records["url"].map(canonical_url)).set_index("_cu")
     rows, errors = [], []
     matched = 0
@@ -165,6 +182,8 @@ def evaluate(ds, labels: pd.DataFrame = None) -> ValidationReport:
     summary = (res.groupby("field", sort=False)["ok"].agg(n="count", correct="sum").reset_index()
                if len(res) else pd.DataFrame(columns=["field", "n", "correct"]))
     summary["accuracy"] = summary["correct"] / summary["n"].where(summary["n"] > 0)
+    ci = [wilson(int(k), int(n)) for k, n in zip(summary["correct"], summary["n"])]
+    summary["ci_low"], summary["ci_high"] = [c[0] for c in ci], [c[1] for c in ci]
     summary = summary.set_index("field").reindex([f for f in FIELDS if f in set(summary["field"])]).reset_index()
 
     lab_d = labels.assign(_cu=labels["url"].map(canonical_url))
@@ -185,8 +204,38 @@ def evaluate(ds, labels: pd.DataFrame = None) -> ValidationReport:
     notes = [f"{len(labels) - matched} labelled URLs are not in this dataset (outside the period or not collected)."
              if len(labels) - matched else "Every labelled URL is in the dataset.",
              "Labels were made by reading each source page; see data/pe_deals/validation/README.md for who labelled "
-             "what and how. Accuracy on a sample of this size has wide error bars (±10-15 points at 95% for n≈40)."]
+             "what and how. The intervals are 95% Wilson intervals: with 30-50 labelled deals they are wide."]
     return ValidationReport(summary=summary, classification={"precision": prec, "recall": recall, "f1": f1, "tp": tp, "fp": fp, "fn": fn},
                             type_confusion=conf, errors=pd.DataFrame(errors, columns=["headline", "url", "field", "label", "program"]),
                             consistency=consistency_checks(ds), repeatable=again.fingerprint() == ds.fingerprint(),
-                            n_labels=matched, notes=notes)
+                            n_labels=matched, notes=notes, split=split)
+
+
+def full_report(ds, labels: pd.DataFrame = None) -> str:
+    """The validation write-up: held-out accuracy (the number to quote) next to the development accuracy, the
+    consistency checks, repeatability and every mismatch."""
+    held, dev = evaluate(ds, labels, "held-out"), evaluate(ds, labels, "development")
+    acc = lambda r, f: r.summary.set_index("field").loc[f] if f in set(r.summary["field"]) else None  # noqa: E731
+    lines = ["# PE Deal Intelligence: validation", "",
+             f"Reference labels: {held.n_labels} held-out articles (labelled after the extraction rules were frozen in git) "
+             f"and {dev.n_labels} development articles (the rules were tuned on these, so their accuracy is in-sample).", "",
+             "| Field | Held-out: correct / labelled | Held-out accuracy (95% interval) | Development accuracy |", "|---|---|---|---|"]
+    for f in FIELDS:
+        h, d = acc(held, f), acc(dev, f)
+        if h is None:
+            continue
+        lines.append(f"| {f} | {int(h['correct'])} / {int(h['n'])} | {h['accuracy']:.0%} ({h['ci_low']:.0%}-{h['ci_high']:.0%}) | "
+                     + (f"{d['accuracy']:.0%} ({int(d['correct'])}/{int(d['n'])})" if d is not None else "—") + " |")
+    c = held.classification
+    lines += ["", f"Deal vs other news (held-out): precision {c['precision']:.0%}, recall {c['recall']:.0%} "
+                  f"({c['tp']} deals found, {c['fp']} false alarms, {c['fn']} missed).", "",
+              "## Consistency checks (every record, no labels needed)", "", "| Check | Records failing |", "|---|---|"]
+    lines += [f"| {r.check} | {r.failing} |" for r in held.consistency.itertuples()]
+    lines += ["", f"Repeatability: two builds from the same saved pages are {'identical' if held.repeatable else 'DIFFERENT'} "
+                  f"(fingerprint `{ds.fingerprint()}`)."]
+    for name, rep in (("held-out", held), ("development", dev)):
+        if len(rep.errors):
+            lines += ["", f"## Mismatches, {name} ({len(rep.errors)})", "", "| Article | Field | Label | Program |", "|---|---|---|---|"]
+            lines += [f"| {str(r.headline)[:70]} | {r.field} | {str(r.label)[:60]} | {str(r.program)[:60]} |" for r in rep.errors.itertuples()]
+    lines += ["", "## Notes", ""] + [f"- {n}" for n in held.notes]
+    return "\n".join(lines) + "\n"

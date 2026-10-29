@@ -86,18 +86,26 @@ def disclosure_gaps(deals: pd.DataFrame) -> pd.DataFrame:
 
 # ----------------------------------------------------------------------------- buy-and-build tracker
 def buy_and_build(deals: pd.DataFrame) -> pd.DataFrame:
-    """One row per platform that made add-ons in the collected announcements: how many, how fast, into what."""
+    """One row per platform that made add-ons in the collected announcements: how many announcements and companies,
+    how fast (median days between announcements), into what industries and states, and the rationale stated."""
     a = deals[deals["transaction_type"] == "Add-on acquisition"].copy()
     if a.empty:
-        return pd.DataFrame(columns=["platform", "sponsor", "add_ons", "first", "last", "median_days_between",
+        return pd.DataFrame(columns=["platform", "sponsor", "add_ons", "companies_acquired", "first", "last", "median_days_between",
                                      "targets", "target_industries", "target_states", "rationale"])
     rows = []
-    for (platform, sponsor), g in a.groupby(["buyer", "sponsor"]):
+    key = "platform_key" if "platform_key" in a.columns else "buyer"
+    for (_, sponsor), g in a.groupby([key, "sponsor"]):
         g = g.sort_values("published_date")
+        from .pipeline import norm_name
+        names = {}
+        for b in g["buyer"].iloc[::-1]:                   # the latest name first ("Marco Sealing Solutions / Marco Rubber & Plastics")
+            names.setdefault(norm_name(b), b)
+        platform = " / ".join(names.values())
         ds = [date.fromisoformat(x) for x in g["published_date"] if x]
         gaps = [(b - c).days for c, b in zip(ds, ds[1:])]
         tags = Counter(t for ts in _split(g["rationale_tags"]) for t in ts)
-        rows.append({"platform": platform, "sponsor": sponsor, "add_ons": len(g), "first": g["published_date"].iloc[0],
+        rows.append({"platform": platform, "sponsor": sponsor, "add_ons": len(g),
+                     "companies_acquired": int(g["n_targets"].clip(lower=1).sum()), "first": g["published_date"].iloc[0],
                      "last": g["published_date"].iloc[-1],
                      "median_days_between": float(np.median(gaps)) if gaps else math.nan,
                      "targets": "; ".join(g["target"]),
@@ -244,7 +252,8 @@ def dataset_brief(ds) -> str:
     lines += [md_table(rf, pct=("share_of_deals_with_rationale",)), "",
               "## Platforms building fastest", ""]
     bb = buy_and_build(u)
-    lines += [md_table(bb[["platform", "sponsor", "add_ons", "first", "last", "median_days_between", "target_industries"]].head(10)), "",
+    lines += [md_table(bb[["platform", "sponsor", "add_ons", "companies_acquired", "first", "last", "median_days_between",
+                              "target_industries"]].head(10)), "",
               "## What the announcements leave out", "", md_table(disclosure_gaps(u), pct=("share_missing",)), "",
               "These are announcements the firms chose to publish on their own sites: an incomplete and selective record, "
               "not a measure of the PE market. A stated rationale is the firm's claim, not evidence that the deal "

@@ -41,8 +41,11 @@ def main(argv=None) -> int:
         print(ds.summary_text())
         print("\n".join(f"wrote {p}" for p in paths))
     elif a.cmd == "validate":
-        from .validate import evaluate
-        print(evaluate(ds).markdown())
+        from .validate import full_report, RESULTS_FILE
+        text = full_report(ds)
+        RESULTS_FILE.write_text(text)
+        print(text)
+        print(f"wrote {RESULTS_FILE}")
     elif a.cmd == "new-since":
         d = ds.deals[ds.deals["published_date"] >= a.date]
         cols = ["published_date", "publisher", "buyer", "target", "transaction_type", "target_industry", "url"]
