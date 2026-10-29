@@ -220,3 +220,9 @@ not guaranteed prices. Paper trading is tested against Alpaca's documented forma
 machine learning could be added safely. Lighthouse is decision support, not investment advice.
 
 MIT licensed.
+
+### Stock Research and PE Deal Intelligence workspaces
+
+The centered switch above the app selects one complete workspace. **Stock Research** retains the existing stock tools. **PE Deal Intelligence** opens a separate landing page with its own tabs; stock controls and results are not rendered in PE mode. A direct link to the PE workspace is `https://fintech-class-project.streamlit.app/?workspace=pe`.
+
+The PE workspace is currently a foundation for the team's project: collection, extraction, filters and exports are not connected yet. It shows this status explicitly and contains no fabricated deal records. Extend `pe/app.py` and add PE modules under `pe/`; shared product navigation lives in `workspace_ui.py`. The app routes to PE before loading the stock engine. Use the top switch to return to Stock Research.

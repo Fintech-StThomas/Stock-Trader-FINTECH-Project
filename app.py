@@ -25,6 +25,18 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from workspace_ui import workspace_switch
+
+st.set_page_config(page_title="Lighthouse · investment research", page_icon="🔦", layout="wide",
+                   menu_items={"About": "Lighthouse offers Stock Research and a separate PE Deal Intelligence workspace. "
+                                        "Decision support, not investment advice."})
+
+# Route before any stock-specific imports, controls, data requests or results are rendered.
+if workspace_switch() == "pe":
+    from pe.app import render_pe_app
+    render_pe_app()
+    st.stop()
+
 
 # Streamlit Community Cloud pulls each push into the running server without restarting Python, so the lighthouse modules
 # imported before it are still in sys.modules and can be older than this app.py ("ImportError: cannot import name ...").
@@ -67,11 +79,6 @@ from lighthouse.screener import rank as rank_results  # noqa: E402
 from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_ideas, signed_usd,  # noqa: E402
                                   TIME_STOP_DEFAULT, StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
-
-st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
-                   menu_items={"About": "Lighthouse turns a ticker and a few facts about you into an explainable Buy / Hold / Sell "
-                                        "decision, a trade ticket for the cash you have, portfolio allocations with a risk report, "
-                                        "and honest backtests. Decision support, not investment advice."})
 
 # ----------------------------------------------------------------------------- look & accessibility
 st.markdown("""
