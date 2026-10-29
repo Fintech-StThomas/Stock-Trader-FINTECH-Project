@@ -1,1 +1,8 @@
 id,recorded_at,decision_id,ticker,kind,date,price,shares,detail,run_id
+1,2026-10-29T01:47:50+00:00,1,AAPL,opened,2026-10-28,343.83,2,"{""rule"": ""fills at the next session's open"", ""stop"": 271.76751989746094, ""exit_style"": ""trend""}",20261029T014750Z
+2,2026-10-29T01:47:50+00:00,2,MSFT,opened,2026-10-28,531.01,1,"{""rule"": ""fills at the next session's open"", ""stop"": 401.31746126098636, ""exit_style"": ""trend""}",20261029T014750Z
+3,2026-10-29T01:47:50+00:00,3,NVDA,opened,2026-10-28,215.38,3,"{""rule"": ""fills at the next session's open"", ""stop"": 187.53382351684573, ""exit_style"": ""trend""}",20261029T014750Z
+4,2026-10-29T01:47:50+00:00,4,AMZN,opened,2026-10-28,254.6,4,"{""rule"": ""fills at the next session's open"", ""stop"": 223.9060579803467, ""exit_style"": ""trend""}",20261029T014750Z
+5,2026-10-29T01:47:50+00:00,9,BRK-B,opened,2026-10-28,540.34,2,"{""rule"": ""fills at the next session's open"", ""stop"": 455.64223559570314, ""exit_style"": ""trend""}",20261029T014750Z
+6,2026-10-29T01:47:50+00:00,11,JPM,opened,2026-10-28,339.3,4,"{""rule"": ""fills at the next session's open"", ""stop"": 294.35248121948246, ""exit_style"": ""trend""}",20261029T014750Z
+7,2026-10-29T01:47:50+00:00,12,V,opened,2026-10-28,400.6,2,"{""rule"": ""fills at the next session's open"", ""stop"": 313.35186677856444, ""exit_style"": ""trend""}",20261029T014750Z
