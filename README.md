@@ -60,7 +60,7 @@ python -m lighthouse trade MSFT AAPL JNJ XOM --cash 5000                    # wh
 python -m lighthouse memo MSFT                                              # the analyst memo alone
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 292 tests, runs offline
+python -m pytest                # 317 tests, runs offline
 ```
 
 ```python
