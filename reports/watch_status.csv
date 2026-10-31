@@ -1,1 +1,3 @@
-
+signal,look,months_at_look,status
+fcf_yield,,0,"collecting: 0 forward month(s) with an outcome; the rule is read once a year, on the months to December, from 36 months on"
+short_volume,,0,"collecting: 0 forward month(s) with an outcome; the rule is read once a year, on the months to December, from 36 months on"

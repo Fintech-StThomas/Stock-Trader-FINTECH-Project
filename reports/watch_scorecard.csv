@@ -1,1 +1,5 @@
-
+signal,config_hash,snapshots,late,first,last,rule,months
+fcf_yield,dd05ff443270,1,0,2026-10-30,2026-10-30,pessimistic,0
+fcf_yield,dd05ff443270,1,0,2026-10-30,2026-10-30,exclude,0
+short_volume,84d37c55a0d9,1,0,2026-10-30,2026-10-30,pessimistic,0
+short_volume,84d37c55a0d9,1,0,2026-10-30,2026-10-30,exclude,0
