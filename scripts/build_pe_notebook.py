@@ -12,27 +12,28 @@ cells = []
 md = lambda s: cells.append(nbf.v4.new_markdown_cell(s))  # noqa: E731
 code = lambda s: cells.append(nbf.v4.new_code_cell(s))     # noqa: E731
 
-md("""# 🤝 PE Deal Intelligence
+md("""# 🎯 PE Deal Sourcing
 
-*Public private-equity deal announcements, turned into an evidence-backed deal record for a portfolio operations team.*
+*Public private-equity deal announcements, turned into an evidence-backed sourcing record for a deal team.*
 
-**User.** A portfolio operations manager at a lower-middle-market sponsor that buys and builds industrial, distribution and
-business-services companies. **Recurring task.** Before each add-on planning cycle: which add-ons are peer sponsors'
-platforms buying, what capabilities do they say those add-ons bring, and how fast do the best builders close deals?
+**User.** A deal team at a lower-middle-market sponsor sourcing in five sectors: building & facility services, IT
+services & cybersecurity, tech-enabled business services, industrial manufacturing and value-added distribution.
+**Recurring task.** Every week: which niches are peer sponsors rolling up, which sponsor-owned companies have been held
+long enough to be sold soon, and who would we bid against for a target?
 
 This notebook runs the whole workflow:
 
 1. **Setup** — fresh Colab session: clone the project, install dependencies
-2. **Collect** — the four firms' news pages (polite: robots.txt and crawl delays), or the saved pages (default)
-3. **Process** — parse, tell deals from other news, extract every field with its evidence, handle duplicates and gaps
+2. **Collect** — sixteen buy-and-build sponsors' news pages (polite: robots.txt and crawl delays), or the saved pages (default)
+3. **Process** — parse, tell deals from other news, extract every field with its evidence, tag sector and niche
 4. **Inspect** — the data dictionary, a record next to its source sentences, coverage and failed pages
 5. **Validate** — accuracy against hand-labelled pages (held-out vs development), consistency checks, repeatability
-6. **Decide** — the add-on research brief, the buy-and-build tracker, charts
+6. **Source** — the consolidation map, the exit watch (portfolio ledger), competing buyers, the sourcing brief
 7. **Extras** — similar-deal search, the new-deal digest, exports
 
 > **Cached data.** By default everything runs on pages saved by the collector (`data/pe_deals/cache/`, collection time
 > in every record), so the notebook gives the same result even if a website changes or goes offline. Set `LIVE = True`
-> in step 2 to fetch new pages first (slow by design: about 10 seconds between pages on two of the sites).
+> in step 2 to fetch new pages first (slow by design: up to 10 seconds between pages on some sites).
 
 The same product is the **🤝 PE deals** tab of the web app (`streamlit run app.py`). Method, data dictionary and
 limitations: `docs/PE_DEALS.md`.
@@ -66,7 +67,7 @@ its news in an XML sitemap. The collector reads each site's robots.txt and obeys
 between requests, names itself in the User-Agent, saves every page with its fetch time and logs every URL's outcome.""")
 code("""pd.DataFrame([{"key": k, "firm": s.firm, "home office": s.hq, "sitemaps": ", ".join(s.sitemaps)} for k, s in SOURCES.items()])""")
 code("""LIVE = False           # True: fetch new articles from the live sites first (minutes; pages already saved are skipped)
-START = "2023-01-01"   # first publication date of interest
+START = "2015-01-01"   # first publication date collected (the ledger needs the older years)
 
 if LIVE:
     from pedeals.collect import collect
@@ -107,44 +108,58 @@ code("""# All deal announcements in the period (the main columns)
 deals[an.DISPLAY_COLUMNS].head(15)""")
 md("""## 5 · Validate
 
-109 articles were labelled field by field from the source pages. The rules were improved on 71 (**development**,
-in-sample) and then frozen in git before 38 more were drawn and labelled (**held-out**). Only the held-out accuracy is
-the tool's accuracy. Consistency checks run on every record; repeatability compares two builds.""")
+Articles were labelled field by field from the source pages. The rules were improved on a **development** set
+(in-sample) and frozen in git before each **held-out** set was drawn and labelled; only held-out accuracy is the tool's
+accuracy. Consistency checks run on every record; repeatability compares two builds.""")
 code("""from pedeals.validate import full_report
 Markdown(full_report(ds))""")
-md("""## 6 · Decide: the add-on research brief
+md("""## 6 · Source
 
-*"Our platform is an IT managed-services provider. Which capabilities are peer platforms adding, and where should our
-next add-on search start?"* Change `INDUSTRY` to your platform's industry.""")
-code("""INDUSTRY = "IT services & cybersecurity"
-Markdown(an.research_brief(deals, INDUSTRY, "Which capabilities are peer platforms adding, and which should we investigate?"))""")
-code("""# Buy-and-build tracker: add-ons per platform and how fast they come
-bb = an.buy_and_build(deals)
-bb.drop(columns=["platform_key"]).head(12)""")
-code("""adds = deals[deals["transaction_type"] == "Add-on acquisition"].merge(bb[["platform_key", "platform"]], on="platform_key")
-charts.buy_and_build_timeline(adds, bb[bb["add_ons"] >= 2]["platform"].tolist()).show()""")
-code("""charts.deals_by_quarter(deals).show()
-rf = an.rationale_frequency(deals[deals["transaction_type"] == "Add-on acquisition"])
-charts.horizontal_counts(rf, "tag", "deals", "Why add-ons were made (stated rationale)", "add-ons").show()
-display(an.rationale_frequency(deals[deals["transaction_type"] == "Add-on acquisition"], by="target_industry"))""")
+### Where is the consolidation? (add-ons by niche of the five focus sectors)
+Momentum compares the last twelve months of add-ons with the twelve before.""")
+code("""from pedeals import sourcing as so
+since_2022 = deals[deals["published_date"] >= "2022-01-01"]
+cons = so.consolidation(since_2022)
+display(cons.head(15))
+charts.horizontal_counts(cons.head(15), "niche", "add_ons", "Add-ons by niche since 2022", "add-ons").show()""")
+md("""### Exit watch: sponsor-owned companies held long enough to be sold soon
+
+The portfolio ledger rebuilds each sponsor's holdings from its own announcements: an investment announcement or a
+sentence that dates it ("ACP acquired StenTech in May of 2022") opens a holding, add-ons show it is still owned, a
+sale closes it, a rename ("rebranded as CompletePet") links the names. Lower-middle-market sponsors usually sell after
+four to six years.""")
+code("""led = so.ledger(ds.records)
+exited = led[(led["status"] == "Exited") & (led["years_basis"] == "from entry")]["years_held"]
+print(f"{len(led)} holdings found; {len(exited)} exits with a dated entry, median hold {exited.median():.1f} years")
+watch = so.exit_watch(led, min_years=4, sectors=so.FOCUS_SECTORS)
+display(watch[["company", "sponsor", "focus_sector", "niche", "years_held", "entry_date", "entry_basis", "add_ons", "signal"]])
+charts.years_held(watch).show()""")
+md("""### Competing buyers and the sourcing brief
+
+*"We want an MSP. Who else is buying them, what did they buy, and which sponsor-owned MSPs may come to market?"*
+Change `SECTOR` and `NICHE`.""")
+code("""SECTOR, NICHE = "IT services & cybersecurity", "Managed IT services (MSP)"
+display(so.competing_buyers(since_2022, led, [NICHE], [SECTOR]))
+Markdown(so.sourcing_brief(since_2022, led, SECTOR, NICHE))""")
 code("""# What the announcements leave out: the honest size of the gaps (a missing price is never zero)
-an.disclosure_gaps(deals)""")
-md("""**What the evidence supports:** which companies were bought, by whom, when, and the capabilities the sponsors say they
-add. **What needs further research:** prices (not disclosed), whether add-ons improved margins, growth or returns
-(operating data), deals the firms did not announce. The collected announcements are not a measure of the PE market.""")
+an.disclosure_gaps(since_2022[since_2022["focus_sector"].isin(so.FOCUS_SECTORS)])""")
+md("""**What the evidence supports:** who announced which acquisitions, where and when, and how long each sponsor says it
+has owned its platforms. **What needs further research:** companies nobody has bought yet (a company database), whether
+"no exit announced" companies are really still held, prices, and the sponsors' fund life. The collected announcements
+are not a measure of the PE market.""")
 md("## 7 · Extras: similar deals, the new-deal digest, exports")
-code("""# Who else bought something like Jones Bearing? (target description and rationale in similar words)
-an.similar_deals(deals, jones["deal_id"], k=5)[["similarity", "published_date", "publisher", "buyer", "target", "target_industry"]]""")
+code("""# More targets like Jones Bearing (target description and rationale in similar words)
+an.similar_deals(deals, jones["deal_id"], k=5)[["similarity", "published_date", "publisher", "buyer", "target", "niche", "target_state"]]""")
 code("""# Monitoring: everything published in the last 120 days of the data
 latest = pd.to_datetime(deals["published_date"]).max()
-an.new_since(deals, (latest - pd.Timedelta(days=120)).date().isoformat())[["published_date", "publisher", "buyer", "target", "transaction_type"]]""")
+an.new_since(deals, (latest - pd.Timedelta(days=120)).date().isoformat())[["published_date", "publisher", "buyer", "target", "transaction_type", "niche"]]""")
 code("""# Export: CSV / JSON / Markdown brief (saved sample outputs live in data/pe_deals/output/)
 for p in ds.export("pe_deals_output"):
     print(p)""")
 md("""## Limitations
 
-* Four firms' self-published announcements: selective and incomplete, not the PE market.
-* A stated rationale is the sponsor's claim, not evidence that a deal improved results.
+* Sixteen sponsors' self-published announcements: selective and incomplete, not the PE market.
+* "No exit announced" is not proof a company is still held; entry dates found in passing are the sponsor's statement.
 * Prices, closing dates and stakes are almost never disclosed; the fields show the gap instead of filling it.
 * Pages with no publication date are excluded from the period and listed, never guessed.
 * The rules fit these sites' press-release formulas; a new firm needs a source entry and a labelled check first.

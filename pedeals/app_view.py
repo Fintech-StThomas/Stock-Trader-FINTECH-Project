@@ -1,9 +1,9 @@
 """
-The PE Deal Intelligence tab of the dashboard (app.py calls `render()` inside its own tab).
+The PE deal-sourcing tab of the dashboard (app.py calls `render()` inside its own tab).
 
-A separate product from the stock tabs: it reads nothing from the sidebar and keeps its state under "pe_" keys. It
-runs on the saved pages by default (offline, reproducible, the collection date on screen) and can refresh one firm
-from its live site.
+A separate product from the stock tabs: it reads nothing from the sidebar and keeps its state under "pe_" keys. Its
+user is a deal team at a lower-middle-market sponsor sourcing in five sectors. It runs on the saved pages by default
+(offline, reproducible, the collection dates on screen) and can refresh one firm from its live site.
 """
 from __future__ import annotations
 
@@ -16,25 +16,28 @@ import streamlit as st
 
 from . import analytics as an
 from . import charts
+from . import sourcing as so
 from .collect import DEFAULT_START, PAGES_FILE, LISTINGS_FILE
 from .fetch import offline_mode
 from .pipeline import build_dataset
 from .sources import SOURCES
-from .taxonomy import RATIONALE_TAGS, TRANSACTION_TYPES
+from .taxonomy import FOCUS_SECTORS, NICHES, OUTSIDE_FOCUS, TRANSACTION_TYPES
 
+VIEW_START = "2022-01-01"          # sourcing looks at recent activity; the ledger uses every collected year
 TABLE_COLUMNS = {
     "published_date": st.column_config.TextColumn("Published", help="When the firm published the announcement (not the closing date)"),
     "publisher": st.column_config.TextColumn("Publisher (PE firm)"),
     "transaction_type": st.column_config.TextColumn("Type"),
-    "buyer": st.column_config.TextColumn("Buyer / investor"),
+    "buyer": st.column_config.TextColumn("Buyer / platform"),
     "target": st.column_config.TextColumn("Target"),
-    "target_industry": st.column_config.TextColumn("Target industry", help="Inferred from the words that describe the target's business"),
+    "focus_sector": st.column_config.TextColumn("Sector"),
+    "niche": st.column_config.TextColumn("Niche"),
     "target_state": st.column_config.TextColumn("State", width="small"),
     "rationale_tags": st.column_config.TextColumn("Stated rationale"),
-    "price_disclosure": st.column_config.TextColumn("Price"),
-    "deal_status": st.column_config.TextColumn("Status"),
     "url": st.column_config.LinkColumn("Source", display_text="open"),
 }
+FINDER_COLUMNS = ["published_date", "publisher", "transaction_type", "buyer", "target", "focus_sector", "niche",
+                  "target_state", "rationale_tags", "url"]
 
 
 def _plotly(fig, key: str) -> None:
@@ -45,9 +48,10 @@ def _stamp() -> tuple:
     return tuple((p.stat().st_mtime_ns, p.stat().st_size) if p.exists() else (0, 0) for p in (Path(PAGES_FILE), Path(LISTINGS_FILE)))
 
 
-@st.cache_resource(show_spinner=False, max_entries=8)
-def _dataset(start: str, stamp: tuple):
-    return build_dataset(start=start)
+@st.cache_resource(show_spinner=False, max_entries=4)
+def _dataset(stamp: tuple):
+    ds = build_dataset(start=DEFAULT_START)
+    return ds, so.ledger(ds.records)
 
 
 def _kpi(col, label: str, value: str, sub: str = "") -> None:
@@ -63,150 +67,168 @@ def _md(text: str) -> str:
 def _refresh_controls() -> None:
     with st.expander("Refresh from the live websites"):
         st.markdown("Collection is deliberately slow: robots.txt is obeyed and each site's crawl delay (10 seconds "
-                    "between pages on two of them) is respected, so one firm takes a few minutes the first time. "
-                    "Pages already saved are not fetched again; only new articles are.")
+                    "between pages on some) is respected. Pages already saved are not fetched again; only new articles are.")
         c1, c2 = st.columns([2, 1])
         firm = c1.selectbox("Firm", list(SOURCES), format_func=lambda k: SOURCES[k].firm, key="pe_refresh_firm")
         go = c2.button("Collect new pages", key="pe_refresh", disabled=offline_mode(), width="stretch",
                        help="Unavailable in offline mode" if offline_mode() else None)
         if go:
             from .collect import collect
-            log = st.empty()
-            lines = []
+            log, lines = st.empty(), []
 
             def show(msg):
                 lines.append(msg)
                 log.code("\n".join(lines[-8:]))
             with st.spinner(f"Collecting {SOURCES[firm].firm} politely ..."):
                 try:
-                    disc = collect(start=st.session_state.get("pe_start_str", DEFAULT_START), firms=[firm], log=show)
-                    st.success(f"Done: {int((disc['source'] == firm).sum())} URLs checked. The dataset below is rebuilt.")
+                    disc = collect(start=DEFAULT_START, firms=[firm], log=show)
+                    st.success(f"Done: {int((disc['source'] == firm).sum())} URLs checked. The data below is rebuilt.")
                 except Exception as exc:  # noqa: BLE001 - show the problem, keep the saved data
                     st.error(f"Collection failed ({type(exc).__name__}: {exc}); the saved pages are unchanged.")
 
 
 def _filters(deals: pd.DataFrame):
-    c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 1.4])
-    firms = c1.multiselect("Firms", sorted(deals["publisher"].unique()), key="pe_firms", placeholder="All firms")
-    types = c2.multiselect("Transaction type", [t for t in TRANSACTION_TYPES if t in set(deals["transaction_type"])], key="pe_types",
-                           placeholder="All types")
-    inds = c3.multiselect("Target industry", sorted(deals["target_industry"].unique()), key="pe_inds", placeholder="All industries")
-    query = c4.text_input("Search", key="pe_query", placeholder="e.g. HVAC, cybersecurity, Texas, distributor",
-                          help="Every word must appear in the headline, the parties, the target's description or the rationale")
-    tags = st.pills("Stated rationale", list(RATIONALE_TAGS), selection_mode="multi", key="pe_tags")
-    return an.search(deals, query, firms=firms, types=types, industries=inds, tags=tags)
+    c1, c2, c3, c4, c5 = st.columns([1.5, 1.2, 1, 0.9, 1.3])
+    sectors = c1.multiselect("Sectors", FOCUS_SECTORS + [OUTSIDE_FOCUS], default=FOCUS_SECTORS, key="pe_sectors",
+                             help="The five focus sectors; add 'Outside focus' to see every other deal")
+    firms = c2.multiselect("Sponsors", sorted(deals["publisher"].unique()), key="pe_firms", placeholder="All sponsors")
+    since = c3.date_input("Deals since", value=date.fromisoformat(VIEW_START), min_value=date.fromisoformat(DEFAULT_START),
+                          max_value=date.today(), key="pe_since_view")
+    states = c4.multiselect("Target states", sorted(x for x in deals["target_state"].unique() if x), key="pe_states",
+                            placeholder="All")
+    query = c5.text_input("Search", key="pe_query", placeholder="e.g. HVAC, MSP, calibration, Texas")
+    view = deals[deals["focus_sector"].isin(sectors or FOCUS_SECTORS)]
+    view = an.search(view, query, firms=firms, states=states, since=since.isoformat())
+    return view, (sectors or FOCUS_SECTORS), since
+
+
+def _radar(view: pd.DataFrame) -> None:
+    st.markdown("**Which niches are being rolled up, by how many platforms, and is the pace rising?** "
+                "Momentum compares the last twelve months of add-ons with the twelve before.")
+    cons = so.consolidation(view, focus_only=False)
+    if cons.empty:
+        st.info("No add-on acquisitions match the filters.")
+        return
+    st.dataframe(cons, hide_index=True, width="stretch", column_config={
+        "focus_sector": "Sector", "niche": "Niche", "add_ons": "Add-ons", "platforms": "Platforms", "sponsors": "Sponsors",
+        "last_12m": "Last 12 months", "prior_12m": "Prior 12 months",
+        "momentum": st.column_config.NumberColumn("Momentum", help="Last 12 months minus the 12 before", format="%+d"),
+        "latest": "Latest", "target_states": "Where targets were (state, count)"})
+    c1, c2 = st.columns(2)
+    with c1:
+        top = cons.head(15).assign(label=lambda t: t["niche"])
+        _plotly(charts.horizontal_counts(top, "label", "add_ons", "Add-ons by niche", "add-ons"), "pe_niches")
+    with c2:
+        _plotly(charts.deals_by_quarter(view[view["transaction_type"] == "Add-on acquisition"]), "pe_quarter")
+
+
+def _exit_watch(led: pd.DataFrame, sectors) -> None:
+    st.markdown("**Sponsor-owned companies likely to be sold soon.** Lower-middle-market sponsors usually sell after "
+                "four to six years; these companies have been held at least that long and no sale has been announced. "
+                "They are candidates to buy from a sponsor (a secondary buyout) or to approach as an add-on seller.")
+    exited = led[(led["status"] == "Exited") & (led["years_basis"] == "from entry")]["years_held"].dropna()
+    c1, c2 = st.columns([1, 2])
+    min_years = c1.slider("Held at least (years)", 2.0, 10.0, so.TYPICAL_HOLD_YEARS, 0.5, key="pe_min_years")
+    if len(exited) >= 3:
+        c2.info(f"In this data, the {len(exited)} exits with a dated entry were held a median of "
+                f"{exited.median():.1f} years (range {exited.min():.1f}-{exited.max():.1f}).", icon="⏳")
+    w = so.exit_watch(led, min_years, sectors)
+    if w.empty:
+        st.info("No sponsor-owned company in these sectors has been held that long with no exit announced.")
+        return
+    st.dataframe(w[["company", "sponsor", "focus_sector", "niche", "state", "years_held", "years_basis", "entry_date",
+                    "entry_basis", "add_ons", "last_add_on", "signal", "entry_url"]],
+                 hide_index=True, width="stretch", column_config={
+                     "years_held": st.column_config.NumberColumn("Years held", format="%.1f"),
+                     "years_basis": "Counted", "entry_date": "Entry", "entry_basis": "Entry from",
+                     "add_ons": "Add-ons", "last_add_on": "Last add-on", "focus_sector": "Sector",
+                     "entry_url": st.column_config.LinkColumn("Evidence", display_text="open")})
+    _plotly(charts.years_held(w, so.TYPICAL_HOLD_YEARS), "pe_years")
+    st.caption("'No exit announced' means no sale appears in the sponsor's own news; check before calling. Entry dates "
+               "come from the investment announcement or a sentence such as 'ACP acquired StenTech in May of 2022'; "
+               "light bars count from the first mention only, so the true hold is longer.")
+    with st.expander("Full portfolio ledger (every holding found, including exits)"):
+        st.dataframe(led.drop(columns=["company_key", "evidence_urls", "description"]), hide_index=True, width="stretch",
+                     column_config={"years_held": st.column_config.NumberColumn("Years held", format="%.1f"),
+                                    "entry_url": st.column_config.LinkColumn("Entry evidence", display_text="open"),
+                                    "exit_url": st.column_config.LinkColumn("Exit evidence", display_text="open")})
+
+
+def _niche_picker(view: pd.DataFrame, key: str):
+    c1, c2, c3 = st.columns([1.2, 1.4, 1])
+    sector = c1.selectbox("Sector", FOCUS_SECTORS, key=f"{key}_sector")
+    present = [n for n in view.loc[view["focus_sector"] == sector, "niche"].value_counts().index if n]
+    niche = c2.selectbox("Niche", ["All niches"] + present, key=f"{key}_niche")
+    states = c3.multiselect("Target states", sorted(x for x in view["target_state"].unique() if x), key=f"{key}_states",
+                            placeholder="Anywhere")
+    return sector, ("" if niche == "All niches" else niche), states
+
+
+def _competitors(view: pd.DataFrame, led: pd.DataFrame) -> None:
+    st.markdown("**Who would you bid against?** The platforms buying in a niche (and region), how often, and how long "
+                "their sponsors have owned them.")
+    sector, niche, states = _niche_picker(view, "pe_comp")
+    comp = so.competing_buyers(view, led, [niche] if niche else None, [sector], states)
+    if comp.empty:
+        st.info("No add-on buyers match.")
+        return
+    st.dataframe(comp, hide_index=True, width="stretch", column_config={
+        "add_ons_here": "Add-ons here", "last_add_on": "Last add-on", "target_states": "Target states",
+        "platform_status": "Platform", "years_held": st.column_config.NumberColumn("Years owned", format="%.1f")})
+    adds = view[(view["transaction_type"] == "Add-on acquisition") & (view["focus_sector"] == sector)]
+    if niche:
+        adds = adds[adds["niche"] == niche]
+    adds = adds.assign(platform=adds["buyer"])
+    _plotly(charts.platform_timeline(adds, comp["platform"].head(15).tolist()), "pe_comp_timeline")
+
+
+def _brief(view: pd.DataFrame, led: pd.DataFrame) -> None:
+    st.markdown("**The weekly sourcing memo** for a sector or niche: who is consolidating it, the companies they bought "
+                "(the profile to look for), the sponsor-owned companies likely to trade, and what still needs research.")
+    sector, niche, states = _niche_picker(view, "pe_brief")
+    min_years = st.slider("Exit watch: held at least (years)", 2.0, 10.0, so.TYPICAL_HOLD_YEARS, 0.5, key="pe_brief_years")
+    brief = so.sourcing_brief(view, led, sector, niche, states, min_years)
+    st.markdown(_md(brief))
+    st.download_button("Download the brief (Markdown)", brief, f"sourcing_brief_{sector.split()[0].lower()}.md", "text/markdown",
+                       key="pe_dl_brief")
 
 
 def _finder(view: pd.DataFrame, deals: pd.DataFrame) -> None:
-    st.caption(f"{len(view)} of {len(deals)} deal announcements. Select a row for its evidence card.")
-    sel = st.dataframe(view[an.DISPLAY_COLUMNS], hide_index=True, width="stretch", column_config=TABLE_COLUMNS,
+    types = st.multiselect("Transaction type", [t for t in TRANSACTION_TYPES if t in set(view["transaction_type"])], key="pe_types",
+                           placeholder="All types")
+    v = view[view["transaction_type"].isin(types)] if types else view
+    st.caption(f"{len(v)} deal announcements. Select a row for its evidence card.")
+    sel = st.dataframe(v[FINDER_COLUMNS], hide_index=True, width="stretch", column_config=TABLE_COLUMNS,
                        on_select="rerun", selection_mode="single-row", key="pe_table")
     c1, c2 = st.columns(2)
-    c1.download_button("Download these deals (CSV)", view.drop(columns=["body"], errors="ignore").to_csv(index=False),
+    c1.download_button("Download these deals (CSV)", v.drop(columns=["body"], errors="ignore").to_csv(index=False),
                        "pe_deals.csv", "text/csv", key="pe_dl_csv", width="stretch")
-    c2.download_button("Download these deals (JSON)", view.drop(columns=["body"], errors="ignore").to_json(orient="records", indent=1),
+    c2.download_button("Download these deals (JSON)", v.drop(columns=["body"], errors="ignore").to_json(orient="records", indent=1),
                        "pe_deals.json", "application/json", key="pe_dl_json", width="stretch")
     rows = sel.selection.rows if sel is not None and hasattr(sel, "selection") else []
     if rows:
-        rec = view.iloc[rows[0]]
+        rec = v.iloc[rows[0]]
         st.markdown(_md(an.deal_card(rec)))
         with st.expander("Full announcement text"):
             st.markdown(_md(rec.get("body", "")))
         sim = an.similar_deals(deals, rec["deal_id"], k=5)
         if len(sim):
-            st.markdown("**Similar deals** (target and rationale described in similar words)")
-            st.dataframe(sim[["similarity", "published_date", "publisher", "buyer", "target", "target_industry", "url"]],
+            st.markdown("**Similar deals** (target and rationale described in similar words): more targets like this one")
+            st.dataframe(sim[["similarity", "published_date", "publisher", "buyer", "target", "niche", "target_state", "url"]],
                          hide_index=True, width="stretch",
                          column_config={**TABLE_COLUMNS, "similarity": st.column_config.ProgressColumn("Similarity", format="%.2f",
                                                                                                          min_value=0, max_value=1)})
 
 
-def _buy_and_build(deals: pd.DataFrame) -> None:
-    bb = an.buy_and_build(deals)
-    if bb.empty:
-        st.info("No add-on acquisitions match the filters.")
-        return
-    st.markdown("Which platforms are buying, how many add-ons each announced and how fast. A short gap between add-ons "
-                "suggests an integration engine worth studying; what the add-ons did to results is not in the "
-                "announcements and needs operating data.")
-    st.dataframe(bb.drop(columns=["platform_key"]), hide_index=True, width="stretch", column_config={
-        "add_ons": st.column_config.NumberColumn("Add-on announcements"),
-        "companies_acquired": st.column_config.NumberColumn("Companies acquired", help="An announcement can name several targets"),
-        "median_days_between": st.column_config.NumberColumn("Median days between", format="%.0f"),
-        "rationale": st.column_config.TextColumn("Stated rationale (count)", width="large")})
-    top = bb[bb["add_ons"] >= 2]["platform"].tolist()[:15] or bb["platform"].tolist()[:15]
-    adds = deals[deals["transaction_type"] == "Add-on acquisition"].merge(bb[["platform_key", "platform"]], on="platform_key", how="left")
-    _plotly(charts.buy_and_build_timeline(adds, top), "pe_bb_timeline")
-
-
-def _brief(deals: pd.DataFrame) -> None:
-    st.markdown("**Decision scenario.** You run operations for a platform and are preparing the next add-on plan: which "
-                "capabilities did peer sponsors' platforms in your industry buy, and how did they justify them? The "
-                "brief lists the deals with their stated rationale and links, and says what still needs research.")
-    adds = deals[deals["transaction_type"] == "Add-on acquisition"]
-    inds = adds["target_industry"].value_counts()
-    inds = [i for i in inds.index if i != "Unknown"]
-    if not inds:
-        st.info("No add-on acquisitions match the filters.")
-        return
-    c1, c2 = st.columns([1, 2])
-    ind = c1.selectbox("Your platform's industry", inds, key="pe_brief_ind")
-    q = c2.text_input("Your question (printed on the brief)", key="pe_brief_q",
-                      value="Which capabilities are peer platforms adding, and which should we investigate?")
-    a = adds[adds["target_industry"] == ind]
-    left, right = st.columns([1, 1.3])
-    rf = an.rationale_frequency(a)
-    with left:
-        if len(rf):
-            _plotly(charts.horizontal_counts(rf, "tag", "deals", f"Stated rationale of {ind} add-ons", "add-ons"), "pe_brief_rf")
-            st.dataframe(rf, hide_index=True, width="stretch",
-                         column_config={"share_of_deals_with_rationale": st.column_config.ProgressColumn("Share", format="percent",
-                                                                                                          min_value=0, max_value=1)})
-    brief = an.research_brief(deals, ind, q)
-    with right:
-        st.markdown(_md(brief))
-    st.download_button("Download the brief (Markdown)", brief, f"add_on_brief_{ind.split()[0].lower()}.md", "text/markdown",
-                       key="pe_dl_brief")
-
-
-def _market(deals: pd.DataFrame) -> None:
-    st.caption("Counts describe the announcements these four firms published, not the PE market: firms announce "
-               "selectively and small or failed deals rarely appear.")
-    if deals.empty:
-        st.info("No deals match the filters.")
-        return
-    _plotly(charts.deals_by_quarter(deals), "pe_quarter")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**What each firm announced**")
-        st.dataframe(an.by_firm_and_type(deals), width="stretch")
-        st.markdown("**Deals by year and type**")
-        st.dataframe(an.by_year(deals), width="stretch")
-    with c2:
-        im = an.industry_mix(deals)
-        _plotly(charts.horizontal_counts(im, "target_industry", "deals", "Target industries", "deals"), "pe_ind")
-    c1, c2 = st.columns(2)
-    with c1:
-        rf = an.rationale_frequency(deals[deals["transaction_type"] == "Add-on acquisition"])
-        if len(rf):
-            _plotly(charts.horizontal_counts(rf, "tag", "deals", "Why add-ons were made (stated rationale)", "add-ons"), "pe_rf")
-    with c2:
-        st.markdown("**What the announcements leave out**")
-        st.dataframe(an.disclosure_gaps(deals), hide_index=True, width="stretch",
-                     column_config={"share_missing": st.column_config.ProgressColumn("Share missing", format="percent",
-                                                                                   min_value=0, max_value=1)})
-        st.caption("A missing price is recorded as not stated, never as zero; the publication date is never used as a closing date.")
-
-
-def _monitor(deals: pd.DataFrame) -> None:
-    latest = pd.to_datetime(deals["published_date"]).max()
+def _monitor(view: pd.DataFrame) -> None:
+    latest = pd.to_datetime(view["published_date"]).max()
     default = (latest - timedelta(days=90)).date() if pd.notna(latest) else date.today() - timedelta(days=90)
     since = st.date_input("Show deals published since", value=default, key="pe_since")
-    new = an.new_since(deals, since.isoformat())
+    new = an.new_since(view, since.isoformat())
     st.markdown(f"**{len(new)} deal announcements** since {since:%B %d, %Y}.")
     for r in new.itertuples():
         st.markdown(_md(f"- **{r.published_date}** · {r.publisher}: **{r.buyer}** → **{r.target}** ({r.transaction_type}; "
-                        f"{r.target_industry}) · [source]({r.url})"))
+                        f"{r.niche or r.focus_sector}{', ' + r.target_state if r.target_state else ''}) · [source]({r.url})"))
     st.caption("Run `python -m pedeals collect` (or the refresh above) on a schedule and this list is the weekly digest.")
 
 
@@ -232,7 +254,7 @@ def _quality(ds) -> None:
         st.caption(f"Two builds from the same saved pages are {'identical' if held.repeatable else 'DIFFERENT'} "
                    f"(fingerprint {ds.fingerprint()}).")
     with c2:
-        st.markdown("**Coverage**: what each firm's sitemap listed and what was kept")
+        st.markdown("**Coverage**: what each sponsor's sitemap listed and what was kept")
         st.dataframe(ds.coverage.drop(columns=["hq"]), hide_index=True, width="stretch")
         if len(ds.failures):
             st.dataframe(ds.failures, hide_index=True, width="stretch")
@@ -248,48 +270,48 @@ def _quality(ds) -> None:
 
 
 def render() -> None:
-    st.markdown("### 🤝 PE Deal Intelligence")
-    st.markdown("Add-on and platform deals announced by four lower-middle-market sponsors (Tonka Bay, Goldner Hawn, "
-                "Huron Capital, Align Capital Partners), read from their own news pages: who bought what, why they say "
-                "they bought it, and how fast each platform builds. **Every field links to the sentence it came from.**")
-    c1, c2 = st.columns([1, 3])
-    start = c1.date_input("Published from", value=date.fromisoformat(DEFAULT_START), min_value=date(2005, 1, 1),
-                          max_value=date.today(), key="pe_start")
-    st.session_state["pe_start_str"] = start.isoformat()
+    st.markdown("### 🎯 PE Deal Sourcing")
+    st.markdown(f"For a deal team at a lower-middle-market sponsor sourcing in **{', '.join(FOCUS_SECTORS[:-1])} and "
+                f"{FOCUS_SECTORS[-1]}**. Read from the announcements of {len(SOURCES)} buy-and-build sponsors: which niches "
+                "are being consolidated, which sponsor-owned companies are due to trade, and who you would bid against. "
+                "**Every record links to the sentence it came from.**")
     with st.spinner("Reading the saved announcements ..."):
-        ds = _dataset(start.isoformat(), _stamp())
-    c2.info(f"**Cached data**: pages collected {str(ds.meta.get('collected_first', ''))[:10]} to "
-            f"{str(ds.meta.get('collected_last', ''))[:10]} (UTC). Announcements published {ds.start} to "
-            f"{ds.meta.get('latest_published', '?')}; the live sites may have changed since.", icon="🗂️")
+        ds, led = _dataset(_stamp())
+    st.info(f"**Cached data**: pages collected {str(ds.meta.get('collected_first', ''))[:10]} to "
+            f"{str(ds.meta.get('collected_last', ''))[:10]} (UTC); announcements published {ds.start} to "
+            f"{ds.meta.get('latest_published', '?')}. The live sites may have changed since.", icon="🗂️")
     _refresh_controls()
     deals = ds.unique_deals
     if deals.empty:
-        st.warning("No deal announcements in this period.")
+        st.warning("No deal announcements collected.")
         return
-    view = _filters(deals)
-    k = st.columns(5)
+    view, sectors, since = _filters(deals)
     adds = view[view["transaction_type"] == "Add-on acquisition"]
-    _kpi(k[0], "Deal announcements", f"{len(view)}", f"of {len(ds.records[ds.records['in_period']])} news items in the period")
-    _kpi(k[1], "Add-on acquisitions", f"{len(adds)}", f"by {adds['platform_key'].nunique()} platforms")
-    _kpi(k[2], "Platform investments", f"{int((view['transaction_type'] == 'Platform investment').sum())}",
-         f"+ {int((view['transaction_type'] == 'Growth / minority investment').sum())} growth / minority")
-    _kpi(k[3], "Exits", f"{int((view['transaction_type'] == 'Exit').sum())}", "sales of portfolio companies")
-    disclosed = int((view["price_disclosure"] == "Disclosed").sum())
-    _kpi(k[4], "Price disclosed", f"{disclosed} of {len(view)}", "the rest: not stated or withheld")
+    cons = so.consolidation(view, focus_only=False)
+    watch = so.exit_watch(led, so.TYPICAL_HOLD_YEARS, sectors)
+    k = st.columns(5)
+    _kpi(k[0], "Add-on acquisitions", f"{len(adds)}", f"since {since:%b %Y} in the chosen sectors")
+    _kpi(k[1], "Active platforms", f"{adds['platform_key'].nunique()}", f"of {adds['sponsor'].nunique()} sponsors")
+    _kpi(k[2], "Niches being rolled up", f"{int((cons['platforms'] >= 2).sum()) if len(cons) else 0}", "two or more platforms buying")
+    _kpi(k[3], "Exit watch", f"{len(watch)}", f"held {so.TYPICAL_HOLD_YEARS:g}+ years, no exit announced")
+    recent = view[pd.to_datetime(view["published_date"]) >= pd.Timestamp(date.today() - timedelta(days=90))]
+    _kpi(k[4], "New in 90 days", f"{len(recent)}", "deal announcements")
 
-    t1, t2, t3, t4, t5, t6 = st.tabs(["🔎 Deal finder", "🏗️ Buy-and-build tracker", "🧭 Add-on research brief",
-                                      "📊 Market view", "🔔 New deals", "✅ Data quality"])
-    with t1:
+    tabs = st.tabs(["🎯 Sourcing radar", "⏳ Exit watch", "🏁 Competing buyers", "🧭 Sourcing brief", "🔎 Deal finder",
+                    "🔔 New deals", "✅ Data quality"])
+    with tabs[0]:
+        _radar(view)
+    with tabs[1]:
+        _exit_watch(led, sectors)
+    with tabs[2]:
+        _competitors(view, led)
+    with tabs[3]:
+        _brief(view, led)
+    with tabs[4]:
         _finder(view, deals)
-    with t2:
-        _buy_and_build(view)
-    with t3:
-        _brief(view)
-    with t4:
-        _market(view)
-    with t5:
+    with tabs[5]:
         _monitor(view)
-    with t6:
+    with tabs[6]:
         _quality(ds)
-    st.caption("Decision support for research, not investment advice. A stated rationale is the firm's claim, not "
-               "evidence that a deal improved results.")
+    st.caption("Decision support for sourcing research, not investment advice. Announcements are what sponsors chose to "
+               "publish: verify a company's ownership and status before outreach.")

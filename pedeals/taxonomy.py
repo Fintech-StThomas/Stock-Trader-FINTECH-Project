@@ -162,3 +162,70 @@ CITY_STATE = {
     "Akron": "OH", "Dayton": "OH", "Ann Arbor": "MI", "Lansing": "MI", "Wichita": "KS", "Lincoln": "NE",
 }
 AMBIGUOUS_CITIES = ("Kansas City", "Portland", "Springfield", "Columbus", "Arlington", "Aurora", "Columbia", "Jackson")
+
+# ----------------------------------------------------------------------------- deal-sourcing focus
+# The five sectors the product focuses on (docs/PE_DEALS.md §1), keyed by the industry category they come from.
+# Everything else is kept in the data but labelled "Outside focus" and hidden by default.
+FOCUS_SECTOR_OF = {
+    "Building & infrastructure services": "Building & facility services",
+    "IT services & cybersecurity": "IT services & cybersecurity",
+    "Business services": "Tech-enabled business services",
+    "Industrial manufacturing": "Industrial manufacturing",
+    "Value-added distribution": "Value-added distribution",
+}
+FOCUS_SECTORS = list(FOCUS_SECTOR_OF.values())
+OUTSIDE_FOCUS = "Outside focus"
+
+# Niches inside each focus sector: what is being rolled up. A deal gets the niche of its sector with the most stems in
+# the target's description (headline as a tie-breaker); none -> "Other <sector>".
+NICHES = {
+    "Building & facility services": {
+        "HVAC & mechanical": ["hvac", "mechanical", "boiler", "chiller", "heating", "air conditioning", "refrigeration"],
+        "Plumbing": ["plumbing", "plumber"],
+        "Electrical contracting": ["electrical contract", "electrical service", "electrician", "electrical renovation",
+                                   "electrical systems"],
+        "Roofing & building envelope": ["roofing", "roof", "exterior", "waterproofing", "building envelope", "siding"],
+        "Fire & life safety": ["fire protection", "life safety", "sprinkler", "fire alarm", "fire suppression"],
+        "Elevator services": ["elevator", "escalator"],
+        "Building automation & energy services": ["building automation", "building control", "energy services",
+                                                  "energy efficiency", "controls"],
+        "Paving & site services": ["paving", "asphalt", "site work", "excavat", "underground", "sewer", "vacuum truck"],
+        "Landscaping & grounds": ["landscap", "lawn", "grounds", "irrigation", "snow"],
+        "Residential repair & renovation": ["residential", "renovation", "home repair", "windows", "homeowner"],
+    },
+    "IT services & cybersecurity": {
+        "Managed IT services (MSP)": ["managed service", "managed it", "msp", "it services", "it managed", "help desk"],
+        "Cybersecurity": ["cybersecurity", "cyber security", "information security", "security testing", "penetration",
+                          "offensive", "compliance audit"],
+        "Broadband & network services": ["broadband", "network", "telecom", "fiber"],
+        "Cloud, hosting & VDI": ["cloud", "hosting", "virtual desktop", "vdi", "data center"],
+    },
+    "Tech-enabled business services": {
+        "Testing, inspection & calibration": ["testing", "inspection", "calibration", "certification", "laborator"],
+        "Legal & litigation services": ["legal", "appellate", "process serving", "service of process", "litigation", "court"],
+        "Engineering & consulting": ["engineering", "consult", "advisory", "surveying", "program evaluation"],
+        "Investigations & risk services": ["investigat", "surveillance", "risk management", "security", "background"],
+        "Receivables & collections": ["receivable", "collection", "revenue cycle"],
+        "Marketing & communications services": ["marketing", "advertising", "promotional", "communications"],
+        "Tax & accounting services": ["tax", "accounting", "cost segregation"],
+        "Staffing & workforce": ["staffing", "workforce", "recruit"],
+        "Event & audiovisual services": ["audiovisual", "audio visual", "event"],
+    },
+    "Industrial manufacturing": {
+        "Precision components & machining": ["machin", "precision", "component", "bearing", "cnc", "fabricat", "stamping"],
+        "Electronics & electrical equipment": ["electronic", "stencil", "smt", "relay", "power", "generator", "electrical"],
+        "Erosion & environmental products": ["erosion", "sediment", "stormwater", "environmental"],
+        "Coatings, adhesives & chemicals": ["coating", "adhesive", "sealant", "chemical", "paint", "formulat"],
+        "Packaging & plastics": ["packaging", "plastic", "molding", "moulding"],
+        "Safety, marking & signage products": ["safety", "marking", "sign", "trench"],
+        "Seals & elastomer products": ["seal", "o-ring", "gasket", "elastomer"],
+    },
+    "Value-added distribution": {
+        "Seals & industrial MRO": ["seal", "o-ring", "gasket", "mro", "fastener"],
+        "Filtration": ["filtration", "filter"],
+        "Lighting & electrical supplies": ["lighting", "electrical", "light pole"],
+        "Erosion & site supplies": ["erosion", "stormwater", "turf", "construction materials"],
+        "Medical & diagnostic supplies": ["diagnostic", "testing products", "medical supplies"],
+        "Promotional & specialty products": ["promotional", "specialty products"],
+    },
+}

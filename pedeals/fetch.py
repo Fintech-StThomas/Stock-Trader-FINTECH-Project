@@ -10,6 +10,7 @@ Polite HTTP for the PE firms' websites.
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -55,6 +56,7 @@ class PoliteFetcher:
         self.retries = retries
         self._robots: Dict[str, Optional[robotparser.RobotFileParser]] = {}
         self._last: Dict[str, float] = {}
+        self._stated_delay: Dict[str, float] = {}
         self._lock = threading.Lock()
         self._session = None
 
@@ -69,6 +71,11 @@ class PoliteFetcher:
         res = self._request(f"{host}/robots.txt", check_robots=False)
         if res.status is not None and 200 <= res.status < 300:
             rp.parse(res.text.splitlines())
+            # a Crawl-delay written outside any User-agent group is ignored by robotparser; honour the largest one stated
+            delays = [float(m) for m in re.findall(r"(?im)^\s*crawl-delay\s*:\s*([\d.]+)", res.text)]
+            if delays:
+                with self._lock:
+                    self._stated_delay[host] = max(delays)
         elif res.status in (401, 403):
             rp.parse(["User-agent: *", "Disallow: /"])     # robots.txt itself refused: treat the site as closed
         else:
@@ -84,7 +91,8 @@ class PoliteFetcher:
     def delay_for(self, url: str) -> float:
         rp = self._robots_for(url)
         stated = rp.crawl_delay(self.user_agent) if rp is not None else None
-        return max(float(stated or 0), self.default_delay)
+        p = urlparse(url)
+        return max(float(stated or 0), self._stated_delay.get(f"{p.scheme}://{p.netloc}", 0.0), self.default_delay)
 
     # ------------------------------------------------------------------ requests
     def _wait(self, host: str, delay: float) -> None:

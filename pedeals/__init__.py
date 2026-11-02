@@ -1,9 +1,13 @@
 """
-PE Deal Intelligence - public private-equity deal announcements turned into an evidence-backed deal record.
+PE Deal Sourcing - public private-equity deal announcements turned into an evidence-backed sourcing record.
 
 A separate product that lives in the Lighthouse dashboard (its own tab) and shares nothing with the stock engine but
-the app. For a portfolio operations manager at a lower-middle-market sponsor: which add-on acquisitions are peer
-sponsors' platforms making, what capabilities do they say each one adds, and how fast do they build.
+the app. For a deal team at a lower-middle-market sponsor sourcing in five sectors: which niches are being rolled
+up, which sponsor-owned companies are due to trade (the exit watch), and who they would bid against.
+
+>>> from pedeals import sourcing
+>>> led = sourcing.ledger(ds.records)       # each sponsor's holdings, dated from its own announcements
+>>> sourcing.exit_watch(led, min_years=4)   # held 4+ years, no exit announced
 
 Public API
 ----------
@@ -15,7 +19,7 @@ Public API
 >>> evaluate(ds).summary                    # accuracy against the hand-labelled reference set
 
 >>> from pedeals.collect import collect     # live collection (polite: robots.txt and crawl delays)
->>> collect(start="2023-01-01")             # refreshes data/pe_deals/cache/pages.jsonl.gz
+>>> collect(start="2015-01-01")             # refreshes data/pe_deals/cache/pages.jsonl.gz
 """
 import os as _os
 

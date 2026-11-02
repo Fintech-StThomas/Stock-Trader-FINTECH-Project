@@ -13,3 +13,4 @@ dist/
 .venv/
 data/journal/
 pe_deals_output/
+data/pe_deals/cache/derived/

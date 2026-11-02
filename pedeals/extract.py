@@ -31,18 +31,20 @@ value the text does not support is left unknown rather than guessed. The rules w
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Dict, List, Optional, Tuple
 
-from .parse import Article, DATE_RE, to_date
+from .parse import Article, DATE_RE, MONTHS, to_date
 from .sources import FIRM_ALIASES, SOURCES
-from .taxonomy import AMBIGUOUS_CITIES, CITY_STATE, END_MARKETS, INDUSTRIES, RATIONALE_TAGS, STATE_ABBR, US_STATES, region_of
+from .taxonomy import (AMBIGUOUS_CITIES, CITY_STATE, END_MARKETS, FOCUS_SECTOR_OF, INDUSTRIES, NICHES, OUTSIDE_FOCUS,
+                       RATIONALE_TAGS, STATE_ABBR, US_STATES, region_of)
 
 UNKNOWN = "Unknown"
 
 # ----------------------------------------------------------------------------- 1. vocabulary: is it a deal?
 STRONG_DEAL = re.compile(r"\b(acqui\w*|invest(?:s|ed|ing)? in|investment in|sale of|sells?|sold|exits|exited|merge[sd]?|merger|"
-                         r"recapitali[sz]\w*|join(?:s|ed)? forces|partners? with|partnership with|add-?ons?|"
+                         r"recapitali[sz]\w*|join(?:s|ed)? forces|partners? with|partnership (?:with|in)|add-?ons?|"
                          r"combin(?:e|es|ed|ation)|divest\w*)\b", re.I)
 WEAK_DEAL = re.compile(r"\b(exit|forms?|backs|launch\w*|platform|adds?|unite[sd]?|purchases?|buys|"
                        r"majority|minority|realiz\w*)\b", re.I)
@@ -59,7 +61,7 @@ NON_DEAL = {
 }
 # a launch of a strategy or platform initiative is firm news unless the opening text names an acquisition
 LAUNCH_HEADLINE = re.compile(r"\b(launch\w*|establish\w*|introduc\w*|unveil\w*)\b", re.I)
-OTHER_HEADLINE = re.compile(r"\b(hiring|job posting|position|pre-mba|seeks|careers?|internship|small is beautiful|"
+OTHER_HEADLINE = re.compile(r"\b(hiring|job posting|position|pre-mba|seeks|careers?|internship|small is beautiful|newsletter|"
                             r"are you ready|how to|tips|lessons|insights?|perspective|outlook|community|donat\w*|"
                             r"volunteer\w*)\b", re.I)
 REVIEW_HEADLINE = re.compile(r"\b(reflects on|year[- ]in[- ]review|looks? back)\b", re.I)
@@ -91,10 +93,10 @@ LEAD_VERBS: List[Tuple[str, re.Pattern]] = [
                        r"(?:the\s+|its\s+|an?\s+|two\s+|three\s+)?(?:recent\s+|strategic\s+|successive\s+)*"
                        r"(?:acquisitions?|purchases?)\s+of\b|\bclosing\s+of\b|\bacquisitions,?\s+including\b", re.I)),
 ]
-NAME_TOKEN = r"(?:[A-Z0-9][\w.'’&/+\-]*|[a-z]{1,3}[A-Z][\w.'’&\-]*)"
+NAME_TOKEN = r"(?:[A-Z0-9][\w.'’&/+\-®™!]*|[a-z]{1,3}[A-Z][\w.'’&\-®™]*)"
 NAME_SUFFIX = r"(?:,?\s+(?:Inc|LLC|L\.L\.C|Ltd|Corp|LP|L\.P|PLLC|PC)\b\.?)"
-NAME_SPAN = re.compile(NAME_TOKEN + r"(?:(?:\s+(?:&|of|de|du|la|and)\s+|\s+)" + NAME_TOKEN + r")*" + NAME_SUFFIX + "?")
-NAME_SPAN_NO_AND = re.compile(NAME_TOKEN + r"(?:(?:\s+(?:&|of|de|du|la)\s+|\s+)" + NAME_TOKEN + r")*" + NAME_SUFFIX + "?")
+NAME_SPAN = re.compile(NAME_TOKEN + r"(?:(?:\s+(?:&|\+|of|de|du|la|and)\s+|\s+)" + NAME_TOKEN + r")*" + NAME_SUFFIX + "?")
+NAME_SPAN_NO_AND = re.compile(NAME_TOKEN + r"(?:(?:\s+(?:&|\+|of|de|du|la)\s+|\s+)" + NAME_TOKEN + r")*" + NAME_SUFFIX + "?")
 NOT_A_NAME = re.compile(r"^(?:The|A|An|This|These|That|Its|Their|Our|Leading|Based|Headquartered|Founded|Media|Today|"
                         r"Since|With|In|On|At|As|For|By|Over|After|Both|Each|CEO|President|Chief|LLC|Inc|Company|"
                         r"Acquisition|Acquisitions|Investment|Partnership|Transaction|Combined|Together|Additionally|"
@@ -102,7 +104,8 @@ NOT_A_NAME = re.compile(r"^(?:The|A|An|This|These|That|Its|Their|Our|Leading|Bas
 ALIAS_RE = re.compile(r"\(\s*(?:the\s+|or\s+)?[“\"]([^”\"]{1,40})[”\"](?:\s*(?:or|,|and)+\s*,?\s*(?:the\s+)?[“\"][^”\"]{1,40}[”\"])*\s*\)")
 NAMED_PAREN = re.compile(r"(" + NAME_SPAN_NO_AND.pattern + r")\s*\(([^()]{1,120})\)")
 LOCATION_IN_NAME = re.compile(r"(?:(?:[A-Z][\w.']+\s?){1,3},\s*)?(?:[A-Z][\w.']+[\s-]?){1,3}-based\s+")
-MONTH_SPAN = re.compile(r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?(?:\s+\d{1,2},?)?(?:\s+\d{4})?$|^Q[1-4](?:\s+\d{4})?$|^\d{4}$")
+MONTH_SPAN = re.compile(r"^(?:January|February|March|April|May|June|July|August|September|October|November|December|"
+                        r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?(?:\s+\d{1,2},?)?(?:\s+\d{4})?$|^Q[1-4](?:\s+\d{4})?$|^\d{4}$")
 DATELINES = [
     re.compile(r"^.{0,100}?" + DATE_RE.pattern + r"\s*\)?\s*(?:/[A-Za-z ]+/)?\s*(?:\||[—–]+|--|-|:)\s*", re.I),
     re.compile(r"^[A-Z][A-Za-z.,' ]{0,40}[—–-]+\s*\((?:[A-Z ]*WIRE|[A-Z][a-z]+ \d{1,2}, \d{4})\)\s*[—–-]+\s*"),
@@ -158,6 +161,10 @@ TRAIL_NOISE = re.compile(r"\s*(?:,\s+(?:a|an|the|its|which|who|based|headquarter
 HEADLINE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("merger", re.compile(r"^(?P<buyer>.+?)\s+(?:and|&)\s+(?P<target>.+?)\s+(?:join(?:s|ed)? forces|merge|combine|unite|"
                           r"announce (?:a |their )?(?:merger|combination|partnership))\b", re.I)),
+    ("merger", re.compile(r"^(?P<buyer>.+?)\s+(?:merges with|combines with|joins forces with|join forces with)\s+(?P<target>.+)$", re.I)),
+    ("merger", re.compile(r"\bmerger between\s+(?P<buyer>.+?)\s+and\s+(?P<target>.+)$", re.I)),
+    ("merger", re.compile(r"^(?P<buyer>.+?)\s+(?:&|and)\s+(?P<target>.+?)\s+merger$", re.I)),
+    ("buy", re.compile(r"\b(?:partnership|investment|add-on|acquisition)\s+in\s+(?P<buyer>[^,]+),\s*(?P<target>.+)$", re.I)),
     ("exit", re.compile(r"^(?P<seller>.+?)\s+(?:announces|completes|closes|finalizes)?\s*(?:the\s+|a\s+)?(?:successful\s+|majority\s+)?"
                         r"(?:sale|divestiture|exit|realization) of (?:its (?:investment|interest) in\s+)?(?P<target>.+?)"
                         r"(?:\s+to\s+(?P<buyer>.+))?$", re.I)),
@@ -177,7 +184,7 @@ HEAD_NOISE = re.compile(r"^(?:the\s+|its\s+|an?\s+|announces\s+|today\s+|portfol
 GENERIC_NAMES = re.compile(r"^(?:two|three|four|several|multiple|new|a|an|the)?\s*(?:companies|businesses|acquisitions?|"
                            r"add-?ons?|platforms?|investments?|firms?|providers?|leaders?|partnership)\b", re.I)
 ABBREVIATIONS = re.compile(r"(?:\b(?:Inc|Co|Corp|Ltd|St|Mr|Ms|Mrs|Dr|Jr|Sr|No|Mt|Ft|Ave|Blvd|vs|etc|approx|"
-                           r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)|"
+                           r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mfg|Bros|Intl|Natl|Mfrs|Assn|Dept)|"
                            r"\b(?:[A-Z]\.){1,3}|\b[A-Z]|" + "|".join(re.escape(a[:-1]) for a in STATE_ABBR) + r")\.$")
 
 
@@ -224,9 +231,37 @@ def _aliases(source: str) -> Tuple[str, ...]:
 def is_publisher(name: str, source: str) -> bool:
     """The publishing firm under any of its names ('Align Capital Partners', 'ACP', 'Goldner Hawn, LP', 'Huron')."""
     n = re.sub(r"[’']s?$", "", (name or "").strip()).lower()
+    n = re.sub(r"^(?:the\s+)?(?:partners|principals|team|investment team)\s+(?:of|at)\s+", "", n)
     n = re.sub(r",?\s+(?:llc|lp|l\.p\.|inc\.?)$", "", n)
     return any(n == a.lower() or re.fullmatch(re.escape(a.lower()) + r"(?: equity| capital| partners| llc| lp)*", n)
                for a in _aliases(source))
+
+
+HEADLINE_VERB_WORDS = {"expands", "enters", "completes", "announces", "acquires", "invests", "partners", "closes", "forms",
+                       "sells", "exits", "adds", "launches", "celebrates", "continues", "strengthens", "makes", "secures",
+                       "builds", "broadens", "increases", "serves", "rebrands", "accelerates", "enhances", "plants",
+                       "branches", "bolsters", "boosts", "deepens", "names", "welcomes", "promotes", "recapitalizes"}
+_NOT_COMPANY = {"year", "years", "company", "llc", "inc", "the company", "u.s", "us", "usa", "north america"}
+
+
+def norm_key(name: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9& ]", " ", (name or "").lower())).strip()
+
+
+def plausible_company(name: str) -> str:
+    """The name cleaned of a location prefix ("Wisconsin-based Bloomer Plastics") and joiners ("LLC and X"), or "" when
+    it cannot be a company: a state, a month, a lone generic word, or a headline fragment that starts with a verb
+    ("Expands Energy Services Holdings")."""
+    n = (name or "").strip(" ,.")
+    n = re.sub(r"^(?:(?:[A-Z][\w.']+\s?){1,3},\s*)?(?:[A-Z][\w.']+[\s-]?){1,3}-based\s+", "", n)
+    n = re.sub(r"^(?:LLC|Inc\.?|Corp\.?|LP)\s+and\s+", "", n)
+    words = n.split()
+    if not words or n.lower() in _NOT_COMPANY or words[0].lower() in HEADLINE_VERB_WORDS:
+        return ""
+    if (n in US_STATES or n in US_STATES.values() or n.rstrip(".") + "." in STATE_ABBR or MONTH_SPAN.match(n)
+            or n in CITY_STATE or n in AMBIGUOUS_CITIES or re.search(r"(?i)\b(?:deal|transaction|acquisition)s?$", n)):
+        return ""
+    return n
 
 
 def clean_name(name: str) -> str:
@@ -240,7 +275,13 @@ def clean_name(name: str) -> str:
         n = TRAIL_NOISE.sub("", n).strip()
     n = re.sub(r"^(?:portfolio company|partner company|platform company|platform)\s*,?\s*", "", n, flags=re.I)
     n = re.sub(r"\s*['’]s$", "", n)
-    return n.strip(" ,.;:-–—")
+    words = n.split()
+    for i, w in enumerate(words[1:], 1):          # "Marco Continues Expansion with ..." -> "Marco"
+        if w.lower() in HEADLINE_VERB_WORDS:
+            n = " ".join(words[:i])
+            break
+    n = re.sub(r"\s+(?:platform|portfolio company)$", "", n, flags=re.I)
+    return plausible_company(n.strip(" ,.;:-–—"))
 
 
 def strip_publisher_prefix(name: str, source: str) -> Tuple[str, bool]:
@@ -266,7 +307,7 @@ def name_spans(text: str, allow_and: bool = True) -> List[str]:
         span = m.group(0).strip(" ,.")
         if re.match(r"^(?:A|An)\s+", span):
             span = re.sub(r"^(?:A|An)\s+", "", span)
-        span = re.sub(r"[’']s?$", "", span)
+        span = plausible_company(re.sub(r"[’']s?$", "", span))
         if span and not NOT_A_NAME.match(span) and not MONTH_SPAN.match(span):
             out.append(span)
     return out
@@ -376,9 +417,13 @@ def lead_parse(art: Article, source: str) -> dict:
 
         # the subject: the company the release calls "the Company" if it is before the verb, else the last company
         # name before the verb once a description after ", a ..." is cut off
-        cut = re.split(r",\s+(?:a|an|the|another|one of|which|who)\b", subject, maxsplit=1)[0]
+        cut = re.split(r",\s+(?:a|an|the|another|one of|which|who|backed by|owned by)\b", subject, maxsplit=1)[0]
         spans = name_spans(cut)
         named = spans[-1] if spans else ""
+        pc = re.search(r"(?i:\b(?:its|their|['’]s?)\s+(?:\(?[\w“”\-]+\)?\s+){0,5}?(?:portfolio|partner|platform)(?:\s+company)?,?)\s+(?:the\s+)?("
+                       + NAME_SPAN_NO_AND.pattern + ")", subject)
+        if pc and name_spans(pc.group(1)) and kind not in ("exit", "exit_passive", "exit_agree"):
+            named = name_spans(pc.group(1))[0]
         for p in protagonists:
             if p in subject:
                 named = name_spans(p)[-1] if name_spans(p) else p
@@ -498,6 +543,15 @@ def parties(art: Article, source: str) -> dict:
             owned, owned_ev = _owned_by_publisher(buyer, art.body, source)
     if kind == "exit_passive":
         kind = "exit"
+    buyer = plausible_company(buyer) if buyer and not is_publisher(buyer, source) else buyer
+    targets = [plausible_company(t) for t in targets]
+    headline_buyer = hp["buyer"] or clean_name(strip_publisher_prefix(art.title or "", source)[0])   # "Burton ... Closes Its ..."
+    if (buyer and is_publisher(buyer, source) and kind != "exit" and headline_buyer and not is_publisher(headline_buyer, source)
+            and ADDON_WORDS.search((art.title or "") + " " + (lp["sentence"] or ""))):
+        buyer, owned, owned_ev = headline_buyer, True, f'headline: "{art.title}"'     # "Align's E Source Platform Acquires ..."
+    same = lambda t: norm_key(t) == norm_key(buyer) or norm_key(buyer).startswith(norm_key(t) + " ")   # noqa: E731 - "Burton"
+    if buyer and targets and same(targets[0]):
+        targets = [t for t in hp["targets"] if not same(t)] or [t for t in targets[1:] if not same(t)]
     return {"kind": kind, "buyer": buyer, "targets": [t for t in targets if t], "seller": seller,
             "parties_evidence": evidence, "buyer_owned": owned, "owned_evidence": owned_ev,
             "aliases": lp["aliases"], "target_tail": lp["target_tail"], "lead_sentence": lp["sentence"]}
@@ -740,6 +794,83 @@ def ownership(art: Article) -> Tuple[str, str]:
     return UNKNOWN, ""
 
 
+# ----------------------------------------------------------------------------- 6. deal sourcing: niche and holding period
+def niche_of(sector: str, description: str, headline: str = "") -> Tuple[str, List[str]]:
+    """(niche, matched stems) inside a focus sector: what is being rolled up. The description decides; the headline
+    breaks ties. Outside the focus sectors -> ("", [])."""
+    if sector not in NICHES:
+        return "", []
+    best, best_hits, best_score = f"Other: {sector}", [], 0.0
+    for niche, stems in NICHES[sector].items():
+        hits = stems_in(description, stems)
+        score = len(hits) + 0.5 * len(stems_in(headline, stems))
+        if score > best_score:
+            best, best_hits, best_score = niche, hits or stems_in(headline, stems), score
+    return best, best_hits
+
+
+_MONTH_ALT = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
+_WHEN = r"in\s+(?:(?P<part>early|mid|late)[- ]?)?(?:(?P<month>" + _MONTH_ALT + r")\.?\s+(?:of\s+)?)?(?P<year>(?:19|20)\d\d)\b"
+
+
+def entry_statements(art: Article, source: str, default_company: str = "") -> List[dict]:
+    """When did the sponsor buy a company? Releases often say it in passing ("ACP acquired StenTech in May of 2022",
+    "its first acquisition since partnering with Tonka Bay in 2023", "since its initial investment in August 2022").
+    Returns [{company, year, month, evidence}]; `default_company` (the release's buyer or target) is used when the
+    sentence names no company. These dates are the backbone of the exit watch."""
+    aliases = "|".join(re.escape(a) for a in _aliases(source)) or r"$^"
+    # the company name stays case-sensitive (a capitalised span, no "and"); the words around it are not
+    pats = [
+        (re.compile(rf"(?i:(?:{aliases})(?:['’]s?)?\s+(?:initially\s+|first\s+)?(?:acquired|invested in|partnered with|"
+                    rf"recapitali[sz]ed|backed|(?:made|completed) (?:its|an|the) (?:initial |first |original )?investment in|"
+                    rf"acquired an? (?:majority|minority|controlling|significant) (?:stake|interest|position) in|"
+                    rf"(?:began|started|formed) (?:its|a) partnership with)\s+(?:the\s+)?)(?P<co>" + NAME_SPAN_NO_AND.pattern
+                    + r")(?i:[^.]{0,40}?" + _WHEN + ")"), True),
+        (re.compile(rf"since (?:(?:{aliases})['’]?s?\s+)?(?:first\s+)?(?:partnering with|partnered with|(?:its|their) partnership with|"
+                    rf"being acquired by|(?:its|the platform['’]s|the) (?:initial|foundational|first|original) (?:platform )?"
+                    rf"(?:investment|acquisition|partnership)(?:\s+in\s+(?!(?:early|mid|late|19|20|" + _MONTH_ALT + rf"))[^.]{{0,40}}?)?|"
+                    rf"(?:its|the) (?:\w+ )?launch)(?:\s+(?:with\s+)?(?:{aliases}))?\s+" + _WHEN, re.I), False),
+        (re.compile(rf"(?:{aliases})[^.]{{0,100}}?to invest in the (?:business|company)\s+" + _WHEN, re.I), False),
+    ]
+    out = []
+    for sent in sentences(art.body):
+        s = _plain(strip_dateline(sent))
+        if not re.search(r"\b(?:19|20)\d\d\b", s):
+            continue                                       # no year, no entry date: skip the expensive patterns
+        for rx, named in pats:
+            for m in rx.finditer(s):
+                co = name_spans(m.group("co"))[0] if named and name_spans(m.group("co")) else default_company
+                if not co or is_publisher(co, source):
+                    continue
+                month = MONTHS.get((m.group("month") or "").lower().rstrip(".")[:3]) if m.group("month") else None
+                if not month and m.group("part"):
+                    month = {"early": 2, "mid": 6, "late": 10}[m.group("part").lower()]
+                out.append({"company": co, "year": int(m.group("year")), "month": month, "evidence": sent.strip()})
+    return out
+
+
+def renames(art: Article, default_company: str = "") -> List[dict]:
+    """Company renames stated in a release ("Counsel Press Inc. has been rebranded as Proceed", "prompting its rebrand
+    to CompletePet"): [{old, new, evidence}]. The ledger uses them so a sale under the new name closes the holding."""
+    out = []
+    for sent in sentences(art.body):
+        s = _plain(strip_dateline(sent))
+        if not re.search(r"(?i)\b(?:rebrand|renam)", s):
+            continue
+        m = re.search(r"(?P<old>" + NAME_SPAN_NO_AND.pattern + r")(?i:[^.]{0,60}?\b(?:has been |was |is being )?(?:rebranded|renamed)\s+(?:as|to))\s+"
+                      r"(?P<new>" + NAME_SPAN_NO_AND.pattern + ")", s)
+        if m:
+            out.append({"old": m.group("old"), "new": m.group("new"), "evidence": sent.strip()})
+            continue
+        m = re.search(r"(?i:\b(?:rebrand(?:ed|ing)?|renam(?:ed|ing)|its rebrand|a rebrand)\s+(?:the company\s+|it\s+)?(?:as|to))\s+"
+                      r"(?P<new>" + NAME_SPAN_NO_AND.pattern + ")", s)
+        if m and default_company:
+            out.append({"old": default_company, "new": m.group("new"), "evidence": sent.strip()})
+    for r in out:
+        r["old"], r["new"] = r["old"].strip(" .,"), r["new"].strip(" .,")
+    return [r for r in out if r["old"] != r["new"]]
+
+
 # ----------------------------------------------------------------------------- the record
 BLANK = {"transaction_type": "", "type_evidence": "", "deal_status": "", "status_evidence": "", "buyer": "", "buyer_short": "",
          "buyer_role": "", "sponsor": "", "seller": "", "target": "", "n_targets": 0, "parties_evidence": "",
@@ -747,7 +878,7 @@ BLANK = {"transaction_type": "", "type_evidence": "", "deal_status": "", "status
          "industry_ambiguous": False, "customer_markets": "", "target_location": "", "target_state": "",
          "target_region": "", "rationale": "", "rationale_tags": "", "price_disclosure": "", "deal_value_usd": None,
          "price_evidence": "", "ownership": "", "ownership_evidence": "", "closing_date": "", "closing_evidence": "",
-         "review_flags": ""}
+         "review_flags": "", "target_short": "", "focus_sector": "", "niche": "", "niche_evidence": ""}
 
 
 def extract(art: Article, source: str, collected_at: str = "", url: str = "") -> dict:
@@ -763,6 +894,8 @@ def extract(art: Article, source: str, collected_at: str = "", url: str = "") ->
     }
     rec.update(BLANK)
     if category != "Deal":
+        rec["entry_statements"] = json.dumps(entry_statements(art, source))
+        rec["renames"] = json.dumps(renames(art))
         return rec
 
     p = parties(art, source)
@@ -786,8 +919,17 @@ def extract(art: Article, source: str, collected_at: str = "", url: str = "") ->
     # suffix changes, so the buy-and-build tracker groups a platform's add-ons under one key
     buyer_short = next((v for k, v in p["aliases"].items() if buyer and (k.startswith(buyer.split(",")[0]) or buyer.startswith(k.split(",")[0]))
                         and v.lower() not in ("company", "the company", "firm")), "")
+    target_short = next((v for k, v in p["aliases"].items() if targets and (k.startswith(targets[0].split(",")[0])
+                         or targets[0].startswith(k.split(",")[0])) and v.lower() not in ("company", "the company", "firm")), "")
     desc, desc_src = describe_target(targets, p["aliases"], p["target_tail"], art, source, p["lead_sentence"])
     ind, ind_hits, ambiguous = industry_of(desc)
+    if ind == UNKNOWN and targets:               # "Sheridan Plumbing & Sewer": the name itself says the business
+        ind, ind_hits, ambiguous = industry_of(" ".join(targets) + " " + (art.title or ""))
+        if ind != UNKNOWN:
+            ind_hits = [f"name/headline: {h}" for h in ind_hits]
+    focus = FOCUS_SECTOR_OF.get(ind, OUTSIDE_FOCUS)
+    niche, niche_hits = niche_of(focus, desc, art.title)
+    held = targets[0] if ttype in ("Exit", "Platform investment", "Growth / minority investment") and targets else buyer
     loc, stc = location_of(targets, p["aliases"], desc, art.body)
     why, tags = rationale(art, targets)
     disclosure, value, price_ev = price(art)
@@ -822,6 +964,9 @@ def extract(art: Article, source: str, collected_at: str = "", url: str = "") ->
         "target_state": stc, "target_region": region_of(stc) if stc else UNKNOWN,
         "rationale": why, "rationale_tags": "; ".join(tags), "price_disclosure": disclosure, "deal_value_usd": value,
         "price_evidence": price_ev, "ownership": own, "ownership_evidence": own_ev, "closing_date": cdate or "Not stated",
-        "closing_evidence": c_ev, "review_flags": "; ".join(flags),
+        "closing_evidence": c_ev, "review_flags": "; ".join(flags), "target_short": target_short,
+        "focus_sector": focus, "niche": niche, "niche_evidence": ", ".join(niche_hits),
+        "entry_statements": json.dumps(entry_statements(art, source, held if held and not is_publisher(held, source) else "")),
+        "renames": json.dumps(renames(art, held if held and not is_publisher(held, source) else "")),
     })
     return rec

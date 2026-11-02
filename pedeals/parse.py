@@ -20,7 +20,7 @@ import json
 import re
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from bs4 import BeautifulSoup
 
@@ -109,6 +109,12 @@ def _meta_date(soup) -> Optional[Tuple[date, str]]:
     t = soup.find("time", attrs={"datetime": True})
     if t and _iso(t["datetime"]):
         return _iso(t["datetime"]), f'<time datetime="{t["datetime"]}">'
+    # a visible date label above the headline (class "date", "post-date", "meta-headline" ...): the first one on the page
+    for el in soup.find_all(class_=re.compile(r"(?:^|[-_ ])(?:date|post-?date|published|meta-headline|entry-meta)(?:$|[-_ ])", re.I))[:3]:
+        txt = el.get_text(" ", strip=True)
+        m = DATE_RE.search(txt)
+        if m and len(txt) < 60 and to_date(m.group(1), m.group(2), m.group(3)):
+            return to_date(m.group(1), m.group(2), m.group(3)), f'date label "{txt}"'
     return None
 
 
@@ -125,12 +131,7 @@ def _paragraphs(node) -> List[str]:
     for br in node.find_all("br"):
         br.replace_with("\n")
     out = []
-    blocks = node.find_all(["p", "li", "h2", "h3", "h4", "h5", "blockquote"])
-    for b in blocks:
-        if b.find_parent(["p", "li", "blockquote"]) is not None and b.name != "li":
-            continue           # a <p> inside a <li>/<blockquote>: its parent already holds the text
-        if b.name == "li" and b.find_parent("li") is not None:
-            continue
+    for b in _blocks(node):
         t = _clean(b.get_text(" "))
         if t:
             out.append(t)
@@ -142,20 +143,61 @@ def _paragraphs(node) -> List[str]:
 def _main_node(soup):
     for tag in soup.find_all(["nav", "header", "footer", "form", "aside", "button"]):
         tag.decompose()
-    for sel in ("[class*=menu]", "[class*=breadcrumb]", "[class*=share]", "[class*=sidebar]", "[id*=sidebar]",
-                "[class*=related]", "[class*=cookie]", "[class*=newsletter]", "[class*=footer]", "[class*=header]"):
-        for tag in soup.select(sel):
-            if tag.name not in ("html", "body", "main", "article"):
-                tag.decompose()
-    # the deepest container holding at least 90% of the page's paragraph text: containers that pass nest inside one
-    # another (two disjoint ones cannot both hold most of the text), so the last one in document order is the deepest
+    page_text = len((soup.body or soup).get_text(" ", strip=True)) or 1
+    # one pass over the tree (CSS selectors were most of the parse time); a class name is only a hint
+    # ("node--view-mode-header" can hold the article), so anything holding much of the text is kept
+    doomed = []
+    for tag in (soup.body or soup).find_all(True):
+        if tag.name in ("html", "body", "main", "article") or any(tag is d or d in tag.parents for d in doomed[-1:]):
+            continue
+        hint = " ".join(tag.get("class") or []) + " " + (tag.get("id") or "")
+        if _BOILERPLATE.search(hint) and len(tag.get_text(" ", strip=True)) < 0.4 * page_text:
+            doomed.append(tag)
+    for tag in doomed:
+        tag.decompose()
+    # the deepest container holding at least 90% of the page's block text: containers that pass nest inside one another
+    # (two disjoint ones cannot both hold most of the text), so the last one in document order is the deepest
     root = soup.body or soup
-    total = sum(len(p.get_text(" ", strip=True)) for p in root.find_all("p"))
+    held: Dict[int, int] = {}                 # block text held by each container, added up in one pass
+    total = 0
+    for b in _blocks(root):
+        n = len(b.get_text(" ", strip=True))
+        total += n
+        for a in b.parents:
+            held[id(a)] = held.get(id(a), 0) + n
+            if a is root:
+                break
     best = root
     for c in root.find_all(["article", "main", "section", "div"]):
-        if total and sum(len(p.get_text(" ", strip=True)) for p in c.find_all("p")) >= 0.9 * total:
+        if total and held.get(id(c), 0) >= 0.9 * total:
             best = c
     return best
+
+
+_BOILERPLATE = re.compile(r"menu|breadcrumb|share|sidebar|related|cookie|newsletter|footer|header", re.I)
+_BLOCK_TAGS = ("p", "li", "h2", "h3", "h4", "h5", "blockquote")
+_CONTAINER_TAGS = ["div", "p", "li", "ul", "ol", "table", "section", "article", "h1", "h2", "h3", "header", "footer"]
+
+
+def _blocks(node):
+    """Text blocks in document order: paragraphs, list items and sub-headings, plus 'leaf' <div>s that hold text
+    directly (themes that never use <p>), never a block nested in another."""
+    out = []
+    for el in node.find_all(True):
+        if el.name in _BLOCK_TAGS:
+            if el.find_parent(["p", "blockquote"]) is not None or (el.name == "li" and el.find_parent("li") is not None):
+                continue
+        elif el.name == "div" and not el.find(_CONTAINER_TAGS) and len(el.get_text(" ", strip=True)) >= 40:
+            if el.find_parent(list(_BLOCK_TAGS)) is not None:
+                continue
+        else:
+            continue
+        out.append(el)
+    return out
+
+
+def _block_texts(node) -> List[str]:
+    return [el.get_text(" ", strip=True) for el in _blocks(node)]
 
 
 def _title(soup) -> str:
@@ -188,6 +230,8 @@ def parse_article(html: str, url: str = "") -> Article:
     body, about, current = [], [], None
     for p in paras:
         if END_MARKERS.match(p) and not about:
+            if not body:
+                continue       # "Back to News" above the article is navigation, not its end
             break
         m = ABOUT_RE.match(p)
         if m and len(m.group(1).split()) <= 8:

@@ -1,7 +1,7 @@
 """
 Collection: find every news article a firm lists in its sitemap and save the pages.
 
-    python -m pedeals collect --start 2023-01-01            # every firm, polite (a few minutes per firm)
+    python -m pedeals collect --start 2015-01-01            # every firm, polite (a few minutes per firm)
     python -m pedeals collect --firm tonkabay --refresh     # one firm, re-fetching pages already saved
 
 The saved pages (data/pe_deals/cache/pages.jsonl.gz) are the program's input: parsing and extraction always run on
@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
@@ -37,7 +39,7 @@ PAGES_FILE = CACHE_DIR / "pages.jsonl.gz"
 LISTINGS_FILE = CACHE_DIR / "listings.jsonl.gz"      # news listing pages (the dates of articles that show none)
 DISCOVERY_FILE = CACHE_DIR / "discovery.csv"
 MAX_LISTING_PAGES = 15
-DEFAULT_START = "2023-01-01"
+DEFAULT_START = "2015-01-01"     # long enough to date the holdings behind the exit watch
 
 _STRIP = re.compile(r"<(script|style|svg|noscript|iframe)\b.*?</\1\s*>", re.S | re.I)
 _DATA_URI = re.compile(r"""(src|srcset|href)=(["'])data:[^"']*\2""", re.I)
@@ -62,10 +64,13 @@ def load_pages(path: Path = PAGES_FILE) -> Dict[str, dict]:
 
 def save_pages(pages: Dict[str, dict], path: Path = PAGES_FILE) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    # mtime=0: the same pages give the same bytes, so an unchanged cache never shows up as a change in git
-    with open(path, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as gz:
+    tmp = Path(str(path) + ".tmp")
+    # mtime=0: the same pages give the same bytes, so an unchanged cache never shows up as a change in git; written to a
+    # temporary file and renamed, so a reader never sees half a file
+    with open(tmp, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as gz:
         for url in sorted(pages):
             gz.write((json.dumps(pages[url], ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+    os.replace(tmp, path)
 
 
 # ----------------------------------------------------------------------------- discovery
@@ -77,7 +82,8 @@ def parse_sitemap(xml: str) -> List[dict]:
         if not loc:
             continue
         mod = re.search(r"<lastmod>\s*(.*?)\s*</lastmod>", block, re.S)
-        rows.append({"url": loc.group(1).replace("&amp;", "&"), "lastmod": mod.group(1)[:10] if mod else ""})
+        url = re.sub(r"^<!\[CDATA\[(.*)\]\]>$", r"\1", loc.group(1).strip()).replace("&amp;", "&")
+        rows.append({"url": url, "lastmod": re.sub(r"<!\[CDATA\[|\]\]>", "", mod.group(1))[:10] if mod else ""})
     return rows
 
 
@@ -100,7 +106,7 @@ def discover(source: Source, fetcher: PoliteFetcher) -> tuple:
 
 # ----------------------------------------------------------------------------- collection
 def collect_source(source: Source, fetcher: PoliteFetcher, pages: Dict[str, dict], start: str,
-                   refresh: bool = False, max_pages: Optional[int] = None, log=print) -> List[dict]:
+                   refresh: bool = False, max_pages: Optional[int] = None, log=print, checkpoint=None) -> List[dict]:
     """Fetch the source's articles into `pages` (in place); returns its discovery rows."""
     found, problems = discover(source, fetcher)
     for p in problems:
@@ -133,6 +139,8 @@ def collect_source(source: Source, fetcher: PoliteFetcher, pages: Dict[str, dict
                                        "html": "", "error": res.error}
             if fetched % 10 == 0:
                 log(f"[{source.key}] {fetched} pages fetched ...")
+            if checkpoint is not None and fetched % 25 == 0:
+                checkpoint()
         disc.append(row)
     log(f"[{source.key}] done: {fetched} fetched")
     return disc
@@ -178,8 +186,14 @@ def collect(start: str = DEFAULT_START, firms: Optional[Iterable[str]] = None, r
     listings = load_pages(listings_file)
     fetcher = PoliteFetcher()
 
+    lock = threading.Lock()
+
+    def checkpoint() -> None:         # an interrupted run keeps what it fetched (dict() copies atomically under the GIL)
+        with lock:
+            save_pages(dict(pages), pages_file)
+
     def one(k: str) -> List[dict]:
-        rows = collect_source(SOURCES[k], fetcher, pages, start, refresh, max_pages, log)
+        rows = collect_source(SOURCES[k], fetcher, pages, start, refresh, max_pages, log, checkpoint)
         collect_listings(SOURCES[k], fetcher, listings, start, log)
         return rows
     with ThreadPoolExecutor(max_workers=len(keys)) as pool:

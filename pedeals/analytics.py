@@ -221,6 +221,7 @@ def deal_card(rec) -> str:
         ("Target", r.get("target"), r.get("parties_evidence")),
         ("Target's business", r.get("target_description"), r.get("description_source")),
         ("Target industry (inferred)", r.get("target_industry"), f"stems matched: {r.get('industry_evidence')}"),
+        ("Focus sector / niche", f"{_v(r.get('focus_sector'))} / {_v(r.get('niche'))}", f"niche stems: {_v(r.get('niche_evidence'))}"),
         ("Target's customers / end markets", r.get("customer_markets"), "from 'serving', 'used in', 'customers in' phrases"),
         ("Target location", f"{_v(r.get('target_location'))} ({_v(r.get('target_state'))})", ""),
         ("Stated rationale", r.get("rationale"), f"tags: {r.get('rationale_tags')}"),

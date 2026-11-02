@@ -1,7 +1,7 @@
 """
 Command line for PE Deal Intelligence.
 
-    python -m pedeals collect [--start 2023-01-01] [--firm tonkabay ...] [--refresh] [--max-pages N]
+    python -m pedeals collect [--start 2015-01-01] [--firm tonkabay ...] [--refresh] [--max-pages N]
     python -m pedeals build   [--out data/pe_deals/output]      # parse + extract the saved pages, export the dataset
     python -m pedeals validate                                  # accuracy against the reference labels, consistency checks
     python -m pedeals new-since 2026-09-01                      # deals published since a date (monitoring)
@@ -16,7 +16,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="pedeals", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("collect", help="fetch the firms' news pages (polite) into the saved cache")
-    c.add_argument("--start", default=None, help="first publication date of interest (default 2023-01-01)")
+    c.add_argument("--start", default=None, help="first publication date of interest (default 2015-01-01)")
     c.add_argument("--firm", action="append", help="firm key (repeatable); default: every firm")
     c.add_argument("--refresh", action="store_true", help="re-fetch pages already saved")
     c.add_argument("--max-pages", type=int, default=None, help="at most this many page requests per firm")

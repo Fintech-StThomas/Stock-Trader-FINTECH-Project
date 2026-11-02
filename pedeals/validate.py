@@ -44,8 +44,11 @@ FIELDS = {
     "target_state": ("target_state", "exact"),
     "deal_status": ("deal_status", "exact"),
     "price_disclosure": ("price_disclosure", "exact"),
+    "focus_sector": ("focus_sector", "exact"),
+    "niche": ("niche", "exact"),
 }
-DEAL_ONLY = {"transaction_type", "buyer", "target", "target_industry", "target_state", "deal_status", "price_disclosure"}
+DEAL_ONLY = {"transaction_type", "buyer", "target", "target_industry", "target_state", "deal_status", "price_disclosure",
+             "focus_sector", "niche"}
 
 
 def _bool(x) -> bool:
@@ -147,7 +150,8 @@ def consistency_checks(ds) -> pd.DataFrame:
         "closing date before the publication date by > 1 year": d.apply(
             lambda x: bool(re.match(r"\d{4}-", str(x["closing_date"]))) and x["closing_date"] < str(int(x["published_date"][:4]) - 1), axis=1),
         "duplicate deal ids": r["deal_id"].duplicated(),
-        "deal with a type but no buyer and no target": (d["buyer"] == "Unknown") & (d["target"] == "Unknown"),
+        "platform or add-on with no buyer and no target": d["transaction_type"].isin(["Platform investment", "Add-on acquisition"])
+        & (d["buyer"] == "Unknown") & (d["target"] == "Unknown"),
     }
     return pd.DataFrame([{"check": k, "failing": int(pd.Series(v).sum())} for k, v in checks.items()])
 

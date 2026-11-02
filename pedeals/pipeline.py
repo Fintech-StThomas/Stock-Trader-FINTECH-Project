@@ -13,8 +13,11 @@ first record, and the analysis uses `unique_deals`.
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
+import os
+import pickle
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -137,6 +140,15 @@ def infer_ownership(df: pd.DataFrame) -> pd.DataFrame:
                 flags = [f for f in r["review_flags"].split("; ") if f and f != "type unclear"]
                 df.at[i, "review_flags"] = "; ".join(flags + ["relationship inferred from another announcement"])
                 break
+        else:
+            # sponsors publish their portfolio companies' acquisitions on their own news pages: an acquisition by a
+            # company other than the sponsor, announced there, is presumed an add-on; flagged so a reviewer can check
+            if r["parties_evidence"] and r["target"] != "Unknown":
+                df.at[i, "transaction_type"] = "Add-on acquisition"
+                df.at[i, "buyer_role"] = f"{r['publisher']} portfolio company (presumed: announced on its site)"
+                df.at[i, "type_evidence"] = f"announced on {r['publisher']}'s own news page; the release does not name the sponsor"
+                flags = [f for f in r["review_flags"].split("; ") if f and f != "type unclear"]
+                df.at[i, "review_flags"] = "; ".join(flags + ["relationship presumed (published on the sponsor's site)"])
     return df
 
 
@@ -213,10 +225,43 @@ def apply_listing_date(art: Article, listed: Optional[dict]) -> None:
     art.published_evidence = f'"{listed["evidence"]}" next to the link on {listed["listing_url"]}'
 
 
+PARSE_CACHE = ROOT / "data" / "pe_deals" / "cache" / "derived" / "parsed.pkl.gz"
+
+
+def _code_version() -> str:
+    """A hash of the code that turns a page into a record: change any rule and every page is parsed again."""
+    here = Path(__file__).resolve().parent
+    blob = b"".join((here / f).read_bytes() for f in ("parse.py", "extract.py", "sources.py", "taxonomy.py", "pipeline.py"))
+    return hashlib.sha1(blob).hexdigest()
+
+
+def _load_parse_cache() -> Dict[str, tuple]:
+    """Records already extracted from identical pages by identical code (a local speed-up, never committed: it only
+    ever returns what parsing the page again would)."""
+    try:
+        with gzip.open(PARSE_CACHE, "rb") as f:
+            return pickle.load(f)
+    except Exception:  # noqa: BLE001 - missing or unreadable cache: parse everything
+        return {}
+
+
+def _save_parse_cache(entries: Dict[str, tuple]) -> None:
+    try:
+        PARSE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(str(PARSE_CACHE) + ".tmp")
+        with gzip.open(tmp, "wb") as f:
+            pickle.dump(entries, f, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, PARSE_CACHE)
+    except OSError:
+        pass
+
+
 def build_dataset(start: str = DEFAULT_START, pages_file: Path = PAGES_FILE, discovery_file: Path = DISCOVERY_FILE,
                   end: Optional[str] = None, listings_file: Path = LISTINGS_FILE) -> DealDataset:
     pages = load_pages(pages_file)
     listed = listed_dates(listings_file)
+    code = _code_version()
+    cached, fresh = _load_parse_cache(), {}
     rows, failures = [], []
     seen: Dict[str, str] = {}
     for url in sorted(pages):
@@ -230,12 +275,20 @@ def build_dataset(start: str = DEFAULT_START, pages_file: Path = PAGES_FILE, dis
             failures.append({"source": pg.get("source"), "url": url, "stage": "fetch",
                              "reason": pg.get("error") or f"HTTP {pg.get('status')}", "fetched_at": pg.get("fetched_at")})
             continue
+        key = hashlib.sha1((code + pg["html"] + json.dumps(listed.get(cu), sort_keys=True) + pg["source"] + url
+                            + str(pg.get("fetched_at", ""))).encode()).hexdigest()
+        if key in cached:
+            kind, value = cached[key]
+            fresh[key] = cached[key]
+            (rows if kind == "rec" else failures).append(value)
+            continue
         try:
             art = parse_article(pg["html"], url)
             apply_listing_date(art, listed.get(cu))
             if art.error:
-                failures.append({"source": pg["source"], "url": url, "stage": "parse", "reason": art.error,
-                                 "fetched_at": pg.get("fetched_at")})
+                fail = {"source": pg["source"], "url": url, "stage": "parse", "reason": art.error, "fetched_at": pg.get("fetched_at")}
+                failures.append(fail)
+                fresh[key] = ("fail", fail)
                 continue
             rec = extract(art, pg["source"], collected_at=pg.get("fetched_at", ""), url=url)
         except Exception as exc:  # noqa: BLE001 - one bad page never stops the run; it is reported
@@ -249,6 +302,8 @@ def build_dataset(start: str = DEFAULT_START, pages_file: Path = PAGES_FILE, dis
         rec["body"] = art.body
         rec["about_sections"] = "; ".join(n for n, _ in art.about)
         rows.append(rec)
+        fresh[key] = ("rec", rec)
+    _save_parse_cache(fresh)
 
     df = pd.DataFrame(rows)
     if df.empty:
