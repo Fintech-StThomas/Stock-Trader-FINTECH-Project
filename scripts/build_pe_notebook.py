@@ -59,11 +59,12 @@ import pedeals
 from pedeals import build_dataset, analytics as an, charts
 from pedeals.sources import SOURCES
 pd.set_option("display.width", 180); pd.set_option("display.max_columns", 30); pd.set_option("display.max_colwidth", 80)
-print("PE Deal Intelligence", pedeals.__version__, "ready in", root)""")
+print("PE Deal Sourcing", pedeals.__version__, "ready in", root)""")
 md("""## 2 · Collect
 
-The four firms are peers of the user (lower-middle-market, Midwest / central US, explicit buy-and-build) and each lists
-its news in an XML sitemap. The collector reads each site's robots.txt and obeys it, waits the site's crawl delay
+Sixteen buy-and-build sponsors active in the five focus sectors, chosen from a state-by-state research list
+(`data/pe_deals/research/pe_firms_by_state.csv`) and kept only if their robots.txt allows their news pages, their news
+is listed in a sitemap or listing page, and their articles carry a date. The collector reads each site's robots.txt and obeys it, waits the site's crawl delay
 between requests, names itself in the User-Agent, saves every page with its fetch time and logs every URL's outcome.""")
 code("""pd.DataFrame([{"key": k, "firm": s.firm, "home office": s.hq, "sitemaps": ", ".join(s.sitemaps)} for k, s in SOURCES.items()])""")
 code("""LIVE = False           # True: fetch new articles from the live sites first (minutes; pages already saved are skipped)
@@ -109,8 +110,12 @@ deals[an.DISPLAY_COLUMNS].head(15)""")
 md("""## 5 · Validate
 
 Articles were labelled field by field from the source pages. The rules were improved on a **development** set
-(in-sample) and frozen in git before each **held-out** set was drawn and labelled; only held-out accuracy is the tool's
-accuracy. Consistency checks run on every record; repeatability compares two builds.""")
+(in-sample) and frozen in git before each **held-out** round was drawn and labelled; the newest round is the accuracy
+to quote. Consistency checks run on every record; repeatability compares two builds.
+
+**Read this before using the sector views:** deals, dates, buyers and targets hold up on new sponsors, but the sector
+and niche matched the labels only about half and a third of the time on the latest round. Treat section 6 as a first
+cut and check each company's description.""")
 code("""from pedeals.validate import full_report
 Markdown(full_report(ds))""")
 md("""## 6 · Source

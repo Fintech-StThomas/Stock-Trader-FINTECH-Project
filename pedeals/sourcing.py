@@ -194,6 +194,8 @@ def ledger(records: pd.DataFrame, as_of: Optional[date] = None) -> pd.DataFrame:
         return out
     # a "holding" named like a sponsor ("Salt Creek Capital") is a co-investor read as a target: drop it
     out = out[~out["company"].map(lambda c: bool(_SPONSOR_LIKE.search(c)))]
+    # "Company Vertical Supply Group": a release's "the Company" glued to the name
+    out["company"] = out["company"].str.replace(r"^(?:[Tt]he )?Company (?=[A-Z])", "", regex=True)
     from .sources import SOURCES
     out.insert(0, "sponsor", out["source"].map(lambda s: SOURCES[s].firm if s in SOURCES else s))
     return out.sort_values(["status", "years_held"], ascending=[False, False]).reset_index(drop=True)
@@ -242,7 +244,7 @@ def consolidation(deals: pd.DataFrame, as_of: Optional[date] = None, focus_only:
 def competing_buyers(deals: pd.DataFrame, led: pd.DataFrame, niches: Optional[List[str]] = None,
                      sectors: Optional[List[str]] = None, states: Optional[List[str]] = None) -> pd.DataFrame:
     """The platforms buying in a niche (and optionally a set of states): who you would bid against for a target."""
-    a = deals[deals["transaction_type"] == "Add-on acquisition"]
+    a = deals[(deals["transaction_type"] == "Add-on acquisition") & ~deals["buyer"].fillna("Unknown").isin(["", "Unknown"])]
     if sectors:
         a = a[a["focus_sector"].isin(sectors)]
     if niches:

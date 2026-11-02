@@ -99,6 +99,10 @@ def _filters(deals: pd.DataFrame):
     query = c5.text_input("Search", key="pe_query", placeholder="e.g. HVAC, MSP, calibration, Texas")
     view = deals[deals["focus_sector"].isin(sectors or FOCUS_SECTORS)]
     view = an.search(view, query, firms=firms, states=states, since=since.isoformat())
+    st.caption("⚠️ Sector and niche come from keyword rules on each target's description. On the latest held-out "
+               "articles they matched the labels about half the time (Data quality tab), so treat the sector view as a "
+               "first cut: open the description before relying on a company's sector, and add 'Outside focus' to "
+               "see deals that may have been misplaced. Buyers, targets, deal types and dates are far more reliable.")
     return view, (sectors or FOCUS_SECTORS), since
 
 
@@ -233,19 +237,25 @@ def _monitor(view: pd.DataFrame) -> None:
 
 
 def _quality(ds) -> None:
-    from .validate import evaluate
-    held, dev = evaluate(ds, split="held-out"), evaluate(ds, split="development")
-    st.markdown(f"**Accuracy against hand-labelled source pages.** Held-out: {held.n_labels} articles labelled after the "
-                f"rules were frozen (the numbers to quote); development: {dev.n_labels} articles the rules were tuned on.")
-    t = held.summary[["field", "n", "correct", "accuracy", "ci_low", "ci_high"]].merge(
-        dev.summary[["field", "accuracy"]].rename(columns={"accuracy": "development"}), on="field", how="left")
+    from .validate import QUOTE_SPLIT, SPLITS, evaluate, load_labels
+    labels = load_labels()
+    reps = {sp: evaluate(ds, labels, sp) for sp in SPLITS if (labels["split"] == sp).any()}
+    held = reps[QUOTE_SPLIT] if QUOTE_SPLIT in reps else next(iter(reps.values()))
+    st.markdown(f"**Accuracy against labelled source pages.** {held.split}: {held.n_labels} articles labelled after the "
+                "current rules were frozen in git (the numbers to quote). Earlier rounds are shown for comparison; rules "
+                "were changed after reading their mismatches, so their current scores are in-sample. "
+                "Details: `data/pe_deals/validation/results.md`.")
+    t = held.summary[["field", "n", "correct", "accuracy", "ci_low", "ci_high"]]
+    for sp, rep in reps.items():
+        if sp != held.split:
+            t = t.merge(rep.summary[["field", "accuracy"]].rename(columns={"accuracy": sp}), on="field", how="left")
     st.dataframe(t, hide_index=True, width="stretch", column_config={
         "n": "Labelled", "correct": "Correct",
-        "accuracy": st.column_config.ProgressColumn("Held-out accuracy", format="percent", min_value=0, max_value=1),
+        "accuracy": st.column_config.ProgressColumn(f"{held.split} accuracy", format="percent", min_value=0, max_value=1),
         "ci_low": st.column_config.NumberColumn("95% low", format="%.2f"), "ci_high": st.column_config.NumberColumn("95% high", format="%.2f"),
-        "development": st.column_config.NumberColumn("Development (in-sample)", format="%.2f")})
+        **{sp: st.column_config.NumberColumn(f"{sp} (now)", format="%.2f") for sp in reps if sp != held.split}})
     if len(held.errors):
-        with st.expander(f"Held-out mismatches ({len(held.errors)})"):
+        with st.expander(f"{held.split} mismatches ({len(held.errors)})"):
             st.dataframe(held.errors, hide_index=True, width="stretch")
     c1, c2 = st.columns(2)
     with c1:

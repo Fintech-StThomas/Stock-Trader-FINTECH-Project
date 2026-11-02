@@ -47,6 +47,21 @@ FIELDS = {
     "focus_sector": ("focus_sector", "exact"),
     "niche": ("niche", "exact"),
 }
+# label rounds, newest first. A round is "held out" from the rules frozen before it was labelled; once rules are
+# changed after looking at its mismatches, its current accuracy is in-sample and the number to quote is the one
+# measured at the freeze (FROZEN_SCORES) or on the next round.
+SPLITS = {
+    "held-out-3": "round 3: 44 articles, any sponsor, labelled after the rules were frozen in commit 1835b7f",
+    "held-out-2": "round 2: 60 articles from the twelve added sponsors and 2015-2022, labelled after the freeze in commit 0bf8a14",
+    "held-out": "round 1: 38 articles from the first four sponsors, labelled after the first freeze",
+    "development": "the articles the first rules were written on (in-sample)",
+}
+QUOTE_SPLIT = "held-out-3"
+# round 2 scored at its freeze (commit 0bf8a14) with this scorer, before the rules were changed: (correct, labelled)
+FROZEN_SCORES = {"held-out-2": {
+    "is_deal": (60, 60), "news_category": (58, 60), "published_date": (60, 60), "transaction_type": (43, 48),
+    "buyer": (44, 48), "target": (45, 48), "target_industry": (26, 47), "target_state": (40, 48),
+    "deal_status": (42, 48), "price_disclosure": (46, 48), "focus_sector": (30, 47), "niche": (13, 31)}}
 DEAL_ONLY = {"transaction_type", "buyer", "target", "target_industry", "target_state", "deal_status", "price_disclosure",
              "focus_sector", "niche"}
 
@@ -227,30 +242,53 @@ def evaluate(ds, labels: pd.DataFrame = None, split: str = "held-out") -> Valida
 
 
 def full_report(ds, labels: pd.DataFrame = None) -> str:
-    """The validation write-up: held-out accuracy (the number to quote) next to the development accuracy, the
-    consistency checks, repeatability and every mismatch."""
-    held, dev = evaluate(ds, labels, "held-out"), evaluate(ds, labels, "development")
-    acc = lambda r, f: r.summary.set_index("field").loc[f] if f in set(r.summary["field"]) else None  # noqa: E731
-    lines = ["# PE Deal Intelligence: validation", "",
-             f"Reference labels: {held.n_labels} held-out articles (labelled after the extraction rules were frozen in git) "
-             f"and {dev.n_labels} development articles (the rules were tuned on these, so their accuracy is in-sample).", "",
-             "| Field | Held-out: correct / labelled | Held-out accuracy (95% interval) | Development accuracy |", "|---|---|---|---|"]
+    """The validation write-up: per field, the newest held-out round (the number to quote), the earlier rounds at their
+    freeze and now, the consistency checks, repeatability and every mismatch of the quoted round."""
+    labels = load_labels() if labels is None else labels
+    reps = {sp: evaluate(ds, labels, sp) for sp in SPLITS if (labels["split"] == sp).any()}
+    quote = reps.get(QUOTE_SPLIT) or next(iter(reps.values()))
+
+    def cell(rep, f):
+        t = rep.summary.set_index("field")
+        if f not in t.index:
+            return "—"
+        r = t.loc[f]
+        return f"{int(r['correct'])}/{int(r['n'])} ({r['accuracy']:.0%})"
+
+    lines = ["# PE Deal Sourcing: validation", "",
+             "Accuracy per field against articles labelled from the source pages. Each held-out round was labelled after "
+             "the rules were frozen in git; the newest round measures the rules as they are now and is the number to quote. "
+             "Rules changed after a round's mismatches were read make that round in-sample, so its score at the freeze "
+             "is kept next to its score now.", ""]
+    lines += [f"- **{sp}**: {SPLITS[sp]} ({reps[sp].n_labels} matched)" for sp in reps]
+    heads = []
+    for sp in reps:
+        if sp in FROZEN_SCORES:
+            heads.append((f"{sp} at its freeze", sp, True))
+        heads.append((f"{sp} now" if sp != QUOTE_SPLIT else f"**{sp} (quote this)**", sp, False))
+    lines += ["", "| Field | " + " | ".join(h for h, _, _ in heads) + " |", "|---|" + "---|" * len(heads)]
     for f in FIELDS:
-        h, d = acc(held, f), acc(dev, f)
-        if h is None:
-            continue
-        lines.append(f"| {f} | {int(h['correct'])} / {int(h['n'])} | {h['accuracy']:.0%} ({h['ci_low']:.0%}-{h['ci_high']:.0%}) | "
-                     + (f"{d['accuracy']:.0%} ({int(d['correct'])}/{int(d['n'])})" if d is not None else "—") + " |")
-    c = held.classification
-    lines += ["", f"Deal vs other news (held-out): precision {c['precision']:.0%}, recall {c['recall']:.0%} "
-                  f"({c['tp']} deals found, {c['fp']} false alarms, {c['fn']} missed).", "",
+        row = []
+        for _, sp, frozen in heads:
+            if frozen:
+                k, n = FROZEN_SCORES[sp].get(f, (0, 0))
+                row.append(f"{k}/{n} ({k / n:.0%})" if n else "—")
+            else:
+                row.append(cell(reps[sp], f))
+        lines.append(f"| {f} | " + " | ".join(row) + " |")
+    s = quote.summary.set_index("field")
+    lines += ["", f"95% Wilson intervals, {quote.split}: " + "; ".join(
+        f"{f} {s.loc[f, 'ci_low']:.0%}-{s.loc[f, 'ci_high']:.0%}" for f in s.index), ""]
+    c = quote.classification
+    lines += [f"Deal vs other news ({quote.split}): precision {c['precision']:.0%}, recall {c['recall']:.0%} "
+              f"({c['tp']} deals found, {c['fp']} false alarms, {c['fn']} missed).", "",
               "## Consistency checks (every record, no labels needed)", "", "| Check | Records failing |", "|---|---|"]
-    lines += [f"| {r.check} | {r.failing} |" for r in held.consistency.itertuples()]
-    lines += ["", f"Repeatability: two builds from the same saved pages are {'identical' if held.repeatable else 'DIFFERENT'} "
+    lines += [f"| {r.check} | {r.failing} |" for r in quote.consistency.itertuples()]
+    lines += ["", f"Repeatability: two builds from the same saved pages are {'identical' if quote.repeatable else 'DIFFERENT'} "
                   f"(fingerprint `{ds.fingerprint()}`)."]
-    for name, rep in (("held-out", held), ("development", dev)):
-        if len(rep.errors):
-            lines += ["", f"## Mismatches, {name} ({len(rep.errors)})", "", "| Article | Field | Label | Program |", "|---|---|---|---|"]
+    for sp, rep in reps.items():
+        if len(rep.errors) and sp != "development":
+            lines += ["", f"## Mismatches, {sp} ({len(rep.errors)})", "", "| Article | Field | Label | Program |", "|---|---|---|---|"]
             lines += [f"| {str(r.headline)[:70]} | {r.field} | {str(r.label)[:60]} | {str(r.program)[:60]} |" for r in rep.errors.itertuples()]
-    lines += ["", "## Notes", ""] + [f"- {n}" for n in held.notes]
+    lines += ["", "## Notes", ""] + [f"- {n}" for n in quote.notes]
     return "\n".join(lines) + "\n"

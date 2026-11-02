@@ -258,6 +258,42 @@ def test_held_out_accuracy_does_not_regress(ds):
     assert 0.6 < lo < 0.87 < hi < 1
 
 
+def test_industry_words_match_whole_words_and_skip_sponsor_names():
+    from pedeals.extract import industry_of
+    assert industry_of("a provider of commercial insurance, personal lines and employee benefits services")[0] == "Financial services"
+    assert industry_of("Peterson McGregor and Associates")[0] != "Consumer & food"          # "pet" is a whole word
+    assert industry_of("specialized AWS IoT, Travel and Hospitality and Retail consulting")[0] != "Healthcare"
+    assert industry_of("Gridiron Capital announces Pendo", mask=("Gridiron Capital", "Gridiron"))[0] == "Unknown"
+    # a specific word outweighs generic ones ("consulting", "testing", "compliance")
+    assert industry_of("a leading provider of cybersecurity services including penetration testing, compliance "
+                       "auditing and strategic consulting")[0] == "IT services & cybersecurity"
+    assert industry_of("a premier injection molder with more than 40 years of dedicated healthcare manufacturing "
+                       "experience")[0] == "Industrial manufacturing"
+
+
+def test_the_sponsors_own_city_is_not_the_targets():
+    body = ("Gryphon Investors (“Gryphon”), a San Francisco-based middle-market private equity firm, announced today that "
+            "it has made a majority investment in PestRoutes (or the “Company”), a leading provider of software.")
+    assert location_of(["PestRoutes"], {}, "a leading provider of software", body) == ("", "")
+    body = "Montage Partners, a private equity firm headquartered in Scottsdale, Arizona, invested in Military Fasteners."
+    assert location_of(["Military Fasteners"], {}, "", body)[1] == ""
+
+
+def test_a_third_party_buying_a_company_the_sponsor_invested_in_is_an_exit(ds):
+    r = ds.records[ds.records["headline"] == "Quarterhill Announces Agreement to Acquire ETC"].iloc[0]
+    assert r["transaction_type"] == "Exit" and "Align Looks to Increase Speed" in r["type_evidence"]
+
+
+def test_latest_held_out_round_does_not_regress(ds):
+    """Floors a little under the round-3 scores (validate.QUOTE_SPLIT): a guard against regressions, not a target."""
+    rep = evaluate(ds, split="held-out-3")
+    acc = rep.summary.set_index("field")["accuracy"]
+    assert rep.n_labels == 44
+    assert acc["is_deal"] >= 0.93 and acc["published_date"] >= 0.97
+    assert acc["transaction_type"] >= 0.8 and acc["buyer"] >= 0.78 and acc["target"] >= 0.86
+    assert acc["target_industry"] >= 0.45
+
+
 # ----------------------------------------------------------------------------- the dashboard tab
 def test_pe_tab_renders_in_the_dashboard():
     pytest.importorskip("streamlit")

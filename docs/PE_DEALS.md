@@ -1,204 +1,231 @@
-# PE Deal Intelligence: method, data dictionary and limitations
+# PE Deal Sourcing: method, data dictionary and limitations
 
 A separate product inside the Lighthouse dashboard (tab **🤝 PE deals**, package `pedeals/`, notebook
-`notebooks/PE_Deal_Intelligence.ipynb`). It reads the deal announcements that private-equity firms publish on their own
-websites and turns each one into a record a professional can filter, compare and cite, with every important field next
-to the sentence it came from.
+`notebooks/PE_Deal_Intelligence.ipynb`). It reads the deal announcements that private-equity sponsors publish on their
+own websites and turns them into a sourcing record: which niches are being rolled up, which sponsor-owned companies
+are due to trade, and who a deal team would bid against. Every value sits next to the sentence it came from.
 
 ## 1. User, problem and decision
 
-**User.** A portfolio operations manager (or the deal team) at a lower-middle-market sponsor that buys and builds
-industrial, distribution and business-services companies.
+**User.** A deal team (associate to principal) at a lower-middle-market sponsor sourcing in five sectors:
+**building & facility services, IT services & cybersecurity, tech-enabled business services, industrial manufacturing
+and value-added distribution.**
 
-**Recurring task.** Before each add-on planning cycle the user asks: *which add-ons are peer sponsors' platforms buying,
-which capabilities do they say those add-ons bring (products, geography, customers, technology, capacity, people), and
-how fast do the best builders close deals?* Today that means reading dozens of press releases by hand on several
-sites, with no common record and no links back to the evidence.
+**Recurring task.** Every week the team asks: *which niches in our sectors are other sponsors consolidating, and how
+fast? Which sponsor-owned companies have been held long enough to come to market? Who would we bid against for a target
+in a given niche and region?* Today that means reading dozens of sponsors' press releases by hand, with no common
+record and no links back to the evidence.
 
-**What the tool gives.** A searchable deal record (deal finder), a buy-and-build tracker (add-ons per platform and the
-gap between them), an add-on research brief for the user's own industry (the decision scenario, §7), a "new since"
-digest for monitoring, and the validation evidence that says how far each field can be trusted.
+**What the tool gives.**
+* **Sourcing radar**: add-ons per niche, the number of platforms and sponsors buying, and momentum (last twelve
+  months against the twelve before).
+* **Exit watch**: a portfolio ledger rebuilt from each sponsor's own announcements; companies held four or more years
+  with no exit announced are candidates for a sponsor-to-sponsor deal.
+* **Competing buyers**: the platforms buying in a niche (and states), their cadence and how long they have been owned.
+* **Sourcing brief**: a downloadable memo per sector / niche: consolidators, what they bought (the target profile),
+  exit-watch companies, what still needs research.
+* **Deal finder, evidence cards, similar deals and a new-deal digest**, and the validation evidence.
 
-**What it does not claim.** A rationale in a press release is the sponsor's claim. Whether an add-on raised margins,
-growth or returns (*operational alpha*) needs operating results the announcements do not contain, so the tool treats
-every stated rationale as a hypothesis to investigate. The firms choose what to announce, so counts describe the
-collected announcements, not the PE market.
+**Why these five sectors.** Public evidence (2025-2026) ranks building/facility services (HVAC deals up about 13% in
+2025 while industrial M&A fell; PE the main buyer), IT managed services (169 MSP deals in 2025, PE in about 69% of those
+disclosed), tech-enabled business services (favoured as non-cyclical), industrial manufacturing (record 47.6% sponsor
+share of industrial deals) and value-added distribution among the most active lower-middle-market buy-and-build areas;
+healthcare services (state PE-ownership laws), software (2026 AI-driven repricing) and consumer (weakest activity) were
+left out. Sources: Capstone Partners HVAC update (Dec 2025) and Industrials report (May 2026), Kroll (Nov 2025), Omdia
+(Apr 2026), PitchBook 2025 Annual US PE Breakdown (Jan 2026). These five sectors also hold most of the deals the
+sponsors below announce.
+
+**What it does not claim.** "No exit announced" is not proof that a company is still held, an entry date found in a
+release is the sponsor's own statement, and the sponsors choose what to announce: the counts describe the collected
+announcements, not the PE market. Companies nobody has bought yet are outside what announcements can show.
 
 ## 2. Scope: sources, period, amount
 
-| Firm | Home office | Focus (from its own site) | How its news is found |
-|---|---|---|---|
-| Tonka Bay Equity Partners | Minnetonka, MN | engineered manufacturing, business services, value-added distribution | news sitemap |
-| Goldner Hawn | Minneapolis, MN | specialty manufacturing, value-added distribution, business and consumer services | news sitemap + news page (dates) |
-| Huron Capital | Detroit, MI | infrastructure, facility and residential services (buy-and-build "ExecFactor") | news sitemap + news page (dates) |
-| Align Capital Partners | Dallas, TX / Cleveland, OH | business services, technology, specialty manufacturing and distribution | post sitemap |
+Sixteen buy-and-build sponsors active in the five sectors: the four of the first version (Tonka Bay, Goldner Hawn,
+Huron Capital, Align Capital Partners) and twelve added in November 2026 from a state-by-state research list
+(`data/pe_deals/research/pe_firms_by_state.csv`): Fort Point Capital (MA), Compass Group Equity Partners (MO), ShoreView
+Industries (MN), CID Capital (IN), Mason Wells (WI), Gryphon Investors (CA), Gridiron Capital (CT), Oridian Capital
+Partners (DC), Azalea Capital (SC), Montage Partners (AZ), Pike Street Capital (WA) and Resilience Capital (OH).
 
-*Why these four.* They are peers of the user: lower-middle-market, Midwest and central US, explicit buy-and-build
-strategies, and they publish their add-ons (the brief's example firm, Tonka Bay, is one of them). Each lists its
-articles in an XML sitemap, so collection finds every article without crawling menus. Firms whose robots.txt blocks
-automated or AI agents by name were left out even where a generic rule would allow them; other candidates were not
-reachable or had no usable news sitemap.
+*Vetting.* A sponsor became a source only if its robots.txt allows its news pages and does not opt out of AI crawlers by
+name, its news is listed in an XML sitemap (or a listing page), and its article pages carry a date. Considered and left
+out: Slate Capital, NewSpring Capital and LFM Capital (robots.txt names AI crawlers), Blue Point Capital (pages ask not
+to be indexed), Trivest (pages show no date), Druid Capital (eight posts, none since 2022), Graycliff and Plexus
+(AI-crawler blocks), Pfingsten (robots.txt refused).
 
-*Period.* Announcements **published from 1 January 2023** to the collection date (about four years: enough for
-platforms to show several add-ons, recent enough to matter for current planning). The start date is a parameter.
+*Period.* Announcements published from **1 January 2015**: long enough to date holdings for the exit watch; the sourcing
+views default to deals since 2022.
 
-*Amount.* The sitemaps listed 518 URLs; 185 pages were fetched (the rest were last modified before the period, so they
-were published before it); 148 news items fall in the period, of which **115 are deal announcements** (80 add-ons, 17
-platform investments, 2 growth investments, 2 combinations, 14 exits). Per-firm counts are in the coverage table
-(Data quality tab, `data/pe_deals/output/coverage.csv`).
+*Amount.* 1,795 articles collected; 1,048 unique deal announcements, 605 of them placed in the five focus sectors (with the
+accuracy limits in section 6); 29 articles
+carry no date and are kept out of the period; one page failed (HTTP 504, recorded). Per-sponsor coverage is in the Data
+quality tab and `data/pe_deals/output/coverage.csv`.
 
 ## 3. Collection (`pedeals/collect.py`, `pedeals/fetch.py`)
 
-* **Polite by construction.** robots.txt is read for each host and obeyed; its `Crawl-delay` (10 seconds on Tonka Bay
-  and Goldner Hawn) is the minimum gap between requests, 5 seconds elsewhere; one thread per host; the User-Agent names
-  the tool and links to this repository. Huron's robots.txt disallows its paginated archive, so it is not read.
-* **What is kept.** Every fetched page is saved with its URL, final URL, HTTP status and UTC fetch time
-  (`data/pe_deals/cache/pages.jsonl.gz`, scripts and styles stripped, text untouched); every URL the sitemaps offered is
-  logged with its outcome (`discovery.csv`). Failed pages are recorded, never silently dropped, and never overwrite a
-  good saved copy.
-* **Cached data.** Parsing and extraction always run on the saved pages, so a run is reproducible and still works when
-  a site changes or goes offline. The app and every export say **CACHED DATA** and show the collection dates. `python -m
-  pedeals collect` (or the refresh button in the tab) adds new articles.
-* **Period filter.** A sitemap `<lastmod>` before the start date proves the page was published before it, so those
-  pages are skipped; all others are fetched and filtered by the publication date read from the page.
+* **Polite by construction.** robots.txt is read for each host and obeyed, including a Crawl-delay written outside a
+  user-agent group (10 seconds on several sites); at least 5 seconds between requests to a host otherwise; one thread
+  per host; the User-Agent names the tool and links to this repository.
+* **What is kept.** Every page with its URL, HTTP status and UTC fetch time (`data/pe_deals/cache/pages.jsonl.gz`),
+  every sitemap URL with its outcome (`discovery.csv`), news listing pages used for dates (`listings.jsonl.gz`).
+  Saves are atomic and checkpointed every 25 pages, so an interrupted run keeps what it fetched.
+* **Cached data.** Parsing and extraction always run on the saved pages, so results are reproducible and survive a
+  site going offline; the app and every export say **CACHED DATA** and show the collection dates. A local parse cache
+  (keyed on each page and on the extraction code) makes rebuilds take seconds; it is never committed.
 
-## 4. Processing and extraction (`pedeals/parse.py`, `pedeals/extract.py`)
+## 4. Processing and extraction (`pedeals/parse.py`, `pedeals/extract.py`, `pedeals/sourcing.py`)
 
-1. **Parsing.** The article body is the page container holding at least 90% of the paragraph text once navigation,
-   headers and footers are removed. "About <company>" paragraphs are separated as boilerplate, so the sponsor's own
-   sector focus is never read as the target's industry.
-2. **Publication date**, in order of trust: page metadata (`article:published_time`), the release's dateline
-   ("MINNETONKA, MN (July 7, 2026) —"), the date printed next to the link on the firm's news page, the first date in the
-   opening text, and finally a month-only date from a news page (stored as the 1st, flagged *date known to the month
-   only*). No date found → left empty and the item is kept out of the period (14 items), never guessed. The
-   publication date is never used as a closing date.
-3. **Deal or not.** Headline first (non-deal signals such as *promoted, named to, podcast, fund close, job posting*
-   decide unless a clear deal verb is present), then the opening text. A firm milestone ("Closes 100th Acquisition"),
-   a fund close or a continuation vehicle is *Fund / firm* news, not a deal.
-4. **Parties** from the release's lead sentence, split at its deal verb: the buyer is the company the release calls
-   "the Company" or the last company name before the verb; the target is the first name after it; parenthesised short
-   names become aliases. Headline patterns are the fallback. The publisher under any of its names (Align Capital
-   Partners, ACP) is the publisher; a buyer introduced as the sponsor's portfolio / partner / platform company, or one
-   that the publisher's *other* announcements show it owned at that date, is a portfolio company (the latter flagged
-   *relationship inferred from another announcement*).
-5. **Type, status, disclosure, rationale, target business**: see the data dictionary below.
-6. **Duplicates.** URLs are normalised and stored once; the same headline twice from one firm, or the same target
-   announced by two firms within 120 days, is marked `duplicate_of` (kept, not deleted); analysis uses unique deals.
+1. **Parsing.** The article body is the deepest container holding 90% of the page's text blocks (paragraphs, list items
+   and text-bearing divs, for themes that use no `<p>`); menus, headers and footers are removed unless they hold much of
+   the text. "About <company>" sections are kept apart as boilerplate.
+2. **Publication date**: page metadata, JSON-LD, `<time>`, a visible date label, the release's dateline, the date beside
+   the link on the sponsor's news page, the first date in the text, a month-only listing date (flagged); else empty and
+   out of the period. Never used as a closing date.
+3. **Deal or not**: headline first, then the opening text (fund closes, milestones, newsletters, people and awards are
+   not deals).
+4. **Parties** from the lead sentence (the company the release calls "the Company", "its portfolio company X", "X,
+   backed by …"), headline patterns as the fallback; names are checked for plausibility (not a state, city, month or
+   headline fragment). An acquisition by a non-sponsor company is an add-on when the release says the sponsor owns it,
+   when another announcement of the sponsor shows it (flagged *inferred*), or, failing both, because it is announced on
+   the sponsor's own site (flagged *presumed*).
+5. **Sector and niche**: the target's industry from the words describing its business (or, failing that, its name and
+   the headline); the five focus sectors map from it; the niche is the sector's sub-category with the most matching
+   words (`pedeals/taxonomy.py`).
+6. **Holding evidence**: sentences that date an investment ("ACP acquired StenTech in May of 2022", "since partnering
+   with Tonka Bay in 2023") and renames ("rebranded as CompletePet").
+7. **Portfolio ledger** (`sourcing.ledger`): per sponsor, an investment announcement or a dated sentence opens a
+   holding, add-ons show it is still owned, a sale closes it, a rename links the names; names merge when one contains
+   the other or the releases give the same short name. Entry dates attach only to companies the sponsor's deal records
+   know (people and co-investors never become holdings). A holding not mentioned for four years is marked *stale*
+   (probably sold without an announcement) and kept out of the exit watch, as are holds over ten years.
+8. **Duplicates**: URLs normalised and stored once; the same headline twice or the same target within 120 days marked
+   `duplicate_of`.
 
-Rules were chosen over a language model so that every value can be traced to a pattern and a sentence, the run is free
-and deterministic, and errors can be investigated; the price is lower recall on unusual wording, which the validation
-measures.
+Rules, not a language model: every value can be traced to a pattern and a sentence, runs are free and deterministic,
+and errors can be investigated. The cost is lower recall on unusual wording, which the validation measures.
 
-## 5. Data dictionary (`data/pe_deals/output/deals.csv`, one row per deal announcement)
+## 5. Data dictionary
+
+**Deal record** (`data/pe_deals/output/deals.csv`, one row per deal announcement):
 
 | Field | Meaning | Values / notes |
 |---|---|---|
-| `deal_id` | stable id (hash of the URL) | |
-| `source`, `publisher` | the firm whose website published the announcement | the publisher is **not necessarily the buyer** |
-| `url`, `collected_at` | the evidence page and when it was fetched (UTC) | |
-| `headline` | the article title | |
-| `published_date` | date the firm published the announcement | ISO date; **not** the closing date |
-| `published_method`, `published_evidence`, `published_precision` | how the date was found and the text it came from | page metadata / dateline / news listing page / first date in text; day or month |
-| `dateline_location` | where the release was issued | the publisher's city, not the target's |
-| `news_category`, `category_evidence` | Deal, Personnel, Fund / firm, Recognition / media, Other | with the words that decided it |
-| `transaction_type`, `type_evidence` | Platform investment (the publisher invests), Add-on acquisition (a company it owns acquires), Growth / minority investment, Merger / combination, Exit (the publisher sells), Dividend recapitalization, Unclear | with the evidence |
-| `deal_status`, `status_evidence` | Completed (the text says it happened), Announced / pending (agreement, expected to close), Unknown | from the headline, lead sentence and the sentence after it only |
-| `buyer`, `buyer_short`, `buyer_role` | the acquirer or investor, its short name, its relationship to the publisher | Publisher (the PE firm itself) / <firm> portfolio company / Third party (acquirer) |
-| `sponsor`, `seller` | the PE firm behind the deal; the seller in exits | |
-| `target`, `n_targets`, `parties_evidence` | the company (or companies, `;`-separated) acquired or invested in | with the sentence |
-| `target_description`, `description_source` | the words that describe the target's business | lead-sentence appositive, a sentence about the target, or its "About" section |
-| `target_industry`, `industry_evidence`, `industry_ambiguous` | category of the **target's own business** (taxonomy in `pedeals/taxonomy.py`) | Industrial manufacturing, Value-added distribution, Aerospace & defense, IT services & cybersecurity, Software & data, Business services, Healthcare, Building & infrastructure services, Transportation & logistics, Consumer & food, Energy & environmental, Financial services, Unknown |
-| `customer_markets` | industries the target **serves** (kept apart from its own industry) | e.g. Industrial / OEM, Healthcare, Government |
-| `target_location`, `target_state`, `target_region` | where the target is based, if the text says | state empty when not stated or ambiguous (Kansas City) |
-| `rationale`, `rationale_tags` | up to two sentences giving the stated reason, and the capabilities they name | Product / service expansion, Geographic reach, Customers / channels, Technology / capability, Capacity / scale, Talent / leadership |
-| `price_disclosure`, `deal_value_usd`, `price_evidence` | Disclosed (a dollar amount tied to the deal), Not disclosed (stated), Not stated | **a missing price is empty, never 0** |
-| `ownership`, `closing_date` | stake (Majority / Minority / 100% / Unknown) and a closing date only if the text gives one | otherwise Unknown / Not stated |
-| `review_flags` | what a reviewer should check | e.g. several targets, industry ambiguous, date from news listing page, relationship inferred |
-| `in_period`, `period_note`, `duplicate_of`, `also_reported_by`, `platform_key` | period membership, duplicates, the key that groups a platform across renames | |
+| `deal_id`, `source`, `publisher`, `url`, `collected_at` | the announcement, the sponsor that published it, when it was fetched (UTC) | the publisher is **not necessarily the buyer** |
+| `headline`, `published_date`, `published_method`, `published_evidence`, `published_precision` | title; publication date and how it was found | not the closing date |
+| `news_category`, `category_evidence` | Deal, Personnel, Fund / firm, Recognition / media, Other | |
+| `transaction_type`, `type_evidence` | Platform investment, Add-on acquisition, Growth / minority investment, Merger / combination, Exit, Dividend recapitalization, Unclear | |
+| `deal_status`, `status_evidence` | Completed, Announced / pending, Unknown | |
+| `buyer`, `buyer_short`, `buyer_role`, `sponsor`, `seller` | acquirer / investor, its short name, its relationship to the publisher | Publisher; <sponsor> portfolio company (stated / inferred / presumed); Third party |
+| `target`, `target_short`, `n_targets`, `parties_evidence` | company or companies acquired (`;`-separated) | |
+| `target_description`, `description_source` | the words describing the target's business | |
+| `target_industry`, `industry_evidence` | the target's own industry (taxonomy in `pedeals/taxonomy.py`) | |
+| `focus_sector`, `niche`, `niche_evidence` | one of the five focus sectors (or Outside focus) and its niche | e.g. Building & facility services / HVAC & mechanical |
+| `customer_markets` | industries the target serves, kept apart from its own | |
+| `target_location`, `target_state`, `target_region` | where the target is based, if stated | empty when not stated or ambiguous |
+| `rationale`, `rationale_tags` | the stated reason and the capabilities it names | |
+| `price_disclosure`, `deal_value_usd`, `price_evidence`, `ownership`, `closing_date` | disclosure gaps | a missing price is empty, never 0 |
+| `entry_statements`, `renames` | dated investments and renames found in the text (JSON) | feed the ledger |
+| `review_flags`, `in_period`, `period_note`, `duplicate_of`, `platform_key` | reviewer warnings, period, duplicates, the key grouping a platform across renames | |
 
-`all_articles.csv` holds every parsed article (deals and other news); `coverage.csv`, `failures.csv`, `deals.json` and
-`deal_brief.md` complete the export.
+**Portfolio ledger** (`portfolio_ledger.csv`; `exit_watch.csv` is its filtered view): `sponsor`, `company`, `status`
+(Exited / No exit announced), `entry_date` and `entry_basis` (investment announced / date stated in a release / first
+seen), `entry_evidence`, `entry_url`, `years_held` and `years_basis` (from entry / at least), `last_seen`, `stale`,
+`add_ons`, `last_add_on`, `exit_date`, `exit_buyer`, `exit_url`, `focus_sector`, `niche`, `state`, `evidence_urls`,
+`signal` (strong: 5+ years from a dated entry; watch; watch (entry not dated)).
+
+**Consolidation map** (`consolidation_since_2022.csv`): `focus_sector`, `niche`, `add_ons`, `platforms`, `sponsors`,
+`last_12m`, `prior_12m`, `momentum`, `latest`, `target_states`.
 
 ## 6. Validation (`pedeals/validate.py`, `data/pe_deals/validation/`)
 
-* **Reference labels.** 109 articles were labelled field by field from the source pages
-  (`reference_labels.csv`, conventions in `validation/README.md`): **71 development** articles (a stratified sample
-  plus hard cases) on which the rules were improved, then the rules were **frozen in git**, then **38 held-out**
-  articles were drawn at random from those not yet labelled and labelled. Only held-out accuracy is quoted as the
-  tool's accuracy; development accuracy is in-sample.
-* **Held-out results** (30 deals, 8 other items; 95% Wilson intervals):
+Accuracy is measured against articles labelled field by field from the source pages, in rounds: rules are improved on a
+**development** set, frozen in a git commit, then a **held-out** set is drawn and labelled. Only held-out accuracy is the
+tool's accuracy.
 
-| Field | Held-out accuracy | Development (in-sample) |
-|---|---|---|
-| Deal vs other news | 38 / 38 (91-100%) | 71 / 71 |
-| News category, publication date | 38 / 38 each | 71 / 71 each |
-| Transaction type, buyer, target, price disclosure | 30 / 30 each (89-100%) | 54/54, 54/54, 53/54, 54/54 |
-| Target industry | 26 / 30 = 87% (70-95%) | 49 / 53 = 92% |
-| Target state | 29 / 30 = 97% (83-99%) | 52 / 54 |
-| Deal status | 29 / 30 = 97% (83-99%) | 54 / 54 |
+| Field | **Round 3 (quote this)** | Round 2 at its freeze | Round 1 | Development (in-sample) |
+|---|---|---|---|---|
+| Deal vs other news | 42/44 (95%) | 60/60 | 38/38 | 71/71 |
+| Publication date | 44/44 (100%) | 60/60 | 38/38 | 71/71 |
+| Transaction type | 30/36 (83%) | 43/48 | 30/30 | 54/54 |
+| Buyer | 29/36 (81%) | 44/48 | 30/30 | 54/54 |
+| Target | 32/36 (89%) | 45/48 | 30/30 | 53/54 |
+| Target's state | 25/36 (69%) | 40/48 | 29/30 | 52/54 |
+| Deal status | 27/36 (75%) | 42/48 | 29/30 | 54/54 |
+| Price disclosure | 33/36 (92%) | 46/48 | 30/30 | 54/54 |
+| **Target industry** | **18/36 (50%)** | 26/47 | 27/30 | 50/53 |
+| **Focus sector** | **18/36 (50%)** | 30/47 | — | — |
+| **Niche** | **8/27 (30%)** | 13/31 | — | — |
 
-* **Errors investigated.** Industry is the weakest field: a target described by its end product (a pet-wellness
-  *manufacturer*, a sealing products *supplier*) or with words from two categories (a "cloud-based case management
-  platform" for litigators) is a judgement call where the rules and a human can disagree. Status errors come from
-  history sentences ("acquired ISPN in 2020") and were reduced by reading only the lead sentence and the one after it.
-  Every mismatch is listed in `results.md` and in the Data quality tab.
-* **Consistency checks** on all records (dates after collection, publisher as its own add-on buyer, zero prices,
-  missing evidence, duplicate ids ...): 0 failures. **Repeatability**: two builds from the saved pages give identical
-  records (fingerprint printed). `tests/test_pedeals.py` (25 tests) covers the hard cases and fails if held-out
-  accuracy regresses.
-* **Limits of this evidence.** The labels were produced by an AI assistant reading the pages and have not yet been
-  checked by a person (`verified_by_human = no`); a group member should re-label a random subset blind and report the
-  agreement. 25 of the 38 held-out items come from Align, the most active publisher, so accuracy on other sites' formats
-  rests on fewer items. Validation evidence is accuracy against labels; the `review_flags` are the program's own
-  warnings and are **not** evidence of accuracy, and no output was corrected by hand.
+Round 1: 38 articles from the first four sponsors. Round 2: 60 articles from the twelve added sponsors and 2015-2022,
+scored at the freeze (commit `0bf8a14`). The industry rules were then fixed on round 2's mismatches (industry rose to
+39/47 on round 2, which is now in-sample), frozen again (commit `1835b7f`) and tested on round 3: 44 new articles from
+every sponsor. Per-round tables, 95% intervals and every mismatch: `data/pe_deals/validation/results.md`.
 
-## 7. Using the outputs: the decision scenario
+**What this says.** Finding deals, dates, buyers and targets holds up on sponsors the rules were not written on (83-100%).
+**The sector and niche do not: about half of the targets get the sector a reader would give them**, and each fresh
+round scored lower than the last, so the in-sample numbers overstate accuracy for new sponsors. The misses on round 3
+are taxonomy boundaries (a manufacturer of baked goods or beauty products: Consumer or Industrial manufacturing?), the
+wrong sentence taken as the description, and vocabulary the keyword lists do not cover. Two rounds of keyword tuning
+moved the out-of-sample number little; a model-based classifier (section 9) is the likelier fix. Until then the app
+says so beside the sector filter, and the sourcing views should be read as a first cut to be checked against each
+deal's description.
 
-*"Our platform is an IT managed-services provider. Which capabilities are peer platforms adding, and where should our
-next add-on search start?"* In the **Add-on research brief** the user picks *IT services & cybersecurity*: the brief
-lists every such add-on with buyer, sponsor, state, stated rationale and a source link, and counts the rationale tags.
-In the collected data, technology / capability and geographic reach dominate those add-ons (Goldner Hawn's Cyber
-Advisors added eight managed-service and security firms in about 20 months, a median of 79 days apart; Tonka Bay's
-Corporate Technologies four), which points the user to (a) security-testing and compliance capabilities and (b)
-regional MSPs in states the platform does not cover. The **buy-and-build tracker** shows which platforms run a fast,
-steady cadence, i.e. whose integration playbook is worth asking about.
+* **Consistency checks** on every record (dates after collection, sponsor as its own add-on buyer, zero prices, buyer
+  equal to target, platform or add-on without buyer and target, duplicate ids): none fails. **Repeatability**:
+  two builds from the saved pages give identical records (fingerprint printed in `results.md`).
+* **Limits of this evidence.** Labels were produced by AI models reading the pages (round 1 by the model that wrote the
+  rules; round 2 by a different model, blind to the program's output); none has been checked by a person
+  (`verified_by_human = no`). Before quoting the numbers, a group member should re-label a random subset blind and
+  report the agreement. The exit watch's entry dates are scored indirectly (through the fields above and the ledger
+  tests), not as a labelled field. `review_flags` are the program's own warnings, not evidence of accuracy, and no
+  output was corrected by hand.
 
-*Supported by this evidence:* which companies were bought, by whom, when, and what the sponsors said they add.
-*Needs further research:* the prices paid (never disclosed here), whether the add-ons improved margins, growth or
-retention, deals the firms did not announce, and the targets' size.
+## 7. Using the outputs: a sourcing week
 
-## 8. Creative features (beyond the required workflow)
+*"We are building an IT managed-services platform. Who else is buying MSPs, what did they pay for (what kind of
+company), and which sponsor-owned MSP or adjacent business may come to market?"* In **Competing buyers** the team picks
+IT services & cybersecurity / Managed IT services (MSP): Goldner Hawn's Cyber Advisors (five MSP add-ons; sold in 2026)
+and Tonka Bay's Corporate Technologies (four, still owned) were the most active buyers, in the Upper Midwest and Iowa /
+Indiana. The **Sourcing brief** lists those targets with their descriptions and states (the profile to look for) and the
+sponsor-owned IT companies past four years. The **Exit watch** shows the broader pipeline across the five sectors: for
+example E Source and Marco Sealing Solutions (Align, since 2019), Mechanix Wear and Ncontracts (Gryphon), KGM
+(Compass), PWSG (CID) and Right Time Group (Gryphon, twelve add-ons): the companies whose sponsors are most likely to
+start a sale process.
 
-* **Buy-and-build tracker**: platforms grouped across renames (Marco Rubber & Plastics → Marco Sealing Solutions) by the
-  short name the releases use; add-ons, companies acquired, median days between add-ons; a timeline coloured by sponsor.
-* **Add-on research brief**: the decision scenario as a downloadable Markdown memo with links, generated for any
-  industry and question.
-* **Evidence cards and similar deals**: each record as a field → value → source-sentence table; a TF-IDF search for
-  deals whose target and rationale read alike ("who else bought something like this?").
-* **Monitoring**: "new since" digest and a one-firm live refresh in the tab (polite, incremental).
-* **Ownership inference across announcements** and **disclosure-gap report** (what announcements leave out).
+The ledger's 85 exits with a dated entry were held a median of 5.6 years (middle half 3.7-7.4), which is why the watch
+starts at four years. *Supported by this evidence:* who bought what, where and when, and how long each sponsor says it
+has owned its platforms. *Needs further research:* whether the companies are still held and for sale, their size and
+financials, prices, the sponsors' fund vintage, and companies no sponsor has bought.
+
+## 8. Creative features
+
+Exit watch from a portfolio ledger rebuilt out of press releases (entry dates read from passing sentences, renames
+linked); consolidation map with momentum; competing buyers per niche and region; sourcing brief generator; evidence
+cards and similar-deal search; new-deal digest and polite live refresh; ownership inferred across announcements;
+disclosure-gap report.
 
 ## 9. Limitations
 
-* Four firms' self-published news: selective (firms announce what flatters them), incomplete (not every add-on is
-  announced) and small. Not a market dataset.
-* 14 articles have no publication date anywhere the collector may read (Huron's older pages, three Tonka Bay pages);
-  they are listed, not placed in the period. Huron dates from its news page are known to the month only.
-* Rule-based extraction fits the press-release formulas of these sites; a new firm needs a source entry and a check of
-  its pages against labels before its records are trusted.
-* Industry is inferred from description words with a small taxonomy; customers' industries are separated but the
-  boundary (a "provider of services to utilities") still needs judgement.
-* Prices, closing dates and stakes are almost never disclosed in these releases; the fields exist so that the gap is
-  visible, not because the data can fill them.
+* Sixteen sponsors' self-published news: selective, incomplete, and skewed to sponsors that announce add-ons; not a
+  market dataset.
+* "No exit announced" can mean a quiet sale: stale and very long holds are excluded by default, but a candidate still
+  needs checking before outreach.
+* Entry dates are read from text; holdings with no dated entry count "at least" from their first mention.
+* **Sector and niche are the weakest fields** (about 50% and 30% on the latest held-out round): niches come from a
+  keyword taxonomy, "Other: <sector>" marks deals it does not place, and a deal can be filed under the wrong sector.
+  The next step is a language-model classifier for these two fields only, scored on the same held-out rounds, with
+  the keyword rules kept as the fallback.
+* Rule-based extraction fits these sites' release formulas; a new sponsor needs vetting and a labelled check.
+* Prices, closing dates and stakes are almost never disclosed.
 
 ## 10. Run it
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py                     # tab "🤝 PE deals"
-python -m pedeals build                  # parse + extract the saved pages, export data/pe_deals/output/
-python -m pedeals validate               # validation report -> data/pe_deals/validation/results.md
-python -m pedeals new-since 2026-09-01   # monitoring digest
-python -m pedeals collect --firm tonkabay   # polite live refresh (minutes), then build again
+streamlit run app.py                       # tab "🤝 PE deals"
+python -m pedeals build                    # parse + extract the saved pages; export data/pe_deals/output/
+python -m pedeals validate                 # validation report -> data/pe_deals/validation/results.md
+python -m pedeals new-since 2026-09-01     # monitoring digest
+python -m pedeals collect --firm gryphon   # polite live refresh of one sponsor (minutes), then build again
 python -m pytest tests/test_pedeals.py
 ```
