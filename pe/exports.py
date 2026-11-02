@@ -24,6 +24,7 @@ FIELD_EXPLANATIONS = {
     "currency": "Currency for the disclosed transaction value.",
     "evidence_excerpt": "Short source excerpt supporting the deal details or rationale.",
     "review_status": "Current validation or human-review status.",
+    "review_notes": "Extraction flags behind the review status, such as where the date came from or an ambiguous industry.",
     "is_inferred": "Whether a classification or value is inferred rather than explicitly stated.",
 }
 

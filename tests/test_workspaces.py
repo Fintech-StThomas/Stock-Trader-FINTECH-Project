@@ -68,7 +68,8 @@ def test_pe_sidebar_switches_sections_and_deep_links():
     assert_pe_only(at)
     assert at.radio(key="pe_page").value == "explorer"
     assert at.sidebar.text_input(key="pe_explorer_search")
-    assert any("Demo dataset" in w.value for w in at.warning)
+    assert not any("Demo dataset" in w.value for w in at.warning)
+    assert any(c.value.startswith("Source: ") and "deal announcements" in c.value for c in at.caption)
 
     at.radio(key="pe_page").set_value("sources").run()
     assert_pe_only(at)

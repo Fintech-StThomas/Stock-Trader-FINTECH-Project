@@ -1,5 +1,7 @@
 """Unit tests for PE Deal Explorer logic and CSV exports."""
+import importlib.util
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -76,3 +78,47 @@ def test_csv_export_keeps_unknown_price_blank_and_source_links():
     assert "https://example.com/a" in csv and "https://example.com/b" in csv
     assert "Unknown" not in csv  # missing values remain blank, not fabricated labels
     assert "field_explanations" in csv
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _converter():
+    spec = importlib.util.spec_from_file_location("build_pe_explorer_dataset", ROOT / "scripts" / "build_pe_explorer_dataset.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_converter_keeps_unknowns_null_and_flags_review(tmp_path):
+    src = tmp_path / "deals.json"
+    src.write_text(json.dumps({"deals": [
+        {"deal_id": "x1", "publisher": "Firm A", "url": "https://example.com/x1", "headline": "Firm A sells Co",
+         "published_date": "2025-03-01", "is_deal": True, "in_period": True, "duplicate_of": "",
+         "buyer": "Unknown", "target": "Co", "transaction_type": "Exit", "deal_status": "Unknown",
+         "target_industry": "Healthcare", "target_state": "MN", "rationale_tags": "Geographic reach; Capacity / scale",
+         "deal_value_usd": None, "parties_evidence": "Firm A has sold Co.", "rationale": "",
+         "review_flags": "buyer not found; date from dateline", "industry_ambiguous": False},
+        {"deal_id": "x2", "publisher": "Firm A", "url": "https://example.com/x2", "headline": "Promotion",
+         "published_date": "2025-04-01", "is_deal": False, "in_period": True},
+    ]}))
+    out = tmp_path / "out.json"
+    deals = _converter().build(src, out)
+    assert [d["deal_id"] for d in deals] == ["x1"]
+    d = deals[0]
+    assert d["buyer_or_investor"] is None and d["transaction_status"] is None
+    assert d["price"] is None and d["currency"] is None
+    assert d["target_geography"] == "Minnesota"
+    assert d["rationale_tags"] == ["Geographic reach", "Capacity / scale"]
+    assert d["review_status"] == "needs review" and "buyer not found" in d["review_notes"]
+    assert summary_metrics(json.loads(out.read_text()))["needs_review"] == 1
+
+
+def test_shipped_dataset_is_collected_and_traceable():
+    raw = json.loads((ROOT / "data" / "pe" / "deals.json").read_text(encoding="utf-8"))
+    assert raw and all(r["data_status"] == "collected" for r in raw)
+    df = load_deals(raw)
+    assert len(df) == len(raw)  # one record per deal id
+    assert df["source_url"].map(lambda urls: bool(urls) and all(u.startswith("https://") for u in urls)).all()
+    assert df["publication_date"].notna().all()
+    assert not (df["price"] == 0).any()  # undisclosed prices stay unknown, never zero

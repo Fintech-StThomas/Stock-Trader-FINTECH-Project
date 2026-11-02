@@ -15,7 +15,17 @@ The PE Deal Explorer is a Streamlit page under the existing Lighthouse workspace
 
 ## Dataset contract
 
-The initial loader reads `data/pe/sample_deals.json`. The sample records are intentionally fictional and marked `data_status: demo`; they are interface fixtures, not real transactions. Replace them with the team's reviewed/published dataset once the collection and extraction modules are ready.
+The explorer reads `data/pe/deals.json`: **115 real deal announcements** (marked `data_status: collected`) published from January 2023 to October 2026 on the news pages of four PE firms: Tonka Bay Equity Partners, Goldner Hawn, Huron Capital and Align Capital Partners. The pages were collected on 2026-10-29.
+
+The records come from the PE deal collector and rule-based extractor on the `claude/dashboard-functionality-yi0loj` branch (`python -m pedeals`, output `data/pe_deals/output/deals.json`, build fingerprint `d5e0683fc0f5e0b2`). On 38 held-out hand-labelled articles, buyer, target, transaction type and price disclosure were 100% correct, target industry 87% and target state 97%. Rebuild the explorer file with:
+
+```bash
+python scripts/build_pe_explorer_dataset.py path/to/pedeals/deals.json
+```
+
+The conversion keeps short evidence quotes, not article bodies, and keeps unknown values null. `target_geography` is the target's US state, so it is unknown when the announcement names no state. A record is `needs review` when the extractor flagged it for a missing buyer, an ambiguous industry, an inferred relationship or several targets. Date-source flags appear in `review_notes` without changing the status. `is_inferred` is true for an ambiguous industry or an inferred relationship.
+
+`data/pe/sample_deals.json` still holds the earlier fictional demo records. The app no longer reads it.
 
 The expected deal fields include:
 
@@ -24,7 +34,7 @@ The expected deal fields include:
 - `publisher_pe_firm`, `source_url`, `headline`, `publication_date`
 - `buyer_or_investor`, `target_company`, `transaction_type`, `transaction_status`
 - `target_industry`, `target_geography`, `rationale_tags`
-- `price`, `currency`, `evidence_excerpt`, `review_status`, `is_inferred`
+- `price`, `currency`, `evidence_excerpt`, `review_status`, `review_notes`, `is_inferred`
 
 Use ISO date strings (`YYYY-MM-DD`). `price` should be numeric only when a value is disclosed; otherwise use JSON `null`. The publisher/PE firm must not be assumed to be the direct buyer. Rationale labels should align with the definitions agreed by Cole and Yuepheng.
 
@@ -35,7 +45,8 @@ Use ISO date strings (`YYYY-MM-DD`). `price` should be numeric only when a value
 - `pe/analytics.py` — normalization, deduplication, filters, metrics, and chart summaries
 - `pe/exports.py` — stable CSV output and data dictionary
 - `pe/pages/explorer.py` — Streamlit interface
-- `data/pe/sample_deals.json` — fictional demonstration records
+- `data/pe/deals.json` — the collected deal dataset
+- `scripts/build_pe_explorer_dataset.py` — converts the collector's output into that file
 - `tests/test_pe_explorer.py` — logic and export tests
 - `tests/test_workspaces.py` — app-level tests for workspace routing, the PE sidebar sections, deep links and sidebar filters
 
@@ -59,7 +70,8 @@ These tests run the real app with Streamlit's `AppTest`, including selecting a s
 
 ## Known first-version limits
 
-- The included dataset is fictional demonstration data.
+- The dataset covers only four firms and the announcements they chose to publish. None disclosed a price or closing date, so those fields are unknown throughout.
+- The data is a saved snapshot. Refreshing it means re-running the collector and the conversion script.
 - The Deal Detail page is still owned by Yuepheng; this version displays evidence in the explorer until that page is integrated.
 - Source monitoring and refresh remain Nikhil's responsibility.
 - Authentication and persistent personal workspaces are not implemented.

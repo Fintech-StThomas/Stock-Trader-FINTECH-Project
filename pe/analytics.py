@@ -15,7 +15,7 @@ DEAL_COLUMNS = [
     "deal_id", "announcement_ids", "publisher_pe_firm", "source_url", "headline",
     "publication_date", "buyer_or_investor", "target_company", "transaction_type",
     "transaction_status", "target_industry", "target_geography", "rationale_tags",
-    "price", "currency", "evidence_excerpt", "review_status", "is_inferred",
+    "price", "currency", "evidence_excerpt", "review_status", "review_notes", "is_inferred",
 ]
 
 FILTERABLE_COLUMNS = {

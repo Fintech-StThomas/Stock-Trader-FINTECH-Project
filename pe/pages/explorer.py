@@ -19,7 +19,7 @@ from pe.analytics import (
 from pe.exports import data_dictionary_csv, export_filtered
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "pe" / "sample_deals.json"
+DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "pe" / "deals.json"
 
 
 def load_explorer_dataset(path: str | Path = DEFAULT_DATA_PATH) -> tuple[pd.DataFrame, bool]:
@@ -127,7 +127,7 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
         st.warning("Demo dataset: these records are illustrative and must not be treated as verified transactions.")
 
     if data.empty:
-        st.info("No deal records are available yet. Add a published dataset at `data/pe/sample_deals.json` or pass records to `render_explorer(dataset)`. The explorer does not scrape sources when a visitor opens the page.")
+        st.info("No deal records are available yet. Add a published dataset at `data/pe/deals.json` or pass records to `render_explorer(dataset)`. The explorer does not scrape sources when a visitor opens the page.")
         return
 
     filters = render_filter_sidebar(data)
@@ -136,6 +136,8 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
     st.caption(f"Showing **{len(filtered):,}** of {len(data):,} unique deals"
                + (f" · {active} filter{'s' if active != 1 else ''} active" if active else " · no filters applied"))
     st.sidebar.caption(f"{len(data):,} deals in the dataset" + (" (demo records)" if demo_data else "") + ".")
+    if not demo_data:
+        st.caption(_provenance(data))
 
     metrics = summary_metrics(filtered)
     k1, k2, k3, k4 = st.columns(4)
@@ -172,6 +174,9 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
     table["publication_date"] = table["publication_date"].map(_fmt_date)
     table["rationale_tags"] = table["rationale_tags"].map(lambda x: ", ".join(x) if isinstance(x, list) and x else "Unknown")
     table["price"] = table["price"].map(lambda x: f"{x:,.0f}" if pd.notna(x) else "Unknown")
+    for col in ["publisher_pe_firm", "buyer_or_investor", "target_company", "transaction_type", "target_industry",
+                "target_geography", "currency", "review_status"]:
+        table[col] = table[col].map(lambda x: _display(x, "Unknown" if col != "currency" else ""))
     table = table.rename(columns={
         "publication_date": "Publication date", "publisher_pe_firm": "Publisher / PE firm",
         "buyer_or_investor": "Buyer / investor", "target_company": "Target", "transaction_type": "Type",
@@ -192,6 +197,8 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
     selected = filtered.loc[filtered["deal_id"].astype(str).eq(str(selected_id))].iloc[0]
     with st.container(border=True):
         st.markdown(f"### {_display(selected['buyer_or_investor'], 'Unknown buyer')} → {_display(selected['target_company'], 'Unknown target')}")
+        if pd.notna(selected["headline"]) and str(selected["headline"]).strip():
+            st.markdown(f"*{selected['headline']}*")
         st.caption(f"Deal ID: {selected['deal_id']} · Published {_fmt_date(selected['publication_date'])} · Status: {_display(selected['transaction_status'])}")
         detail_cols = st.columns(3)
         detail_cols[0].write(f"**Type**\n\n{_display(selected['transaction_type'])}")
@@ -206,6 +213,8 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
         if pd.notna(selected["is_inferred"]) and bool(selected["is_inferred"]):
             st.warning("At least one classification is inferred rather than explicitly stated.")
         st.write(f"**Review status:** {_display(selected['review_status'])}")
+        if pd.notna(selected["review_notes"]) and str(selected["review_notes"]).strip():
+            st.caption(f"Extraction notes: {selected['review_notes']}")
         st.write(f"**Disclosed transaction value:** {selected['price']:,.0f} {_display(selected['currency'], '')}" if pd.notna(selected["price"]) else "**Disclosed transaction value:** Unknown / not disclosed")
         urls = selected["source_url"] if isinstance(selected["source_url"], list) else []
         st.markdown("**Source announcements**")
@@ -223,6 +232,15 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
         st.download_button("Download data dictionary", data=data_dictionary_csv(), file_name="lighthouse_pe_data_dictionary.csv", mime="text/csv", key="pe_explorer_download_dictionary")
     with export_cols[2]:
         st.caption("Exports contain the same filtered, deduplicated records used by the table and charts. Missing values stay blank/unknown, not zero.")
+
+
+def _provenance(data: pd.DataFrame) -> str:
+    firms = data["publisher_pe_firm"].dropna().nunique()
+    dates = data["publication_date"].dropna()
+    span = f", published {dates.min():%b %Y} – {dates.max():%b %Y}" if len(dates) else ""
+    return (f"Source: {len(data):,} deal announcements from the news pages of {firms} PE firm"
+            f"{'s' if firms != 1 else ''}{span}, extracted by rules and checked against hand labels. "
+            "Each deal links to its original announcement.")
 
 
 def _deal_label(df: pd.DataFrame, deal_id: str) -> str:

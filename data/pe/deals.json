@@ -1,0 +1,3375 @@
+[
+ {
+  "data_status": "collected",
+  "deal_id": "2bb5602ac3",
+  "announcement_ids": [
+   "2bb5602ac3"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-forms-partnership-with-international-filtration-services/"
+  ],
+  "headline": "Goldner Hawn Forms Partnership with International Filtration Services",
+  "publication_date": "2026-10-13",
+  "buyer_or_investor": "Goldner Hawn",
+  "target_company": "International Filtration Services",
+  "transaction_type": "Platform investment",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn is pleased to announce that it has recapitalized, in partnership with management, International Filtration Services (“IFS” or the “Company”), a leading value-added distributor of industrial filtration solutions. … The investment will support IFS’s strategic initiatives, including geographic expansion, new services capabilities, hiring, and acquisitions. IFS is actively seeking add-on acquisition opportunities within the filtration space across the U.S.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "2a4d6cd93f",
+  "announcement_ids": [
+   "2a4d6cd93f"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/advantage-investigations-strengthens-presence-in-the-northeast-with-norstar-acquisition/"
+  ],
+  "headline": "Advantage Investigations Strengthens Presence in the Northeast with NorStar Acquisition",
+  "publication_date": "2026-10-07",
+  "buyer_or_investor": "Advantage Investigations",
+  "target_company": "NorStar Investigations",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "New York",
+  "rationale_tags": [
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, October 7, 2026 – Align Capital Partners’ (“ACP”) national insurance investigative services platform Advantage Investigations (“Advantage” or the “Company”) recently completed the acquisition of NorStar Investigations (“NorStar”). … This partnership brings together two established investigative organizations with a shared commitment to delivering exceptional service, reliable results and deep industry expertise. This marks the second add-on for Advantage since partnering with ACP in late 2025 and the Company’s sixth overall.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "fc9fa4fbbd",
+  "announcement_ids": [
+   "fc9fa4fbbd"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/mkb-company-acquires-siltworm-to-expand-innovative-and-sustainable-erosion-control-solutions/"
+  ],
+  "headline": "MKB Company Acquires Siltworm to Expand Innovative and Sustainable Erosion Control Solutions",
+  "publication_date": "2026-09-09",
+  "buyer_or_investor": "MKB Company",
+  "target_company": "Siltworm",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Indiana",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 9, 2026 – Align Capital Partners’ (“ACP”) environmental control platform MKB Company (the “Company” or “MKB”) announced today the acquisition of Siltworm, an Indiana-based manufacturer of erosion and sediment control products. … The acquisition expands MKB’s product capabilities and strengthens its ability to offer customers effective, sustainable solutions supported by a growing national manufacturing and distribution network. The addition of Siltworm complements MKB’s broad portfolio of products.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "1f31e9596b",
+  "announcement_ids": [
+   "1f31e9596b"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marco-expands-footprint-and-wholesale-distribution-capabilities-with-acquisition-of-global-o-ring-and-seal/"
+  ],
+  "headline": "Marco Expands Footprint and Wholesale Distribution Capabilities with Acquisition of Global O-Ring and Seal",
+  "publication_date": "2026-09-03",
+  "buyer_or_investor": "Marco Sealing Solutions",
+  "target_company": "Global O-Ring and Seal",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": "Texas",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 3, 2026 – Align Capital Partners’ (“ACP”) portfolio company Marco Sealing Solutions (“Marco” or the “Company”) announced the recent acquisition of Global O-Ring and Seal (“Global”), a Houston-based distributor of sealing products serving industrial distributors worldwide. … The acquisition adds a strategic Houston location to Marco’s growing footprint and strengthens its wholesale distribution and quick-ship capabilities. Both companies offer rapid service and inventory depth, and together, the combined organization offers a broader range of capabilities across a wider set of customers and industries.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "09d1646468",
+  "announcement_ids": [
+   "09d1646468"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-announces-partnership-with-trident-solutions/"
+  ],
+  "headline": "Align Capital Partners Announces Partnership with Trident Solutions",
+  "publication_date": "2026-09-02",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Trident Solution",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Texas",
+  "rationale_tags": [
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 2, 2026 – Align Capital Partners (“ACP”) is pleased to announce the acquisition of Trident Solution s (“Trident” or the “Company”), a manufacturer of branded safety marking, identification and damage prevention solutions serving over 1,700 customers across utility, commercial and industrial end markets. … Trident will continue to be led by CEO Blair Cook and the existing management team as the Company enters its next chapter in partnership with ACP. ACP shares that ambition, and I look forward to partnering with their team as we take Trident into its next phase of growth.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "6c127d7ab3",
+  "announcement_ids": [
+   "6c127d7ab3"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-announces-sale-of-completepet-to-blue-sea-capital/"
+  ],
+  "headline": "Align Capital Partners Announces Sale of CompletePet to Blue Sea Capital",
+  "publication_date": "2026-09-01",
+  "buyer_or_investor": "Blue Sea Capital",
+  "target_company": "CompletePet",
+  "transaction_type": "Exit",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Florida",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability",
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 1, 2026 – Align Capital Partners (“ACP”) is pleased to announce the sale of its pet wellness products platform CompletePet (the “Company”) to Blue Sea Capital. … Over the course of the partnership, the Company evolved significantly, prompting its rebrand to CompletePet, a reflection of its expanded capabilities, broader manufacturing footprint and strengthened leadership position in the industry. A key milestone in the Company’s growth journey was the acquisition of Green Mountain Animal in 2025, which expanded CompletePet’s geographic reach, added a second manufacturing facility and created new opportunities to cross-sell products and services across a broader customer base.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "82f97670b9",
+  "announcement_ids": [
+   "82f97670b9"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/e-source-acquires-aneden-consulting-to-deepen-interconnection-engineering-capabilities/"
+  ],
+  "headline": "E Source Acquires Aneden Consulting to Deepen Interconnection Engineering Capabilities",
+  "publication_date": "2026-08-24",
+  "buyer_or_investor": "E Source",
+  "target_company": "Aneden Consulting",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 24, 2026 –Align Capital Partners’ (“ACP”) utilities-focused portfolio company E Source (the “Company”) has acquired Aneden Consulting, an interconnection and compliance firm known for pairing deep technical expertise with a hands-on, client-first approach to navigating grid complexity. … This acquisition strengthens E Source’s ability to guide utilities, developers and hyperscalers through interconnection due diligence and compliance work with the same responsiveness and clarity Aneden Consulting’s clients have come to expect. As interconnection queues continue to grow nationwide amid surging power demand, Aneden Consulting’s deep technical expertise has become increasingly valuable to utilities and developers alike.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "4e232bf39a",
+  "announcement_ids": [
+   "4e232bf39a"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marco-acquires-rocket-seals-adding-70-year-legacy-to-its-growing-platform/"
+  ],
+  "headline": "Marco Acquires Rocket Seals, Adding 70-Year Legacy to Its Growing Platform",
+  "publication_date": "2026-07-14",
+  "buyer_or_investor": "Marco Sealing Solutions",
+  "target_company": "Rocket Seals, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": "Colorado",
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, July 14, 2026 – Align Capital Partners’ (“ACP”) portfolio company Marco Sealing Solutions (“Marco” or the “Company”) announced the recent acquisition of Rocket Seals, Inc., a Denver-based independent distributor specializing in O-rings and sealing products for MRO and OEM customers across North America. … The addition deepens Marco’s capabilities and extends its reach across a wide range of industrial end markets. Founded in 1956, Rocket Seals has a strong reputation for serving customers across diversified industries, including fluid power, aerospace, oil & gas, medical equipment, food & beverage, water treatment and heavy equipment.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "eb78b05b59",
+  "announcement_ids": [
+   "eb78b05b59"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/standard-locknut-acquires-jones-bearing/"
+  ],
+  "headline": "Standard Locknut acquires Jones Bearing",
+  "publication_date": "2026-07-07",
+  "buyer_or_investor": "Standard Locknut",
+  "target_company": "Jones Bearing",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Alabama",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (July 7, 2026) — Standard Locknut, a Tonka Bay partner company, has acquired Jones Bearing. … The acquisition expands Standard Locknut’s product offering into light-to-medium-duty mounted bearings while broadening its reach across both OEM and distributor channels.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "5803dd8e1d",
+  "announcement_ids": [
+   "5803dd8e1d"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capital-completes-sale-of-horsepower-automotive-group-to-river-associates/"
+  ],
+  "headline": "Huron Capital Completes Sale of Horsepower Automotive Group to River Associates",
+  "publication_date": "2026-07-01",
+  "buyer_or_investor": "River Associates Investments",
+  "target_company": "Horsepower Automotive Group",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Consumer & food",
+  "target_geography": null,
+  "rationale_tags": [
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Huron Capital Partners (“Huron Capital”), a leading middle market private equity firm, is pleased to announce the sale of Horsepower Automotive Group (“HPAG” or the “Company”), a diversified aftermarket automotive platform, to River Associates Investments (“River Associates”). … Platform Scaled Through Disciplined Buy-and-Build Strategy and Nine Add-On Acquisitions Huron Capital Partners (“Huron Capital”), a leading middle market private equity firm, is pleased to announce the sale of Horsepower Automotive Group (“HPAG” or the “Company”), a diversified aftermarket automotive platform, to River Associates Investments (“River Associates”).",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page; date known to the month only",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "5c836c9da1",
+  "announcement_ids": [
+   "5c836c9da1"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/advantage-investigations-enhances-capabilities-with-lange-technical-services/"
+  ],
+  "headline": "Advantage Investigations Enhances Capabilities with Lange Technical Services",
+  "publication_date": "2026-06-30",
+  "buyer_or_investor": "Advantage Investigations",
+  "target_company": "Lange Technical Services",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "New York",
+  "rationale_tags": [
+   "Product / service expansion"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 30, 2026 – Align Capital Partners’ (“ACP”) national insurance investigative services platform Advantage Investigations (“Advantage” or the “Company”) recently completed the acquisition of Lange Technical Services (“Lange”). … The addition of Lange broadens Advantage’s service offering to include accident reconstruction and forensic services. We look forward to the expanded opportunities and resources this partnership will provide.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "7018584b90",
+  "announcement_ids": [
+   "7018584b90"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-adds-new-england-geosystems/"
+  ],
+  "headline": "Schneider Geospatial Adds New England GeoSystems",
+  "publication_date": "2026-06-24",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "New England GeoSystems",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": "Connecticut",
+  "rationale_tags": [],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 24, 2026 – Align Capital Partners’ (“ACP”) portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired New England GeoSystems (“NEGEO”), a Connecticut-based geospatial software and services company serving municipalities throughout the Northeast. … NEGEO marks the eighth add-on for the Company since ACP acquired Schneider Geospatial in June of 2022.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "97e9879d18",
+  "announcement_ids": [
+   "97e9879d18"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/premier-biotech-broadens-product-portfolio-with-nexscreen-and-transmed-acquisitions/"
+  ],
+  "headline": "Premier Biotech Broadens Product Portfolio with NexScreen and TransMed Acquisitions",
+  "publication_date": "2026-06-18",
+  "buyer_or_investor": "Premier Biotech",
+  "target_company": "NexScreen; TransMed",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Healthcare",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 18, 2026 – Align Capital Partners’ (“ACP”) drug and alcohol testing solutions provider, Premier Biotech (“Premier” or the “Company”), announced the acquisitions of NexScreen and TransMed. … These strategic acquisitions expand Premier’s global footprint and online presence, enhance the Company’s product portfolio and deepen customer relationships across healthcare, government and workplace markets. Together, these acquisitions significantly strengthen Premier’s ability to deliver a comprehensive, end-to-end suite of solutions to its growing global customer base.",
+  "review_status": "needs review",
+  "review_notes": "several targets",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "ab5a93ee13",
+  "announcement_ids": [
+   "ab5a93ee13"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/albireo-energy-completes-acquisition-of-pasco-building-automation-systems-strengthens-presence-in-upstate-new-york/"
+  ],
+  "headline": "Albireo Energy Completes Acquisition of PASCO Building Automation Systems, Strengthens Presence in Upstate New York",
+  "publication_date": "2026-06-01",
+  "buyer_or_investor": "Albireo Energy",
+  "target_company": "PASCO Building Automation Systems",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "New York",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability",
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "EDISON, N.J.–(BUSINESS WIRE)–Albireo Energy, a leading independent building controls and energy services provider and a Huron Capital portfolio company, announced today that it has acquired PASCO Building Automation Systems (PASCO). … The acquisition enhances Albireo Energy’s Northeast footprint and expands its ability to serve a region characterized by a significant installed base of aging buildings in need of modernization. By combining PASCO’s regional expertise with Albireo Energy’s national scale, customers will benefit from enhanced capabilities, including access to Albireo Energy’s Managed Services Center, its technical center of excellence, the company’s portfolio of Intelligent Services including alarm management, private cloud hosting, fault detection and diagnostics, as well as the ability to execute more complex projects in data centers, healthcare, biopharmaceuticals, and other markets.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page; date known to the month only",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "aa080c2d7d",
+  "announcement_ids": [
+   "aa080c2d7d"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-the-exigent-group-acquires-superior-building-services-in-ohio/"
+  ],
+  "headline": "Huron Capital’s the Exigent Group Acquires Superior Building Services in Ohio",
+  "publication_date": "2026-06-01",
+  "buyer_or_investor": "The Exigent Group",
+  "target_company": "Superior Building Services",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Ohio",
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Huron Capital (“Huron”), a leading lower middle-market private equity firm, announced that its portfolio company, The Exigent Group (“Exigent,” or the “Company”), has acquired Superior Building Services (“Superior”). … “We’re excited to join Exigent and leverage the platform to accelerate our growth both within our existing footprint and in adjacent markets,” said Bill Detillion, President of Superior.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page; date known to the month only",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "9ea4c4986a",
+  "announcement_ids": [
+   "9ea4c4986a"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-partners-with-heritage-imaging-as-its-next-platform/"
+  ],
+  "headline": "ACP Partners with Heritage Imaging as its Next Platform",
+  "publication_date": "2026-05-28",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Heritage Imaging",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Healthcare",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, May 28, 2026 – Align Capital Partners (“ACP”) is pleased to announce the acquisition of Heritage Imaging (“Heritage” or the “Company”), a provider of mobile diagnostic imaging services to hospitals and healthcare facilities. … Heritage has closed three add-ons since 2024 and, alongside ACP, plans to continue M&A with an initial focus on similar outsourced imaging models in adjacent markets and service line expansion into new modalities. “Heritage was established to help hospitals provide the best possible experience and outcomes for patients, no matter where they live,” said Dr. Coppess.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "3410cfc16c",
+  "announcement_ids": [
+   "3410cfc16c"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marco-sealing-solutions-continues-expansion-with-acquisition-of-pride-seals/"
+  ],
+  "headline": "Marco Sealing Solutions Continues Expansion with Acquisition of Pride Seals",
+  "publication_date": "2026-05-20",
+  "buyer_or_investor": "Marco Sealing Solutions",
+  "target_company": "Pride Seals, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, May 20, 2026 – Align Capital Partners’ (“ACP”) portfolio company Marco Sealing Solutions (“Marco” or the “Company”) announced the recent acquisition of Pride Seals, Inc., a provider of specialty sealing products and services. … The acquisition further strengthens Marco’s position as a premier partner for engineered sealing solutions, expanding its product breadth, technical capabilities and customer base across key industrial end markets. Together, we are even better positioned to solve sealing challenges and support our customers’ most demanding applications.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "4b7b727257",
+  "announcement_ids": [
+   "4b7b727257"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-backed-strata-branches-out-closes-two-add-ons/"
+  ],
+  "headline": "ACP-Backed Strata Branches Out; Closes Two Add-ons",
+  "publication_date": "2026-05-06",
+  "buyer_or_investor": "Strata",
+  "target_company": "Watersedge Landscape",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": null,
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Strata initially acquired Watersedge Landscape (“Watersedge”) to expand its presence in the San Diego market and subsequently added Venco Western (“Venco”), which serves Ventura County and the surrounding communities. … Strata will continue to seek additional add-on opportunites with owners who care deeply about their legacy and are looking for a thoughtful transition that creates opportunities for employees and customers alike. Strata initially acquired Watersedge Landscape (“Watersedge”) to expand its presence in the San Diego market and subsequently added Venco Western (“Venco”), which serves Ventura County and the surrounding communities.",
+  "review_status": "machine-extracted",
+  "review_notes": "no target description",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "f0d19ab2ae",
+  "announcement_ids": [
+   "f0d19ab2ae"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/armko-bolsters-texas-presence-with-acquisition-of-kuhn-associates/"
+  ],
+  "headline": "Armko Bolsters Texas Presence with Acquisition of Kuhn & Associates",
+  "publication_date": "2026-05-05",
+  "buyer_or_investor": "Armko",
+  "target_company": "Kuhn & Associates, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Texas",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, May 5, 2026 – Align Capital Partners’ (“ACP”) portfolio company Armko (the “Company”) acquired Kuhn & Associates, Inc. (“Kuhn”), a building envelope consulting firm serving education, municipal and multi-family clients across Southeast Texas. … The acquisition expands Armko’s team and Texas footprint, strengthens client depth across end markets and adds complementary testing capabilities to better serve the Company’s clients. Armko will continue to pursue strategic acquisitions that augment the Company’s geographic reach, end market exposure and service capabilities.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "fe4154929c",
+  "announcement_ids": [
+   "fe4154929c"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/corporate-technologies-acquires-rpm/"
+  ],
+  "headline": "Corporate Technologies Acquires RPM",
+  "publication_date": "2026-04-30",
+  "buyer_or_investor": "Corporate Technologies",
+  "target_company": "RPM Technologies, LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Indiana",
+  "rationale_tags": [
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (April 30, 2026) — Corporate Technologies, a Tonka Bay partner company, has acquired RPM Technologies, LLC. … RPM is Corporate Technologies’ 5th acquisition since partnering with Tonka Bay and expands its footprint to 21 locations across the U.S.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "b8e882615d",
+  "announcement_ids": [
+   "b8e882615d"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/stentech-acquires-pentagon-ems-to-further-enhance-tooling-capabilities/"
+  ],
+  "headline": "StenTech Acquires Pentagon EMS to Further Enhance Tooling Capabilities",
+  "publication_date": "2026-04-21",
+  "buyer_or_investor": "StenTech",
+  "target_company": "Pentagon EMS",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Oregon",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, April 21, 2026 – Align Capital Partners’ (“ACP”) portfolio company StenTech (the “Company”), a leading provider of surface mount technology (“SMT”) printing solutions, has announced the acquisition of Pentagon EMS (“Pentagon”). … The acquisition expands StenTech’s capabilities in precision tooling, CNC machining and complex part manufacturing, enabling improved process control and production efficiency in increasingly demanding assembly environments. Headquartered near Portland, Oregon, Pentagon enhances StenTech’s North American footprint and reinforces the Company’s position as a complete partner in precision manufacturing supporting next-generation electronics, aerospace, defense and other high-reliability applications.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "9cdee65d44",
+  "announcement_ids": [
+   "9cdee65d44"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/premier-biotech-adds-scale-in-point-of-care-testing-with-gh-solutions-acquisition/"
+  ],
+  "headline": "Premier Biotech Adds Scale in Point-of-Care Testing with GH Solutions Acquisition",
+  "publication_date": "2026-04-09",
+  "buyer_or_investor": "Premier Biotech",
+  "target_company": "GH Solutions",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, April 9, 2026 – Align Capital Partners’ (“ACP”) drug and alcohol testing solutions provider Premier Biotech (“Premier” or the “Company”) has acquired GH Solutions (“GH”), a distributor of point-of-care diagnostic testing products. … This combination increases Premier’s customer base and broadens the solutions that GH can offer to its existing network. The Company will continue to pursue additional acquisitions and collaboration opportunities to further accelerate its growth.",
+  "review_status": "needs review",
+  "review_notes": "industry ambiguous",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "b812b30aee",
+  "announcement_ids": [
+   "b812b30aee"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-completes-the-sale-of-matrix-adhesives-group/"
+  ],
+  "headline": "Goldner Hawn Completes the Sale of Matrix Adhesives Group",
+  "publication_date": "2026-04-01",
+  "buyer_or_investor": "TruArc Partners",
+  "target_company": "Matrix Adhesives Group",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Ohio",
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn LP (“Goldner Hawn”) announced the sale of Matrix Adhesives Group (“Matrix” or the “Company”), a leading adhesives and sealant solutions provider, to TruArc Partners (“TruArc”). … With TruArc, we believe we have a strong partner to support our growth – expanding our capabilities, driving innovation, and pursuing strategic acquisitions to better serve our customers,” said DJ Johnson, Chief Executive Officer of Matrix Adhesives Group. During our partnership, DJ built out an outstanding team and together we executed on a number of important commercial and operational initiatives to set the company up for strong continued future growth.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "76cb8524d6",
+  "announcement_ids": [
+   "76cb8524d6"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-partners-with-lone-star-environmental-companies/"
+  ],
+  "headline": "Goldner Hawn Partners with Lone Star Environmental Companies",
+  "publication_date": "2026-03-23",
+  "buyer_or_investor": "Goldner Hawn",
+  "target_company": "Lone Star Environmental Companies",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Texas",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn is pleased to announce its partnership with Lone Star Environmental Companies (“LSEC” or, the “Company”), a leading provider of underground infrastructure services in Texas. … This partnership provides the resources to strengthen our underground infrastructure services, invest in our people and fleet, and continue delivering dependable solutions for the communities and customers we serve.” LSEC is actively seeking add-on acquisition opportunities within underground infrastructure services across the Southern and Midwest regions of the U.S.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "1866a56629",
+  "announcement_ids": [
+   "1866a56629"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-completes-the-sale-of-cyber-advisors/"
+  ],
+  "headline": "Goldner Hawn Completes the Sale of Cyber Advisors",
+  "publication_date": "2026-03-19",
+  "buyer_or_investor": "Sterling Investment Partners",
+  "target_company": "Cyber Advisors, LLC",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn LP (“Goldner Hawn”) announced the sale of Cyber Advisors, LLC (“Cyber Advisors” or the “Company”), a leading provider of cybersecurity and managed IT services, to Sterling Investment Partners (“Sterling”). … Founded in 1997, Cyber Advisors provides cybersecurity, managed IT and compliance services to small, mid, and enterprise businesses across diverse end markets. The management team has executed effectively on both organic initiatives and acquisitions, positioning the Company well for its next phase of growth.”",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "3ff460c917",
+  "announcement_ids": [
+   "3ff460c917"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/ispn-and-zcorum-unite-to-expand-managed-services-for-broadband-providers/"
+  ],
+  "headline": "ISPN and ZCorum Unite to Expand Managed Services for Broadband Providers",
+  "publication_date": "2026-03-10",
+  "buyer_or_investor": "ISPN",
+  "target_company": "ZCorum",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Georgia",
+  "rationale_tags": [
+   "Product / service expansion"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, March 10, 2026 – Align Capital Partners’ (“ACP”) portfolio company ISPN (or the “Company”) completed the acquisition of ZCorum, positioning the combined companies as a market leader in broadband-focused managed IT services. … Align Capital Partners’ (“ACP”) portfolio company ISPN (or the “Company”) completed the acquisition of ZCorum, positioning the combined companies as a market leader in broadband-focused managed IT services. Headquartered in Alpharetta, Georgia, ZCorum provides a suite of broadband diagnostics and managed services designed primarily to help rural internet providers increase operational efficiency, reduce costs and improve the subscriber experience.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "8f7c5962c8",
+  "announcement_ids": [
+   "8f7c5962c8"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-invests-in-camp-digital/"
+  ],
+  "headline": "Tonka Bay Invests in CAMP Digital",
+  "publication_date": "2026-02-26",
+  "buyer_or_investor": "Tonka Bay Equity Partners",
+  "target_company": "CAMP Digital",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Tonka Bay Announces Strategic Investment in CAMP Digital to Fuel Next Generation of Home Service Technology … Tonka Bay Equity Partners LLC (“Tonka Bay”) is pleased to announce a strategic investment in CAMP Digital (“CAMP”), a premier tech-enabled marketing platform purpose-built for the home services industry. This strategic partnership marks Tonka Bay’s commitment to backing high-growth, category-leading businesses that are disrupting traditional service models through superior technology and execution.",
+  "review_status": "needs review",
+  "review_notes": "industry ambiguous; date from first date in text",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a2a49ca7db",
+  "announcement_ids": [
+   "a2a49ca7db"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/mkb-company-acquires-us-silt-site-supply-to-expand-northeast-presence/"
+  ],
+  "headline": "MKB Company Acquires US Silt & Site Supply to Expand Northeast Presence",
+  "publication_date": "2026-02-09",
+  "buyer_or_investor": "MKB Company",
+  "target_company": "US Silt & Site Supply",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "New Hampshire",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 9, 2026 – Align Capital Partners’ (“ACP”) environmental control platform MKB Company (the “Company” or “MKB”) announced today the acquisition of US Silt & Site Supply (“US Silt”), a manufacturer and distributor of erosion and sediment control products. … The acquisition expands MKB’s geographic footprint in the Northeast and strengthens its ability to serve customers with high-quality, locally supported erosion control solutions. The addition of US Silt enhances MKB’s ability to provide localized service and faster response times across the Northeast while maintaining the consistency, scale and technical expertise of a national platform.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "778776b06f",
+  "announcement_ids": [
+   "778776b06f"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-acquires-bruce-harris-associates/"
+  ],
+  "headline": "Schneider Geospatial Acquires Bruce Harris & Associates",
+  "publication_date": "2026-02-05",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "Bruce Harris & Associates, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Technology / capability",
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 5, 2026 | Align Capital Partners’ (“ACP”) portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired Bruce Harris & Associates, Inc. (“BHA”), a GIS consulting firm known for its deep land records expertise and hands-on delivery for local governments. … The acquisition strengthens Schneider Geospatial’s ability to support parcel modernization initiatives that require both modern cloud technology and experienced execution. This expands capacity for high-complexity parcel work that requires disciplined project management, rigorous data standards and sustained post-implementation support.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "829e852fcc",
+  "announcement_ids": [
+   "829e852fcc"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/armko-announced-as-align-capital-partners-newest-aec-platform/"
+  ],
+  "headline": "Armko Announced as Align Capital Partners’ Newest AEC Platform",
+  "publication_date": "2026-01-06",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Armko Industries",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Building & infrastructure services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, January 6, 2026 | Align Capital Partners (“ACP”) announced today the acquisition of Armko Industries (“Armko” or the “Company”), a provider of specialized building envelope, roofing and waterproofing consulting services. … In partnership with ACP, we are well positioned to continue to enhance Armko’s services for our clients and aim to drive meaningful growth opportunities for our employees.” Having invested significant time mapping growth opportunities, ACP is excited to support Armko’s goals for expansion through strategic add-on acquisitions.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "186520167b",
+  "announcement_ids": [
+   "186520167b"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-rampart-exterior-services-partners-with-colorado-moisture-control/"
+  ],
+  "headline": "Huron Capital’s Rampart Exterior Services Partners With Colorado Moisture Control",
+  "publication_date": "2026-01-01",
+  "buyer_or_investor": "Rampart Exterior Services",
+  "target_company": "Colorado Moisture Control, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Colorado",
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Leading lower middle-market private equity firm Huron Capital (“Huron”) announced that its portfolio company, Rampart Exterior Services (“Rampart,” or the “Company”), has acquired Colorado Moisture Control, Inc. (“CMC”). … CMC is Rampart’s third acquisition since partnering with Independent Roofing Systems in August of 2024 and Port Enterprises in March of 2025. The partnership with CMC enhances Rampart’s geographic diversification by establishing a presence in a region with robust commercial roofing services activity.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page; date known to the month only",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a8a2b6b206",
+  "announcement_ids": [
+   "a8a2b6b206"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/mkb-company-acquires-enviroscape/"
+  ],
+  "headline": "MKB Company Acquires Enviroscape",
+  "publication_date": "2025-11-25",
+  "buyer_or_investor": "MKB Company",
+  "target_company": "Enviroscape",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Ohio",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, November 25, 2025 | Align Capital Partners’ (“ACP”) erosion control products platform MKB Company (the “Company” or “MKB”) announced today the acquisition of Enviroscape, a respected manufacturer of erosion control blankets and related products. … The acquisition enhances MKB’s manufacturing capacity, broadens its product portfolio and reinforces its long-term commitment toward building a leading national platform in stormwater and erosion control. Enviroscape brings significant manufacturing capacity and room to grow, positioning it as a key part of MKB’s national production network.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "96f9119b5d",
+  "announcement_ids": [
+   "96f9119b5d"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/counsel-press-rebrands-as-proceed-broadens-market-reach-with-three-acquisitions/"
+  ],
+  "headline": "Counsel Press Rebrands as Proceed, Broadens Market Reach with Three Acquisitions",
+  "publication_date": "2025-11-18",
+  "buyer_or_investor": "Counsel Press Inc",
+  "target_company": "Court Record Research; Special Delivery Service; Rapid Legal",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Transportation & logistics",
+  "target_geography": "Texas",
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "The new brand emerged on the heels of several recently completed acquisitions, including Court Record Research (“CRR”), Special Delivery Service (“Special Delivery”) and Rapid Legal. … The acquisitions of CRR and Special Delivery expand Proceed’s service of process footprint in the Texas Market.",
+  "review_status": "needs review",
+  "review_notes": "several targets",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "4bbc16fce7",
+  "announcement_ids": [
+   "4bbc16fce7"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-completes-growth-capital-investment-in-advantage-investigations/"
+  ],
+  "headline": "ACP Completes Growth Capital Investment in Advantage Investigations",
+  "publication_date": "2025-11-07",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Advantage Investigations",
+  "transaction_type": "Platform investment",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, November 7, 2025 | Align Capital Partners (“ACP”) recently completed the acquisition of Advantage Investigations (“Advantage” or the “Company”), a national insurance investigative services platform specializing in surveillance, research and related solutions, from MD Holdings. … The new partnership will allow Advantage to further advance its growth strategy and technology roadmap, with CEO Shelly Kummings continuing in her role alongside ACP. With over 300 employees and coverage across 45 states, Advantage has established itself as a trusted partner to many of the largest insurance carriers and TPAs in the U.S. The Company leverages its proprietary case management system to streamline the processing and delivery of investigative reports for clients.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "f0f22d57d6",
+  "announcement_ids": [
+   "f0f22d57d6"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-backed-global-guardian-acquires-solace-global-risk/"
+  ],
+  "headline": "ACP-Backed Global Guardian Acquires Solace Global Risk",
+  "publication_date": "2025-11-06",
+  "buyer_or_investor": "Global Guardian",
+  "target_company": "Solace Global Risk",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, November 6, 2025 | Align Capital Partners’ (“ACP”) portfolio company Global Guardian (the “Company”) recently announced its acquisition of Solace Global Risk, a premier travel risk management company with a strong European presence and proprietary technology platform. … ACP acquired Global Guardian in 2023 and will continue supporting the Company with operating and growth resources, including additional add-on acquisitions. “This acquisition significantly accelerates Global Guardian’s growth trajectory and strengthens our international presence, representing a pivotal moment in our mission to be the most trusted global security firm,” said Global Guardian CEO Dale Buckner.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "2dcca9a377",
+  "announcement_ids": [
+   "2dcca9a377"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/premier-acquires-nts-to-accelerate-growth-in-point-of-care-drug-screening-services/"
+  ],
+  "headline": "Premier Acquires NTS to Accelerate Growth in Point-of-Care Drug Screening Services",
+  "publication_date": "2025-11-05",
+  "buyer_or_investor": "Premier Biotech",
+  "target_company": "National Test Systems",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Healthcare",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, November 5, 2025 | Align Capital Partners’ (“ACP”) drugs and alcohol testing solutions provider Premier Biotech (“Premier” or the “Company”) has acquired National Test Systems (“NTS”), a leading provider of rapid point-of-care diagnostic drug screening supplies and services throughout the United States. … The addition of NTS enhances Premier’s customer base and strengthens the Company’s leadership within the Government and Behavioral Health channel. NTS CEO, Andrew Panico, will remain involved with the Company to support continued growth and a successful transition.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "ece4423ba7",
+  "announcement_ids": [
+   "ece4423ba7"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/mkb-company-and-western-green-combine-to-create-an-industry-leading-stormwater-and-erosion-control-platform/"
+  ],
+  "headline": "MKB Company and Western Green Combine to Create an Industry Leading Stormwater and Erosion Control Platform",
+  "publication_date": "2025-11-03",
+  "buyer_or_investor": "MKB Company",
+  "target_company": "Western Green",
+  "transaction_type": "Merger / combination",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, November 3, 2025 | Align Capital Partners’ (“ACP”) erosion control products platform MKB Company (the “Company” or “MKB”) announced today a strategic combination with Western Green, a recognized innovator in engineered erosion and sediment control solutions. … The partnership creates one of the most comprehensive platforms in the industry supported by a broader product portfolio, expanded geographic reach and deeper technical expertise to serve customers across North America. This partnership strengthens our ability to support customers where and when they need us most.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "d7eb8cb5fd",
+  "announcement_ids": [
+   "d7eb8cb5fd"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-portfolio-company-cyber-advisors-completes-tenth-acquisition-acquiring-infranet-technologies-group/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Completes Tenth Acquisition, Acquiring Infranet Technologies Group",
+  "publication_date": "2025-10-29",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "Infranet Technologies Group",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn portfolio company Cyber Advisors, a premier provider of cybersecurity, IT solutions, and managed services, announced its acquisition of Infranet Technologies Group, a deeply respected technology consulting firm with four locations throughout North Carolina and Virginia. … Founded in 1998, Infranet Technologies Group has built a strong reputation for delivering high-quality IT consulting services, specializing in enterprise infrastructure, cloud solutions, and managed services. The acquisition of Infranet Technologies Group aligns with Cyber Advisors’ strategic vision to broaden its service territory for Managed Services and deepen its expertise in infrastructure and cloud solutions.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "fa91abce44",
+  "announcement_ids": [
+   "fa91abce44"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/stentech-strengthens-precision-parts-platform-with-ame-acquisition/"
+  ],
+  "headline": "StenTech Strengthens Precision Parts Platform with AME Acquisition",
+  "publication_date": "2025-10-17",
+  "buyer_or_investor": "StenTech",
+  "target_company": "Advanced Metal Etching, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Consumer & food",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, October 17, 2025 | Align Capital Partners (“ACP”) portfolio company StenTech (the “Company”), a leading provider of surface mount technology (“SMT”) solutions, has announced the acquisition of Advanced Metal Etching, Inc. (“AME”). … The acquisition represents a significant milestone in StenTech’s growth strategy, expanding its Parts Division beyond SMT into a broader array of high-value industries including aerospace, medical, automotive, military, energy and industrial manufacturing. This integration strengthens StenTech’s ability to deliver intricate geometries, tight tolerances and scalable production capabilities across a wider spectrum of applications made in the USA using domestic and global materials.",
+  "review_status": "needs review",
+  "review_notes": "industry ambiguous",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "c8ed3a2608",
+  "announcement_ids": [
+   "c8ed3a2608"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/professional-acquires-varo-byl/"
+  ],
+  "headline": "Professional Acquires VARO/BYL",
+  "publication_date": "2025-10-07",
+  "buyer_or_investor": "Professional",
+  "target_company": "Virtual Accounts Receivable Outsourcing, LLC; BYL Services",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Pennsylvania",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (October 7, 2025) — Professional, a Tonka Bay partner company, has acquired Virtual Accounts Receivable Outsourcing, LLC and BYL Services (VARO/BYL). … Both firms are based in West Chester, Pennsylvania and will strengthen Professional’s national footprint and tech-enabled receivables management solutions across multiple industries.",
+  "review_status": "needs review",
+  "review_notes": "several targets; date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "192c4765c1",
+  "announcement_ids": [
+   "192c4765c1"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-expands-florida-presence/"
+  ],
+  "headline": "Schneider Geospatial Expands Florida Presence",
+  "publication_date": "2025-10-07",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "Grizzly Logic, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": null,
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, October 6, 2025 | Align Capital Partners’ (“ACP”) portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) announced today the acquisition of the local government web portal business from Grizzly Logic, Inc. This strategic investment expands Schneider Geospatial’s presence in the Florida market, with the Company now serving over half of the state’s 67 counties. … Align Capital Partners’ (“ACP”) portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) announced today the acquisition of the local government web portal business from Grizzly Logic, Inc. This strategic investment expands Schneider Geospatial’s presence in the Florida market, with the Company now serving over half of the state’s 67 counties. Timothy M. Thompson, Founder of Grizzly Logic, will join Schneider and lead the transition effort, bringing decades of expertise that will enhance both migration and product development.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "60dc05e3ab",
+  "announcement_ids": [
+   "60dc05e3ab"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/e-source-acquires-cf-power-to-expand-grid-modernization-and-engineering-capabilities/"
+  ],
+  "headline": "E Source Acquires CF Power to Expand Grid Modernization and Engineering Capabilities",
+  "publication_date": "2025-09-23",
+  "buyer_or_investor": "E Source",
+  "target_company": "CF Power",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Energy & environmental",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 23, 2025 | Align Capital Partners’ (“ACP”) utilities-focused portfolio company E Source (the “Company”) has acquired CF Power, a leading power systems engineering firm with a strong track record in grid modernization and interconnection studies. … Acquisition enables E Source to help customers safely and efficiently connect new power generation sources to the grid—an increasingly critical capability as utilities expand non-hydrocarbon capacity to meet rising demand from data centers and sustainability goals. This strategic acquisition enhances E Source’s ability to support utilities and developers from early-stage planning through to engineering execution—solidifying its position as one of the industry’s most capable partners for energy infrastructure transformation.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "d84855b17e",
+  "announcement_ids": [
+   "d84855b17e"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/counsel-press-acquires-firefly-legal-to-accelerate-nationwide-growth-in-service-of-process/"
+  ],
+  "headline": "Counsel Press Acquires Firefly Legal to Accelerate Nationwide Growth in Service of Process",
+  "publication_date": "2025-09-18",
+  "buyer_or_investor": "Counsel Press Inc",
+  "target_company": "Firefly Legal",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 18, 2025 | Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) has acquired Firefly Legal, strengthening its position in the service of process market. … Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) has acquired Firefly Legal, strengthening its position in the service of process market. With its strong customer focus and established client base, Firefly expands Counsel Press’ service of process footprint and enhances its nationwide capabilities.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "7c8f2195bb",
+  "announcement_ids": [
+   "7c8f2195bb"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/corporate-technologies-acquires-cenetric/"
+  ],
+  "headline": "Corporate Technologies Acquires Cenetric",
+  "publication_date": "2025-09-03",
+  "buyer_or_investor": "Corporate Technologies",
+  "target_company": "Cenetric",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (September 3, 2025) — Corporate Technologies, a Tonka Bay partner company, has acquired Cenetric. … Cenetric is Corporate Technologies’ 3 rd acquisition since partnering with Tonka Bay in 2023 and expands its footprint to 18 locations across the U.S.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "acf1250d58",
+  "announcement_ids": [
+   "acf1250d58"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/e-source-completes-the-acquisition-of-opinion-dynamics/"
+  ],
+  "headline": "E Source Completes the Acquisition of Opinion Dynamics",
+  "publication_date": "2025-08-19",
+  "buyer_or_investor": "E Source",
+  "target_company": "Opinion Dynamics",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 19, 2025 | Align Capital Partners’ (“ACP”) utilities-focused portfolio company E Source (the “Company”) has acquired Opinion Dynamics, a leading program evaluation and advisory firm focused on the intersection of the customer and the grid. … Partnership strengthens E Source’s energy efficiency, electrification and load flexibility solutions This strategic acquisition deepens E Source’s ability to deliver full-spectrum utility customer solutions—from planning and customer research to program evaluation and advisory services—solidifying its position as the industry’s most comprehensive partner.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "955c22d378",
+  "announcement_ids": [
+   "955c22d378"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/professional-credit-acquires-elevate-medical-solutions/"
+  ],
+  "headline": "Professional Acquires Elevate Medical Solutions",
+  "publication_date": "2025-08-12",
+  "buyer_or_investor": "Professional",
+  "target_company": "Elevate Medical Solutions",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Healthcare",
+  "target_geography": "Wisconsin",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (August 12, 2025) — Professional, a Tonka Bay partner company, has acquired Elevate Medical Solutions. … Based in Madison, Wisconsin, Elevate marks an expansion of Professional’s capabilities into medical coding and audit solutions to hospitals, clinics, and providers.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "79b8c4c877",
+  "announcement_ids": [
+   "79b8c4c877"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-adds-fct-to-advance-digital-permitting/"
+  ],
+  "headline": "Schneider Geospatial Adds FCT to Advance Digital Permitting",
+  "publication_date": "2025-08-11",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "Full Circle Technologies",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": "Massachusetts",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 11, 2025 | Align Capital Partners’ (“ACP”) portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired Full Circle Technologies (“FCT”), a Boston-based permitting & licensing software company that streamlines permitting for municipal departments. … The acquisition allows Schneider Geospatial to further strengthen its permitting and licensing solution and reinforces its commitment to serving the evolving needs of state and local governments. FCT’s clients will continue receiving the high-touch support they expect, now backed by the expanded resources and innovation capacity of a national GovTech platform.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "9dce19623d",
+  "announcement_ids": [
+   "9dce19623d"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/counsel-press-expands-its-appellate-footprint-with-gibson-moore/"
+  ],
+  "headline": "Counsel Press Expands Its Appellate Footprint with Gibson Moore",
+  "publication_date": "2025-07-10",
+  "buyer_or_investor": "Counsel Press Inc",
+  "target_company": "Gibson Moore",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Virginia",
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, July 10, 2025 | Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) has acquired Gibson Moore to further enhance the Company’s market presence in the Mid-Atlantic. … Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) has acquired Gibson Moore to further enhance the Company’s market presence in the Mid-Atlantic. The transaction marks the Company’s eighth add-on acquisition since ACP partnered with Counsel Press in 2023.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "3423a10f93",
+  "announcement_ids": [
+   "3423a10f93"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/ispn-expands-marketing-services-capabilities-with-acquisition-of-dxtel-business-units/"
+  ],
+  "headline": "ISPN Expands Marketing Services Capabilities with Acquisition of DxTEL Business Units",
+  "publication_date": "2025-07-02",
+  "buyer_or_investor": "ISPN",
+  "target_company": "DxTEL",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, July 2, 2025 | Align Capital Partners’ (“ACP”) portfolio company ISPN (or the “Company”) announced today the acquisition of two core business lines from DxTEL, a specialized marketing services partner to the broadband industry. … The acquisition expands ISPN’s comprehensive suite of solutions for community-focused Broadband Service Providers (“BSPs”) by adding DxTEL’s marketing expertise and the Harper platform’s proven content library. This strategic combination enhances ISPN’s ability to help clients turn customer experience into a provider’s competitive edge.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "1eef786ffd",
+  "announcement_ids": [
+   "1eef786ffd"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/counsel-press-serves-up-market-expansion-with-legalex-acquisition/"
+  ],
+  "headline": "Counsel Press Serves Up Market Expansion with Legalex Acquisition",
+  "publication_date": "2025-06-05",
+  "buyer_or_investor": "Counsel Press Inc",
+  "target_company": "Legalex LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": "New York",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 5, 2025 | Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) announced the Company’s expansion into the service of process market with its acquisition of Legalex LLC. … Headquartered in New York City, Legalex is an all-in-one technology-enabled platform designed to support process serving, court e-filing, skip tracing and investigative services across all 50 states. The acquisition of Legalex serves as a strategic pillar for Counsel Press’ continued growth in the service of process market, which significantly increases the Company’s TAM and creates cross-sell opportunities with Counsel Press’ thousands of litigator customers.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "b4cc627f83",
+  "announcement_ids": [
+   "b4cc627f83"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marco-adds-product-depth-with-acquisition-of-colonial-seal-company/"
+  ],
+  "headline": "Marco Adds Product Depth with Acquisition of Colonial Seal Company",
+  "publication_date": "2025-06-03",
+  "buyer_or_investor": "Marco Rubber & Plastics",
+  "target_company": "Colonial Seal Company",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Value-added distribution",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 3, 2025 | Align Capital Partners’ (“ACP”) custom sealing solutions provider Marco Rubber & Plastics (“Marco” or the “Company”) adds oil seals to its growing product portfolio through its acquisition of Colonial Seal Company (“Colonial”). … Align Capital Partners’ (“ACP”) custom sealing solutions provider Marco Rubber & Plastics (“Marco” or the “Company”) adds oil seals to its growing product portfolio through its acquisition of Colonial Seal Company (“Colonial”). This acquisition provides Marco enhanced product breadth and new product lines, unlocking cross-sell opportunities for the Company’s customer base.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "dbf89af55b",
+  "announcement_ids": [
+   "dbf89af55b"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-plants-roots-with-strata-landscape-services/"
+  ],
+  "headline": "Align Capital Partners Plants Roots with Strata Landscape Services",
+  "publication_date": "2025-05-29",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Strata Landscape Services",
+  "transaction_type": "Growth / minority investment",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, May 29, 2025 | Align Capital Partners (“ACP”) is pleased to announce that it completed a growth investment in Strata Landscape Services (“Strata” or the “Company”), a leading provider of commercial landscape services in the Western United States. … Align Capital Partners (“ACP”) is pleased to announce that it completed a growth investment in Strata Landscape Services (“Strata” or the “Company”), a leading provider of commercial landscape services in the Western United States. Collectively, Strata is now serving over 350 commercial clients with its full suite of maintenance, enhancement, irrigation and snow services.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "678c9726bb",
+  "announcement_ids": [
+   "678c9726bb"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/engineering-services-firm-aks-expands-washington-presence-with-two-add-ons/"
+  ],
+  "headline": "Engineering Services Firm AKS Expands Washington Presence with Two Add-ons",
+  "publication_date": "2025-05-27",
+  "buyer_or_investor": "AKS",
+  "target_company": "CPH Consultants",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Washington",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Following the PSI transaction, AKS acquired Kirkland, WA-based CPH Consultants (“CPH”), a full-service civil engineering firm, which extends AKS’ reach to the Puget Sound and Central Washington. … Following the PSI transaction, AKS acquired Kirkland, WA-based CPH Consultants (“CPH”), a full-service civil engineering firm, which extends AKS’ reach to the Puget Sound and Central Washington. This deal allows us to grow our business in ways that weren’t available to us before,” commented PSI President Chris Ammann.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "78131be6cc",
+  "announcement_ids": [
+   "78131be6cc"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/mkb-builds-a-stronger-line-of-defense-against-erosion-with-addition-of-silt-saver/"
+  ],
+  "headline": "MKB Builds a Stronger Line of Defense Against Erosion with Addition of Silt Saver",
+  "publication_date": "2025-05-21",
+  "buyer_or_investor": "MKB Company",
+  "target_company": "Silt Saver, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Georgia",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, May 21, 2025 | Align Capital Partners’ (“ACP”) erosion control products platform MKB Company (the “Company” or “MKB”) announced today it completed the acquisition of Silt Saver, Inc (“Silt Saver”). … This strategic combination strengthens MKB’s market-leading position in high-performance sediment control products by adding Silt Saver’s portfolio of innovative, outcome-oriented water management solutions. Founded in 1999 and headquartered in Covington, Georgia, Silt Saver specializes in patented inlet protection, silt fence and other sediment control products that enable better solutions for end users.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "2d2ed834a6",
+  "announcement_ids": [
+   "2d2ed834a6"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/e-source-acquires-illume-advising-to-broaden-utility-consulting-and-research-expertise/"
+  ],
+  "headline": "E Source Acquires ILLUME Advising to Boost Program Evaluation Capabilities",
+  "publication_date": "2025-05-06",
+  "buyer_or_investor": "E Source",
+  "target_company": "ILLUME Advising",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, May 6, 2025 | Align Capital Partners’ (“ACP”) utilities-focused research, data science and consulting platform E Source (the “Company”), has acquired ILLUME Advising (“ILLUME”). … From behavioral economics and human-centered design to applied engineering and building science, ILLUME’s multidisciplinary expertise will further enhance E Source’s deep technical knowledge and trend-tracking capabilities across all utility verticals. This acquisition enhances our talent pool and depth of offerings, allowing us to create a more connected and holistic client experience across services.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "0166336241",
+  "announcement_ids": [
+   "0166336241"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/smt-stencil-tooling-manufacturer-stentech-combines-with-bluering-stencils/"
+  ],
+  "headline": "SMT Stencil & Tooling Manufacturer StenTech Combines with BlueRing Stencils",
+  "publication_date": "2025-04-23",
+  "buyer_or_investor": "StenTech",
+  "target_company": "BlueRing Stencils",
+  "transaction_type": "Merger / combination",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, April 23, 2025 | Align Capital Partners (“ACP”) portfolio company StenTech (the “Company”), a leading provider of surface mount technology (“SMT”) stencils, pallets, tooling and related components, announced today that it combined with BlueRing Stencils (“BlueRing”). … Established in 2017, BlueRing is a full-service stencil manufacturer focused on supplying stencil printing technologies to the circuit board assembly industry. BlueRing offers high-quality laser cut stencils, paste transfer increasing nano-coatings, printing accessories and stencil design/development services.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a6ebf0512a",
+  "announcement_ids": [
+   "a6ebf0512a"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/cyber-advisors-acquires-stratum-security/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Acquires Stratum Security",
+  "publication_date": "2025-04-22",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "Stratum Security",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Virginia",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn portfolio company Cyber Advisors, a premier provider of cybersecurity, IT solutions, and managed services announced its acquisition of Stratum Security, a CREST-accredited information security consulting firm based in Reston, Virginia. … This strategic move highlights Cyber Advisors’ dedication to expanding its cybersecurity capabilities and delivering comprehensive offensive security services to clients nationwide. The integration of Stratum Security’s seasoned team into Cyber Advisors will provide clients with enhanced resources and expertise to navigate the complex and ever-evolving cybersecurity landscape.",
+  "review_status": "needs review",
+  "review_notes": "industry ambiguous; date from news listing page",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "28eca07b7a",
+  "announcement_ids": [
+   "28eca07b7a"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/premier-biotech-increases-offerings-and-global-distribution-network-with-recent-acquisitions/"
+  ],
+  "headline": "Premier Biotech Increases Offerings and Global Distribution Network with Recent Acquisitions",
+  "publication_date": "2025-04-10",
+  "buyer_or_investor": "Premier Biotech",
+  "target_company": "OraSure Technologies, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Healthcare",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, April 10, 2025 | Align Capital Partners’ (“ACP”) toxicology testing solutions provider Premier Biotech (“Premier” or the “Company”) completed two successive acquisitions including OraSure Technologies, Inc.’s (“OTI”) substance abuse testing business line (the “OraSure Toxicology Line”), and separately, the Mexican subsidiary of Green Earth Biomedical LLC (“GEM”), an international provider of drug testing solutions. … The OraSure Toxicology Line acquisition further solidifies Premier’s oral fluid leadership position in toxicology diagnostics and services; plus, expands Premier’s service offering and customer relationships. While broadening Premier’s offerings, this acquisition reflects the Company’s unwavering commitment to expand the oral fluid market as a whole and enhance Premier’s oral fluid leadership position within the toxicology space.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "2a8ba2be6b",
+  "announcement_ids": [
+   "2a8ba2be6b"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-rampart-exterior-services-partners-with-port-enterprises-in-texas/"
+  ],
+  "headline": "Huron Capital’s Rampart Exterior Services Partners With Port Enterprises in Texas",
+  "publication_date": "2025-04-01",
+  "buyer_or_investor": "Rampart Exterior Services",
+  "target_company": "Port Enterprises, Ltd",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Texas",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Leading lower middle-market private equity firm Huron Capital (“Huron”) announced that its portfolio company, Rampart Exterior Services (“Rampart,” or the “Company”), has acquired Port Enterprises, Ltd. (“Port”). … Leading lower middle-market private equity firm Huron Capital (“Huron”) announced that its portfolio company, Rampart Exterior Services (“Rampart,” or the “Company”), has acquired Port Enterprises, Ltd. (“Port”). The partnership with Port further enhances Rampart’s customer base and geographic footprint.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page; date known to the month only",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "3e46a06e93",
+  "announcement_ids": [
+   "3e46a06e93"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-portfolio-company-cyber-advisors-acquires-managed-service-provider-wasatch-i-t/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Acquires Managed Service Provider Wasatch I.T.",
+  "publication_date": "2025-02-27",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "Wasatch I.T",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Utah",
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Cyber Advisors, a leading provider of managed IT services and cybersecurity solutions, is excited to announce the acquisition of Wasatch I.T., a prominent IT services company based in Utah. … This strategic acquisition marks a significant milestone in Cyber Advisors’ expansion nationwide, this partnership extends its reach to the western United States. The acquisition of Wasatch I.T. represents a significant milestone for Cyber Advisors, marking its eighth acquisition and reinforcing its position as a trusted Managed Service Provider with specialized operations in Minneapolis/St. Paul, Chicago, Fargo, and now Salt Lake City.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "dd1309f225",
+  "announcement_ids": [
+   "dd1309f225"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-partners-with-engineering-services-firm-aks/"
+  ],
+  "headline": "Align Partners with Engineering Services Firm AKS",
+  "publication_date": "2025-02-18",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "AKS Engineering",
+  "transaction_type": "Platform investment",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 18, 2025 | Align Capital Partners (“ACP”) is pleased to announce that it completed the recapitalization of AKS Engineering (“AKS” or the “Company”), a multi-disciplinary consulting firm providing civil engineering, surveying, natural resources, permitting, planning and design services to a wide range of private and public clients throughout the Pacific Northwest. … AKS management and employees retain a significant stake in the Company and will continue to lead the firm through its next phase of growth. Through key organic growth initiatives and the completion of four add-on acquisitions to date, the team has already done a tremendous job growing AKS and establishing a burgeoning leader.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "77133e2d31",
+  "announcement_ids": [
+   "77133e2d31"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/custom-veterinary-acquires-green-mountain-to-form-leading-pet-health-products-platform/"
+  ],
+  "headline": "Custom Veterinary Acquires Green Mountain to Form Leading Pet Health Products Platform",
+  "publication_date": "2025-02-10",
+  "buyer_or_investor": "Custom Veterinary Services",
+  "target_company": "Green Mountain Animal, LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Vermont",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 10, 2025 | Align Capital Partners’ (“ACP”) pet health products platform Custom Veterinary Services (“CVS” or the “Company”) recently acquired Green Mountain Animal, LLC (“GMA”). … Together, CompletePet plans to keep pushing the envelope for more solutions, more capabilities and enhanced pet wellness. The combination of our two businesses helps to ensure continued growth of our market.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "c19c057856",
+  "announcement_ids": [
+   "c19c057856"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-the-exigent-group-and-its-operating-company-smith-boughan-acquire-premier-mechanical/"
+  ],
+  "headline": "Huron Capital’s The Exigent Group and Its Operating Company Smith-Boughan Acquire Premier Mechanical",
+  "publication_date": "2025-01-21",
+  "buyer_or_investor": "The Exigent Group",
+  "target_company": "Premier Mechanical",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Ohio",
+  "rationale_tags": [
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Leading lower middle-market private equity firm Huron Capital (“Huron”) announced that its portfolio company, The Exigent Group (“Exigent,” or the “Company”), along with its operating company, Smith-Boughan Mechanical (“Smith-Boughan”) has acquired Premier Mechanical (“Premier”). … “The strategic partnership between Premier and Smith-Boughan strengthens Exigent’s presence in Ohio and the surrounding region,” stated Peter van Niekerk, CEO of Exigent. “Premier brings exceptional technical expertise and a service-driven approach that will support sustainable growth and innovation for our organization.”",
+  "review_status": "machine-extracted",
+  "review_notes": "date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "7bdc3ef349",
+  "announcement_ids": [
+   "7bdc3ef349"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capital-exits-pacific-shoring-after-five-year-partnership/"
+  ],
+  "headline": "Huron Capital Exits Pacific Shoring After Five-Year Partnership",
+  "publication_date": "2025-01-13",
+  "buyer_or_investor": "Palm Peak Capital",
+  "target_company": "Pacific Shoring",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "California",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Huron Capital Partners (“Huron Capital”), a leading middle market private equity firm, is pleased to announce the sale of Pacific Shoring (“Pacific Shoring” or the “Company”), a leading manufacturer of trench safety equipment, to Palm Peak Capital (“Palm Peak”). … Pacific Shoring Nearly Tripled in Size Through Strategic Add-Ons and Product Line Expansions “We are grateful to have had the opportunity to work closely with Bruce and the Salt Creek team to build Pacific Shoring into a leader within its industry through a series of accretive add-ons and a series of strategic growth initiatives,” said Brian Demkowicz, Chairman and Founding Partner of Huron Capital.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "97ac7ff592",
+  "announcement_ids": [
+   "97ac7ff592"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/matrix-completes-the-acquisition-of-roman-products/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Matrix Completes the Acquisition of Roman Products",
+  "publication_date": "2025-01-07",
+  "buyer_or_investor": "Matrix Adhesives Group",
+  "target_company": "Roman Products",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Matrix Adhesives Group, a Goldner Hawn portfolio company, recently completed the purchase of Roman Products. … This acquisition further enhances Matrix’s product and service offering, while expanding its market reach and customer base. The acquisition provides customers with a broader range of solutions, improved delivery options, and enhanced support through Matrix’s extensive manufacturing network.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "582107d528",
+  "announcement_ids": [
+   "582107d528"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-invests-in-lightmart/"
+  ],
+  "headline": "Tonka Bay Invests in LightMart",
+  "publication_date": "2025-01-07",
+  "buyer_or_investor": "Tonka Bay Equity Partners",
+  "target_company": "LightMart Holdings LLC",
+  "transaction_type": "Platform investment",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (January 7, 2025) — Tonka Bay Equity Partners LLC (“Tonka Bay”) invested in LightMart Holdings LLC (“LightMart”), a value-added distributor of outdoor industrial and commercial lighting products and accessories. … Tonka Bay has partnered with LightMart founders Sami and Lori Ozgen to accelerate the company’s growth plans. Headquartered in Lake Zurich, Illinois, LightMart began in the Ozgen’s garage and evolved into a value-added distributor and manufacturer, offering powder coating, CNC machining, and welding capabilities.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "1d0d6f6b7f",
+  "announcement_ids": [
+   "1d0d6f6b7f"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capital-completes-a-majority-sale-of-experigreen-lawn-care-to-wind-point-partners/"
+  ],
+  "headline": "Huron Capital Completes a Majority Sale of ExperiGreen Lawn Care to Wind Point Partners",
+  "publication_date": "2025-01-07",
+  "buyer_or_investor": "Wind Point Partners",
+  "target_company": "ExperiGreen Lawn Care",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Indiana",
+  "rationale_tags": [
+   "Geographic reach",
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(BUSINESS WIRE)–Huron Capital (“Huron”), a leading middle-market private equity firm, announced it has sold a majority interest in ExperiGreen Lawn Care (“ExperiGreen” or the “Company”) to funds managed by Wind Point Partners. … In partnering with Huron, we hoped to rapidly scale a model that was working well at six locations and have been thrilled to have them as our partner as we have grown our service area and team to support 27 branch locations,” John Moehn, Founder and President of ExperiGreen, said. Huron partnered with the Company in 2022 and supported its expansion, including organic growth and 19 acquisitions that drove a greater than 10-fold increase to EBITDA, transforming ExperiGreen from an upstart lawncare provider into a regional powerhouse.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "9b80551847",
+  "announcement_ids": [
+   "9b80551847"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/counsel-press-expands-into-the-trial-courts-with-case-anywhere-acquisition/"
+  ],
+  "headline": "Counsel Press Expands into the Trial Courts with Case Anywhere Acquisition",
+  "publication_date": "2024-12-20",
+  "buyer_or_investor": "Counsel Press Inc",
+  "target_company": "Case Anywhere LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, December 20, 2024 | Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) adds trial court services with its acquisition of Case Anywhere LLC (“Case Anywhere”). … Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press Inc. (“Counsel Press” or the “Company”) adds trial court services with its acquisition of Case Anywhere LLC (“Case Anywhere”). The addition of Case Anywhere strengthens Counsel Press’ geographic presence on the West Coast, introduces new technology and enhances its scale, further establishing the Company as a comprehensive, national provider of outsourced legal services.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "d1b9b60830",
+  "announcement_ids": [
+   "d1b9b60830"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-makes-a-fast-connection-with-ispn-network-services/"
+  ],
+  "headline": "Align Makes a Fast Connection with ISPN Network Services",
+  "publication_date": "2024-12-18",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "ISPN Network Services",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, December 18, 2024 | Align Capital Partners (“ACP”) announced today the acquisition of ISPN Network Services (“ISPN” or the “Company”), a managed IT services provider primarily serving broadband fiber and internet operators in suburban and rural areas across the country. … ISPN CEO Jeff Neblett and President & CFO Scott Lauber will continue leading the firm through its next phase of growth. ISPN is uniquely positioned to help clients navigate the complexities of technical support by pairing talented industry professionals with unique client-facing technology,” said ACP Partner Matt Iodice.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "3b2d1f964a",
+  "announcement_ids": [
+   "3b2d1f964a"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-forms-nexterra-environmental-a-new-erosion-control-and-stormwater-distribution-platform/"
+  ],
+  "headline": "Goldner Hawn Forms Nexterra Environmental, A New Erosion Control and Stormwater Distribution Platform",
+  "publication_date": "2024-12-11",
+  "buyer_or_investor": "Goldner Hawn",
+  "target_company": "Ramy Turf Products; Jen-Hill Construction Materials; Ero-Guard Erosion Control Products",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Energy & environmental",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn, LP (“Goldner Hawn”) is pleased to announce a new partnership, created through the recapitalization of Ramy Turf Products (“Ramy”), Jen-Hill Construction Materials (“Jen-Hill”), and Ero-Guard Erosion Control Products (“Ero-Guard”). … The three companies were brought together by Goldner Hawn to form Nexterra Environmental, a multi-regional, value-added distributor in the erosion control and stormwater market. The principals of Ramy, Jen-Hill and Ero-Guard will all remain investors in the new platform and active in growing the combined business.",
+  "review_status": "needs review",
+  "review_notes": "several targets; date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "5468336624",
+  "announcement_ids": [
+   "5468336624"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-invests-in-a-cleaner-environment-with-acquisition-of-mkb-company/"
+  ],
+  "headline": "Align Invests in a Cleaner Environment with Acquisition of MKB Company",
+  "publication_date": "2024-12-04",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "MKB Company",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Ohio",
+  "rationale_tags": [
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, December 4, 2024 | Align Capital Partners (“ACP”) is pleased to announce the acquisition of MKB Company (“MKB” or the “Company”), a manufacturer of erosion control, pollution prevention and stormwater management products utilized across applications to comply with federal and state environmental regulations. … MKB was established in 2012 through a strategic investment in MAZCON by the Kurtz Brothers, a family-owned business based in the Cleveland area. MKB’s history of successful acquisitions, strong distribution relationships and regulatory demand drivers position the Company well for continued growth,” added ACP Partner Matt Beesley.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a2238afaf7",
+  "announcement_ids": [
+   "a2238afaf7"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-portfolio-company-cyber-advisors-acquires-managed-service-provider-edot/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Acquires Managed Service Provider eDot",
+  "publication_date": "2024-11-06",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "eDot",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Cyber Advisors, a provider of cybersecurity and technology services and solutions, announced its recent acquisition of eDot, a premier Managed Service Provider dedicated to serving small and medium-sized businesses. … This strategic acquisition bolsters Cyber Advisors’ plan to broaden its service reach and technical expertise in the Midwest, offering industry-leading Managed Service Solutions complemented by a comprehensive Cyber Security offering. The acquisition of eDot represents a significant milestone for Cyber Advisors, marking its seventh acquisition and reinforcing its position as a trusted Managed Service and Managed Security Provider with operations in Chicago, Minneapolis/St. Paul, and Fargo.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "4a036d3c8b",
+  "announcement_ids": [
+   "4a036d3c8b"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/corporate-technologies-acquires-rspn/"
+  ],
+  "headline": "Corporate Technologies Acquires RSPN",
+  "publication_date": "2024-10-16",
+  "buyer_or_investor": "Corporate Technologies",
+  "target_company": "RSPN",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Iowa",
+  "rationale_tags": [
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (October 16, 2024) — Corporate Technologies, a Tonka Bay partner company, has acquired RSPN. … RSPN is Corporate Technologies’ second acquisition since partnering with Tonka Bay in 2023 and expands its footprint to 17 cities across the U.S.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "85f884648d",
+  "announcement_ids": [
+   "85f884648d"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-backed-counsel-press-announces-three-strategic-add-ons-fueling-early-platform-momentum/"
+  ],
+  "headline": "ACP-Backed Counsel Press Announces Three Strategic Add-ons, Fueling Early Platform Momentum",
+  "publication_date": "2024-09-19",
+  "buyer_or_investor": "Counsel Press, Inc",
+  "target_company": "Cockle Legal Briefs; Becker Gallagher Briefs and Records; Lantagne Legal Printing",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 19, 2024 | Align Capital Partners’ (“ACP”) outsourced legal services platform Counsel Press, Inc. (“Counsel Press” or the “Company”) has acquired three providers of outsourced appellate services. … The acquisitions enhance Counsel Press’ Supreme Court presence and overall customer base, while providing incremental geographic coverage and growth opportunities across the U.S. The acquisition also gives our clients access to a growing list of resources as Counsel Press continues to scale.”",
+  "review_status": "needs review",
+  "review_notes": "several targets",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "123669eb59",
+  "announcement_ids": [
+   "123669eb59"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-acquires-systems-development-group/"
+  ],
+  "headline": "Schneider Geospatial Acquires Systems Development Group",
+  "publication_date": "2024-09-06",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "Systems Development Group",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 6, 2024 | Align Capital Partners’ (“ACP”) portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired Systems Development Group (“SDG”), a provider of geo-centric property record and analysis solutions for local governments. … The acquisition strengthens Schneider Geospatial’s ability to deliver geo-centric solutions that address the unique needs of state and local governments and the citizens they serve. SDG marks the fourth add-on for the Company since ACP acquired Schneider Geospatial in June of 2022.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "dc5b56c07a",
+  "announcement_ids": [
+   "dc5b56c07a"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-completes-sale-of-action-elevator/"
+  ],
+  "headline": "Align Capital Partners Completes Sale of Action Elevator",
+  "publication_date": "2024-09-03",
+  "buyer_or_investor": "H.I.G. Capital",
+  "target_company": "Action Elevator",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Maryland",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 3, 2024 | Align Capital Partners (“ACP”) announced today the sale of Action Elevator (“Action” or the “Company”) to an affiliate of H.I.G. Capital (“H.I.G.”). … Action completed two strategic acquisitions during its partnership with ACP, including Avery Elevator Corporation and Century Elevator, which expanded the Company’s presence in the Mid-Atlantic. “Action Elevator was founded in 2012 with a focus on building long-term relationships in our community by always putting the customer first, delivering best-in-class service and providing our employees with a family-oriented culture.” said John Marshall, Sr. “We’re extremely proud of the growth our Company has achieved, and appreciate the support and partnership Align Capital Partners provided us along the way.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "420e9771c0",
+  "announcement_ids": [
+   "420e9771c0"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-completes-the-sale-of-trystar/"
+  ],
+  "headline": "Goldner Hawn Completes the Sale of Trystar",
+  "publication_date": "2024-08-27",
+  "buyer_or_investor": "Blackstone",
+  "target_company": "Trystar, LLC",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Goldner Hawn LP (“Goldner Hawn”) announced the sale of Trystar, LLC (“Trystar” or the “Company”), to private equity funds affiliated with Blackstone (“Blackstone”). … Established in 1991, Trystar is headquartered in Faribault, Minnesota with additional manufacturing and offices located throughout the United States and Canada. Trystar’s diverse portfolio of offerings includes a wide range of safe, reliable, permanent, and portable power solutions that serve diverse industry sectors including healthcare, data centers, utilities, entertainment, education, government, and commercial buildings.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "4e6e61f56b",
+  "announcement_ids": [
+   "4e6e61f56b"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-platform-rampart-exterior-services-announces-its-first-acquisition-with-independent-roofing-systems/"
+  ],
+  "headline": "Huron Capital’s Platform Rampart Exterior Services Announces its First Acquisition with Independent Roofing Systems",
+  "publication_date": "2024-08-21",
+  "buyer_or_investor": "Rampart Exterior Services",
+  "target_company": "Independent Roofing Systems, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Mississippi",
+  "rationale_tags": [],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Detroit – August 21, 2024 – Leading middle-market private equity firm Huron Capital (“Huron”) announced today that its commercial roofing and exterior facility services platform, Rampart Exterior Services (“Rampart”), completed its first acquisition with the closing of Independent Roofing Systems, Inc. (“Independent”).",
+  "review_status": "machine-extracted",
+  "review_notes": "date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "3bd579c137",
+  "announcement_ids": [
+   "3bd579c137"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-portfolio-company-cyber-advisors-acquires-bai-security/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Acquires BAI Security",
+  "publication_date": "2024-08-21",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "BAI Security",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Cyber Advisors, a provider of cybersecurity and technology solutions, announced its recent acquisition of BAI Security (“BAI”), a firm providing offensive cybersecurity testing, as well as governance, risk, and compliance services. … This strategic purchase solidifies Cyber Advisors’ commitment to market-leading cybersecurity capabilities and expands its reach in the ever-evolving landscape of digital security, risk, and compliance. Their combined expertise will enable clients to remain proactive against emerging threats, strengthen cybersecurity defenses, and uphold the utmost standards of data protection and compliance.",
+  "review_status": "needs review",
+  "review_notes": "industry ambiguous; date from news listing page",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "adb3b8cf14",
+  "announcement_ids": [
+   "adb3b8cf14"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/accelerated-growth-continues-for-cleartelligence-with-acquisition-of-bardess-group/"
+  ],
+  "headline": "Accelerated Growth Continues for Cleartelligence with Acquisition of Bardess Group",
+  "publication_date": "2024-07-16",
+  "buyer_or_investor": "Cleartelligence",
+  "target_company": "Bardess Group",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": "New Jersey",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, July 16, 2024 | Align Capital Partners’ (“ACP”) data strategy and analytics consulting firm Cleartelligence (or the “Company”) announced today it has acquired Bardess Group (“Bardess”). … The acquisition extends Cleartelligence’s solution offerings and deepens its industry expertise — solidifying the Company as a leading independent data strategy advisory firm. Headquartered in Randolph, New Jersey, Bardess serves blue-chip enterprise customers across a variety of industries including technology, financial services and healthcare & life sciences.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "4b8bfee1dc",
+  "announcement_ids": [
+   "4b8bfee1dc"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/premier-biotech-expands-service-offering-with-desert-tox-acquisition/"
+  ],
+  "headline": "Premier Biotech Expands Service Offering with Desert Tox Acquisition",
+  "publication_date": "2024-06-06",
+  "buyer_or_investor": "Premier Biotech",
+  "target_company": "Desert Tox, LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Healthcare",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 6, 2024 | Align Capital Partners’ (“ACP”) toxicology testing solutions provider Premier Biotech (“Premier” or the “Company”) has acquired Desert Tox, LLC (“Desert Tox”), a provider of Substance Abuse and Mental Health Services Administration (“SAMHSA”) certified laboratory testing services. … Desert Tox’s founders, Mike Grommes and Mike Gorman, will remain involved with the Company to support continued growth and a successful transition. We believe our combined expertise will position us in an emerging oral fluids market to deliver testing solutions with unmatched value and enable customers to make timely and informed decisions for their compliance and safety needs,” said Grommes.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "79fb869361",
+  "announcement_ids": [
+   "79fb869361"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-announces-sale-of-orange-tree-employment-screening/"
+  ],
+  "headline": "Tonka Bay Announces Sale of Orange Tree",
+  "publication_date": "2024-06-04",
+  "buyer_or_investor": "Accurate Background, LLC",
+  "target_company": "Orange Tree Employment Screening LLC",
+  "transaction_type": "Exit",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (June 4, 2024) — Tonka Bay Equity Partners LLC (“Tonka Bay”) has announced the sale of Orange Tree Employment Screening LLC (“Orange Tree”) to Accurate Background, LLC (“Accurate”). … Based in Minneapolis, Minnesota, Orange Tree provides technology-enabled employee background screening services to the middle market. During Tonka Bay’s ownership, Orange Tree built out a strong leadership team, expanded its service offering, completed three add-on acquisitions, and increased revenue and EBITDA more than 3x.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "8b4b093b8b",
+  "announcement_ids": [
+   "8b4b093b8b"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-portfolio-company-cyber-advisors-acquires-total-networx/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Acquires Total Networx",
+  "publication_date": "2024-06-03",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "Total Networx",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Cyber Advisors recently acquired Total Networx, a cybersecurity-focused managed IT services company providing comprehensive, responsive, and cost-effective IT solutions for small to large businesses. … The acquisition of Total Networx represents yet another milestone for Cyber Advisors, further reinforcing its position as a trusted advisor to organizations seeking comprehensive cybersecurity and managed IT solutions. With a reputation for delivering premium service and rapid response, the addition of Total Networx to the Cyber Advisors family brings expanded scale for serving businesses in Minnesota.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a3482941b3",
+  "announcement_ids": [
+   "a3482941b3"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-platform-1-800-hansons-has-acquired-paramount-builders-llc/"
+  ],
+  "headline": "Huron Capital’s Platform 1-800 HANSONS Acquires Paramount Builders, LLC",
+  "publication_date": "2024-05-15",
+  "buyer_or_investor": "1-800 Hansons",
+  "target_company": "Paramount Builders, LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Consumer & food",
+  "target_geography": "Virginia",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Detroit – May 15, 2024 – Leading middle-market private equity firm Huron Capital (“Huron”) announced today that its portfolio company, 1-800 Hansons (“Hansons” or “the Company”), a premier provider of residential repair and renovation services with a focus on windows, roofing, siding, gutters, and one-day bath solutions, has acquired Paramount Builders, LLC (“Paramount”). … Acquisition Accelerates 1-800 HANSONS’ Expansion Into the Mid-Atlantic Region Established in 1991, Paramount is an established home repair provider based in Virginia Beach, Virginia, serving homeowners throughout the Mid-Atlantic and Southeastern United States with a comprehensive offering of renovation products and solutions.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "bc5a5b79f4",
+  "announcement_ids": [
+   "bc5a5b79f4"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/goldner-hawn-portfolio-company-cyber-advisors-completes-acquisition-of-sl-computer-services/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Completes Acquisition of S&L Computer Services",
+  "publication_date": "2024-05-09",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "S&L Computer Services",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "North Dakota",
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Cyber Advisors recently acquired S&L Computer Services (“SLC”), a managed IT service provider for small and medium-sized businesses. … The addition of SLC to the Cyber Advisors’ family brings expanded scale and depth for the organization along with access to marquee customers. Together, their combined expertise will empower clients to thrive without the weight of technology challenges, enhance their cybersecurity defenses, and uphold the personalized service they have grown to rely on.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "5806112d5a",
+  "announcement_ids": [
+   "5806112d5a"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-electrical-services-platform-criticore-acquires-jenco/"
+  ],
+  "headline": "Huron Capital’s Electrical Services Platform Criticore Acquires Jenco",
+  "publication_date": "2024-04-11",
+  "buyer_or_investor": "Criticore",
+  "target_company": "Jenco Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Arizona",
+  "rationale_tags": [
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Detroit – April 11, 2024 – Leading middle-market private equity firm Huron Capital (“Huron”) announced today that its portfolio company, Criticore (or the “Company”), has acquired Jenco Inc. (“Jenco”). … Acquisition accelerates Criticore’s expansion by deploying Huron’s Execfactor® strategy within the commercial electrical services sector “Jenco has developed a strong brand presence through its service-oriented culture, deep technical talent base, and unwavering commitment to safety that offers strong alignment with RK Electric’s capabilities and market leading position.”",
+  "review_status": "machine-extracted",
+  "review_notes": "date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "b35701526d",
+  "announcement_ids": [
+   "b35701526d"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/cleartelligence-accelerates-growth-with-recruitment-of-owen-frivold-as-president-and-strategic-acquisition-of-winter-sun/"
+  ],
+  "headline": "Cleartelligence Accelerates Growth with Recruitment of Owen Frivold as President and Strategic Acquisition of Winter Sun",
+  "publication_date": "2024-04-09",
+  "buyer_or_investor": "Cleartelligence",
+  "target_company": "Winter Sun",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, April 9, 2024 | Align Capital Partners (“ACP”) announced today that Cleartelligence (or the “Company”) has appointed technology executive Owen Frivold as President alongside the acquisition of Winter Sun, a data and digital transformation consulting firm founded by Frivold. … Cleartelligence has greatly expanded its team and resources in the first year of our partnership and is well positioned for continued growth in the data & analytics industry,” said Jack Parks, Partner at ACP. “Through the continued pursuit of strategic add-on acquisitions and our growing private equity portfolio company practice, we believe the Company is uniquely qualified to be clients’ trusted value creation partner through data.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a98e8c2b59",
+  "announcement_ids": [
+   "a98e8c2b59"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-invests-in-image-av/"
+  ],
+  "headline": "Tonka Bay Invests in Image AV",
+  "publication_date": "2024-04-02",
+  "buyer_or_investor": "Tonka Bay Equity Partners",
+  "target_company": "Image Audiovisuals",
+  "transaction_type": "Platform investment",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Colorado",
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (April 2, 2024) — Tonka Bay Equity Partners LLC (“Tonka Bay”) invested in Image Audiovisuals (“Image AV”), a leading audiovisual production services company. … Tonka Bay has partnered with Image AV owners Dave and Diana Mueller to accelerate a national growth plan of the company.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "d2540c3a5b",
+  "announcement_ids": [
+   "d2540c3a5b"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-establishes-specialty-tax-platform/"
+  ],
+  "headline": "Align Capital Partners Establishes Specialty Tax Platform",
+  "publication_date": "2024-03-26",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Cost Segregation Services, Inc; TaxIncennovations, LLC",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, March 26, 2024 | Align Capital Partners (“ACP”) is pleased to announce the formation of a specialty tax consulting platform with the acquisitions of Cost Segregation Services, Inc. (“CSSI” or the “Company”) and TaxIncennovations, LLC. … I am looking forward to guiding CSSI through its next phase of growth in partnership with ACP.” Alongside the investment in CSSI, ACP also supported the Company’s acquisition of TaxIncennovations which expands the platform’s core service offering to include research & development tax credit and energy efficiency tax deduction consulting services.",
+  "review_status": "needs review",
+  "review_notes": "several targets",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "8f2d8d21e3",
+  "announcement_ids": [
+   "8f2d8d21e3"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/trystar-completes-the-acquisitions-of-macromatic-and-primax-technologies/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Trystar Completes the Acquisitions of Macromatic and Primax Technologies",
+  "publication_date": "2024-02-29",
+  "buyer_or_investor": "Trystar",
+  "target_company": "Macromatic; Primax Technologies",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Wisconsin",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Trystar, a Goldner Hawn portfolio company, recently completed the purchases of Macromatic and Primax Technologies (“Primax”). … Both acquisitions further enhance Trystar’s product and service offering, while expanding its market reach and customer base.",
+  "review_status": "needs review",
+  "review_notes": "several targets; date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "e1958fd088",
+  "announcement_ids": [
+   "e1958fd088"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-announces-sale-of-seam-group-to-abb/"
+  ],
+  "headline": "Align Capital Partners Announces Sale of SEAM Group to ABB",
+  "publication_date": "2024-02-20",
+  "buyer_or_investor": "ABB",
+  "target_company": "SEAM Group",
+  "transaction_type": "Exit",
+  "transaction_status": "Announced / pending",
+  "target_industry": "Business services",
+  "target_geography": "Ohio",
+  "rationale_tags": [
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 20, 2024 | Align Capital Partners (“ACP”) announced today that its portfolio company SEAM Group (the “Company”) has entered into a definitive agreement to be acquired by ABB. … Align Capital Partners (“ACP”) announced today that its portfolio company SEAM Group (the “Company”) has entered into a definitive agreement to be acquired by ABB. During the partnership, SEAM Group experienced strong organic growth and scaled operations through three add-on acquisitions.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "5ff000bd97",
+  "announcement_ids": [
+   "5ff000bd97"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/professional-credit-acquires-project-heat/"
+  ],
+  "headline": "Professional Acquires “Project Heat”",
+  "publication_date": "2024-02-14",
+  "buyer_or_investor": "Professional",
+  "target_company": "Project Heat",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": null,
+  "target_geography": null,
+  "rationale_tags": [],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "headline: \"Professional Acquires “Project Heat”\" … The acquisition expands Professional Credit’s market presence outside the Pacific Northwest into New York, Iowa, and Arizona as well as additional business in nine other states. “Project Heat” represents Professional Credit’s first add-on acquisition.",
+  "review_status": "machine-extracted",
+  "review_notes": "no target description; date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "6c2bf9fc9c",
+  "announcement_ids": [
+   "6c2bf9fc9c"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/cyber-advisors-completes-acquisition-of-innovative-technology-partners/"
+  ],
+  "headline": "Goldner Hawn Portfolio Company Cyber Advisors Completes Acquisition of Innovative Technology Partners",
+  "publication_date": "2024-02-13",
+  "buyer_or_investor": "Cyber Advisors",
+  "target_company": "Innovative Technology Partners",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Cyber Advisors, a Goldner Hawn portfolio company, recently acquired Innovative Technology Partners, a focused provider of personalized managed IT services. … The acquisition of Innovative Technology Partners further reinforces Cyber Advisors’ position as a trusted advisor to organizations seeking comprehensive cybersecurity and managed IT solutions.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "56befc8c01",
+  "announcement_ids": [
+   "56befc8c01"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marco-continues-expansion-with-acquisition-of-allied-metrics-o-rings-seals/"
+  ],
+  "headline": "Marco Continues Expansion with Acquisition of Allied Metrics O-Rings & Seals",
+  "publication_date": "2024-02-08",
+  "buyer_or_investor": "Marco Rubber & Plastics",
+  "target_company": "Allied Metrics O-Rings & Seals",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 8, 2024 | Align Capital Partners’ (“ACP”) custom sealing solutions provider Marco Rubber & Plastics (“Marco” or the “Company”) has acquired Allied Metrics O-Rings & Seals (“Allied”), a distributor of specialty O-rings, seals and gaskets. … Allied’s President and second-generation family owner, Bill Westerman, will remain involved to ensure continued growth and a successful transition. Allied enhances Marco’s product depth and customer base while providing incremental growth opportunities across multiple end-markets.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "83b439409b",
+  "announcement_ids": [
+   "83b439409b"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/corporate-technologies-acquires-numsp/"
+  ],
+  "headline": "Corporate Technologies Acquires NuMSP",
+  "publication_date": "2024-01-30",
+  "buyer_or_investor": "Corporate Technologies",
+  "target_company": "NuMSP",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "EDEN PRAIRIE, Minn., Jan. 30, 2024 /PRNewswire/ — Corporate Technologies, a leading national managed service provider (MSP) offering IT and cybersecurity solutions, has acquired NuMSP, another national MSP that offers IT solutions for small and mid-sized businesses (SMB). … The acquisition expands Corporate Technologies’ national presence to 16 markets in eleven states. NuMSP clients will benefit from expanded service offerings including 24×7 NOC and SOC services and comprehensive cybersecurity solutions.",
+  "review_status": "needs review",
+  "review_notes": "date from dateline; relationship inferred from another announcement",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "7fc7ee7eed",
+  "announcement_ids": [
+   "7fc7ee7eed"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-announces-sale-of-united-skin-specialists/"
+  ],
+  "headline": "Tonka Bay Announces Sale of United Skin Specialists",
+  "publication_date": "2024-01-09",
+  "buyer_or_investor": "Schweiger Dermatology Group",
+  "target_company": "United Skin Specialists LLC",
+  "transaction_type": "Exit",
+  "transaction_status": null,
+  "target_industry": "Healthcare",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (January 9, 2024) — Tonka Bay Equity Partners LLC (“Tonka Bay”) has announced the sale of United Skin Specialists LLC (“USS”) to Schweiger Dermatology Group (“SDG”). … “Tonka Bay provided valuable expertise and capital support as our management team navigated acquisitions, expanded our services, and improved operational metrics,” Dr. Zelickson added.",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "d520acf88d",
+  "announcement_ids": [
+   "d520acf88d"
+  ],
+  "publisher_pe_firm": "Goldner Hawn",
+  "source_url": [
+   "https://goldnerhawn.com/news/concept-advanced-manufacturing-solutions-completes-two-acquisitions-in-the-precision-manufacturing-market/"
+  ],
+  "headline": "Concept Advanced Manufacturing Solutions Completes Two Acquisitions in the Precision Manufacturing Market",
+  "publication_date": "2024-01-05",
+  "buyer_or_investor": "Concept Advanced Manufacturing Solutions",
+  "target_company": "American Calibration; Inspection Engineering",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Illinois",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "Concept Advanced Manufacturing Solutions (“Concept”), a Goldner Hawn portfolio company, recently acquired American Calibration and Inspection Engineering. … These acquisitions enhance Concept’s position as a source for advanced manufacturing solutions and deepens its functional expertise in machining, automation, precision measurement, calibration services and additive manufacturing.",
+  "review_status": "needs review",
+  "review_notes": "several targets; date from news listing page",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "fb43592859",
+  "announcement_ids": [
+   "fb43592859"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-backed-e-source-expands-its-reach-with-the-acquisition-of-ums-group/"
+  ],
+  "headline": "ACP-Backed E Source Expands its Reach with the Acquisition of UMS Group",
+  "publication_date": "2023-11-28",
+  "buyer_or_investor": "E Source",
+  "target_company": "UMS Group",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, November 28, 2023 | Align Capital Partners’ (“ACP”) utility market intelligence, data science and solution services platform, E Source (the “Company”), has acquired UMS Group (“UMS”). … UMS is an industry leader in utility management consulting with technical expertise that extends across a wide spectrum of utility management challenges including wildfire risk reduction, asset management excellence, renewable energy integration and advanced AI modeling. This combination enhances E Source’s services to major investor-owned utilities, emphasizing C-suite-level strategic and operational excellence.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "ea9847d8d0",
+  "announcement_ids": [
+   "ea9847d8d0"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/huron-capitals-execfactor-platform-the-exigent-group-has-acquired-its-fourth-and-fifth-acquisitions-expanding-into-the-new-england-region-and-broadening-its-energy-efficiency-and-sust/"
+  ],
+  "headline": "Huron Capital’s ExecFactor® Platform, The Exigent Group, has Acquired its Fourth and Fifth Acquisitions Expanding into the New England Region and Broadening its Energy Efficiency and Sustainability Engineering and Advisory Capabilities",
+  "publication_date": "2023-10-31",
+  "buyer_or_investor": "The Exigent Group",
+  "target_company": "Ambient Temperature Corp; Global Facility Solutions",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Building & infrastructure services",
+  "target_geography": "Massachusetts",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT–(Oct 31, 2023)–Leading lower middle-market private equity firm Huron Capital (“Huron”) today announced that The Exigent Group (“Exigent” or the “Company”), a provider of commercial HVAC, plumbing, and other mechanical system repair, maintenance, and replacement services, has acquired Ambient Temperature Corp. (“ATCO”) and, in a separate transaction, Global Facility Solutions (“GFS”). … The ATCO acquisition marks Exigent’s first investment in the New England region and both GFS and ATCO are an important part of a continuing expansion plan to service new markets, build out a base of top-tier clients, and expand offerings through several avenues, including the hiring of more skilled technicians. “The addition of ATCO and GFS to Exigent’s growing portfolio of services and locations bolsters the Company’s sustainability offerings and expands our geographic coverage,” said Huron Partner Scott Hauncher.",
+  "review_status": "needs review",
+  "review_notes": "several targets; date from first date in text",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "e3fe0961dd",
+  "announcement_ids": [
+   "e3fe0961dd"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-makes-a-motion-into-legal-services-with-acquisition-of-counsel-press/"
+  ],
+  "headline": "ACP Makes a Motion into Legal Services with Acquisition of Counsel Press",
+  "publication_date": "2023-10-24",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Counsel Press, Inc",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Business services",
+  "target_geography": "New York",
+  "rationale_tags": [
+   "Geographic reach",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, October 24, 2023 | Align Capital Partners (“ACP”) is pleased to announce its acquisition of Counsel Press, Inc. (“Counsel Press” or “the Company”) from Gladstone Investment Corporation (“Gladstone”). … Headquartered in New York, Counsel Press is a national, tech-enabled legal process outsourcing provider focused on appellate services. The acquisition of Counsel Press represents an attractive opportunity for ACP to partner with the Company’s existing management team and support key growth initiatives with the shared vision of building a diversified legal services platform.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a7aea77b55",
+  "announcement_ids": [
+   "a7aea77b55"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-realizes-investment-in-vetevolve/"
+  ],
+  "headline": "Align Capital Partners Realizes Investment in VetEvolve",
+  "publication_date": "2023-10-18",
+  "buyer_or_investor": "Varsity Healthcare Partners",
+  "target_company": "VetEvolve",
+  "transaction_type": "Exit",
+  "transaction_status": null,
+  "target_industry": "Healthcare",
+  "target_geography": null,
+  "rationale_tags": [
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, October 18, 2023 | Align Capital Partners (“ACP”) is pleased to announce the sale of VetEvolve (the “Company”) to Varsity Healthcare Partners. … ACP began its partnership with VetEvolve in 2020 to support investments in operating and growth resources. Together with management, the Company scaled from 12 to over 30 clinics and completed 20 add-on acquisitions.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "14361b89db",
+  "announcement_ids": [
+   "14361b89db"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/e-source-acquires-leading-utilities-advisor-utilligent/"
+  ],
+  "headline": "E Source Acquires Leading Utilities Advisor Utilligent",
+  "publication_date": "2023-09-20",
+  "buyer_or_investor": "E Source",
+  "target_company": "Utilligent LLC",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": null,
+  "rationale_tags": [
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, September 20, 2023 | Align Capital Partners’ (“ACP”) utility market intelligence, data science and solution services platform, E Source (the “Company”), has acquired Utilligent LLC (“Utilligent”). … Utilligent brings deep utility expertise and a data-driven approach that furthers E Source’s capabilities in areas such as smart infrastructure, utility operations, technology & the digital utility and customer engagement. The acquisition adds incremental expertise in strategy and data transformation, program execution and organizational change management.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "58b7193da6",
+  "announcement_ids": [
+   "58b7193da6"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marcos-acquisition-of-american-seal-packing-marks-fifth-add-on/"
+  ],
+  "headline": "Marco’s Acquisition of American Seal & Packing Marks Fifth Add-on",
+  "publication_date": "2023-08-30",
+  "buyer_or_investor": "Marco Rubber & Plastics",
+  "target_company": "American Seal & Packing",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": "California",
+  "rationale_tags": [
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 30, 2023 | Align Capital Partners (“ACP”) custom sealing solutions provider Marco Rubber & Plastics (“Marco” or the “Company”) has acquired American Seal & Packing (“AS&P”), a distributor of specialty O-rings, seals, gaskets and vee packing with a focus on specialty graphite-based products. … We are excited to partner with Dave and the AS&P team through this next phase of shared growth.” ACP acquired a majority stake in Marco Rubber & Plastics in February 2020 and has since completed five strategic add-ons.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "fe80602d50",
+  "announcement_ids": [
+   "fe80602d50"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/stentech-acquires-stencil-manufacturer-photo-etch-technology/"
+  ],
+  "headline": "StenTech Acquires Stencil Manufacturer Photo Etch Technology",
+  "publication_date": "2023-08-22",
+  "buyer_or_investor": "StenTech",
+  "target_company": "Photo Etch Technology",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": null,
+  "rationale_tags": [
+   "Geographic reach"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 22, 2023 | Align Capital Partners (“ACP”) is pleased to announce its portfolio company StenTech (the “Company”), a leading provider of surface mount technology (“SMT”) stencils, pallets, tooling and related components, has acquired Photo Etch Technology (“Photo Etch”). … In terms of strategic fit, Photo Etch deepens StenTech’s existing presence in Silicon Valley and New England, while adding new geographic reach into Florida via its Clearwater operation. ACP acquired StenTech in May of 2022 and this transaction marks the second add-on for the Company.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "112a9bbcf2",
+  "announcement_ids": [
+   "112a9bbcf2"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-secures-new-platform-with-investment-in-global-guardian/"
+  ],
+  "headline": "ACP Secures New Platform with Investment in Global Guardian",
+  "publication_date": "2023-08-15",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Global Guardian",
+  "transaction_type": "Growth / minority investment",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Virginia",
+  "rationale_tags": [
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 15, 2023 | Align Capital Partners (“ACP”) is pleased to announce it has made a growth capital investment in Global Guardian (or the “Company”), a comprehensive provider of security, medical and travel-related services to a global base of clients. … Align Capital Partners (“ACP”) is pleased to announce it has made a growth capital investment in Global Guardian (or the “Company”), a comprehensive provider of security, medical and travel-related services to a global base of clients. Headquartered in McLean, Virginia, Global Guardian was established to provide an integrated, “one-button” DoC solution that extends from planning and intelligence to active response execution, in over 130 countries.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "32f533d7ea",
+  "announcement_ids": [
+   "32f533d7ea"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-continues-growth-journey-with-acquisition-of-spatialest/"
+  ],
+  "headline": "Schneider Geospatial Continues Growth Journey with Acquisition of Spatialest",
+  "publication_date": "2023-08-09",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "Spatialest",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, August 9, 2023 | Align Capital Partners (“ACP”) announced today that its portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired Spatialest. … Schneider Geospatial’s industry-leading solutions, including Beacon™, qPublic.net™, SimpliCITY™ and GeoPermits™, will now be complemented by Spatialest’s specialized products and expertise. The acquisition expands Schneider Geospatial’s capabilities and enhances the Company’s ability to deliver geo-centric solutions that address the unique needs of state and local governments and citizens.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "ce071135b1",
+  "announcement_ids": [
+   "ce071135b1"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-invests-in-corporate-technologies/"
+  ],
+  "headline": "Tonka Bay Invests in Corporate Technologies",
+  "publication_date": "2023-07-18",
+  "buyer_or_investor": "Tonka Bay Equity Partners",
+  "target_company": "Corporate Technologies",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "IT services & cybersecurity",
+  "target_geography": "Minnesota",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (July 18, 2023) — Tonka Bay Equity Partners LLC (“Tonka Bay”) led the acquisition of Corporate Technologies, a leading IT managed services provider. … Corporate Technologies has five locations across the United States, providing a national footprint to serve customers in multiple desirable markets, and is actively seeking add-on acquisitions. Jim Griffith, CEO of Corporate Technologies said, “We’re very excited about the opportunity to partner with Tonka Bay, a local firm with a great reputation that’s an ideal cultural fit with similar views of growth and taking care of customers’ evolving IT and cyber needs.”",
+  "review_status": "machine-extracted",
+  "review_notes": "date from dateline",
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a6aa2bd076",
+  "announcement_ids": [
+   "a6aa2bd076"
+  ],
+  "publisher_pe_firm": "Huron Capital",
+  "source_url": [
+   "https://www.huroncapital.com/news/horsepower-automotive-partners-with-flatline-van-company/"
+  ],
+  "headline": "Horsepower Automotive Partners with Flatline Van Company",
+  "publication_date": "2023-06-08",
+  "buyer_or_investor": "Horsepower Automotive",
+  "target_company": "Flatline Van Company",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": null,
+  "target_industry": "Consumer & food",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Geographic reach",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "DETROIT, Mich., (June 8, 2023) — Horsepower Automotive (“Horsepower” or “the Company”) announced today the acquisition of Flatline Van Company (“FVCO”), a brand known in the camper van world for their thoughtful designs and unparalleled service. … FVCO partnership brings to Horsepower Automotive’s offerings an established leader in adventure van market’s aftermarket products and accessories space This marks an exciting chapter for both companies as Horsepower Automotive expands into new markets, guided by the expertise of the Flatline founders Kevin Callahan, Silas Thurman, and Jake Ballard, who will remain with the Company post-acquisition.",
+  "review_status": "needs review",
+  "review_notes": "date from first date in text; relationship inferred from another announcement",
+  "is_inferred": true
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a1f15944e1",
+  "announcement_ids": [
+   "a1f15944e1"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/schneider-geospatial-strengthens-govtech-leadership-expands-into-asset-management-with-peoplegis/"
+  ],
+  "headline": "Schneider Geospatial Strengthens GovTech Leadership; Expands into Asset Management with PeopleGIS",
+  "publication_date": "2023-06-07",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "PeopleGIS",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": "Massachusetts",
+  "rationale_tags": [
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, June 7, 2023 | Align Capital Partners (“ACP”) announced today that its portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired PeopleGIS. … This highly strategic add-on marks Schneider Geospatial’s entry into the asset management software space and sets the stage for accelerated growth and innovation. This acquisition represents a significant milestone in our strategic growth plan,” said Jeff Corns, CEO of Schneider Geospatial.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "a0e7fd75f6",
+  "announcement_ids": [
+   "a0e7fd75f6"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/marco-expands-into-brewery-end-market-with-add-on-of-jet-gasket-seal/"
+  ],
+  "headline": "Marco Expands into Brewery End Market with Add-on of Jet Gasket & Seal",
+  "publication_date": "2023-02-28",
+  "buyer_or_investor": "Marco Rubber & Plastics",
+  "target_company": "Jet Gasket & Seal",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Value-added distribution",
+  "target_geography": "Nevada",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 28, 2023 | Align Capital Partners’ (“ACP”) specialty supplier Marco Rubber & Plastics (“Marco” or the “Company”) has acquired Jet Gasket & Seal (“Jet”), a specialty distributor of seals, gaskets and related products primarily sold into the brewery end-market. … The Jet acquisition adds depth to Marco’s product portfolio and supplier network while opening new end markets for growth. ACP acquired a majority stake in Marco Rubber & Plastics in February 2020 and has since completed four strategic add-ons.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "04f570879c",
+  "announcement_ids": [
+   "04f570879c"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-govtech-platform-schneider-geospatial-acquires-webguide-xtreme/"
+  ],
+  "headline": "ACP GovTech Platform Schneider Geospatial Acquires WebGUIDE Xtreme",
+  "publication_date": "2023-02-02",
+  "buyer_or_investor": "Schneider Geospatial, LLC",
+  "target_company": "WebGUIDE Xtreme",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Software & data",
+  "target_geography": "Wisconsin",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, February 2, 2023 | Align Capital Partners (“ACP”) announced today that its portfolio company Schneider Geospatial, LLC (“Schneider Geospatial” or the “Company”) acquired the WebGUIDE Xtreme (“WGX”) product of Applied Data Consultants, a leading Geographic Information Systems (“GIS”) software solutions provider in Wisconsin. … The acquisition expands the Company’s footprint within Wisconsin and further solidifies its leadership position within the Midwest. The combination increases Schneider Geospatial’s customer base to over 700 local government clients in 28 states.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "59b85840d1",
+  "announcement_ids": [
+   "59b85840d1"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/stentech-expands-into-silicon-valley-region-with-acquisition-of-atd/"
+  ],
+  "headline": "StenTech Expands into Silicon Valley Region with Acquisition of ATD",
+  "publication_date": "2023-01-19",
+  "buyer_or_investor": "StenTech",
+  "target_company": "Advanced Tooling Design, Inc",
+  "transaction_type": "Add-on acquisition",
+  "transaction_status": "Completed",
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "California",
+  "rationale_tags": [
+   "Geographic reach",
+   "Customers / channels",
+   "Capacity / scale"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, January 19, 2023 | Align Capital Partners (“ACP”) is pleased to announce its portfolio company StenTech (the “Company”), a leading provider of surface mount technology (“SMT”) stencils, pallets, tooling and related components, has acquired Advanced Tooling Design, Inc (“ATD”). … ACP acquired StenTech in May of 2022 and this transaction marks the first add-on for the Company. “A combination with StenTech will carry on ATD’s rich legacy while ensuring our customers continue to benefit from our intense focus on customer service while gaining access to the expanded resources and facility footprint of the broader StenTech platform.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "7f5a718e3d",
+  "announcement_ids": [
+   "7f5a718e3d"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/align-capital-partners-completes-sale-of-ipromoteu/"
+  ],
+  "headline": "Align Capital Partners Completes Sale of iPROMOTEu",
+  "publication_date": "2023-01-12",
+  "buyer_or_investor": "Champlain Capital",
+  "target_company": "iPROMOTEu",
+  "transaction_type": "Exit",
+  "transaction_status": "Completed",
+  "target_industry": "Business services",
+  "target_geography": "Massachusetts",
+  "rationale_tags": [
+   "Technology / capability",
+   "Capacity / scale",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, January 12, 2023 | Align Capital Partners (“ACP”) announced today the sale of iPROMOTEu (the “Company”) to Champlain Capital. … “Through the creation of sales and marketing tools, the development and release of the iSUITE technology and significant additions to the management team, iPROMOTEu is not only a larger business today, but it also is fundamentally better positioned for future growth.”",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "f265477119",
+  "announcement_ids": [
+   "f265477119"
+  ],
+  "publisher_pe_firm": "Align Capital Partners",
+  "source_url": [
+   "https://aligncp.com/news/acp-believes-in-the-power-of-data-with-growth-investment-in-cleartelligence/"
+  ],
+  "headline": "ACP Believes in the Power of Data with Growth Investment in Cleartelligence",
+  "publication_date": "2023-01-05",
+  "buyer_or_investor": "Align Capital Partners",
+  "target_company": "Cleartelligence",
+  "transaction_type": "Platform investment",
+  "transaction_status": null,
+  "target_industry": "Software & data",
+  "target_geography": null,
+  "rationale_tags": [
+   "Product / service expansion",
+   "Customers / channels",
+   "Technology / capability",
+   "Talent / leadership"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "CLEVELAND and DALLAS, January 5, 2023 | Align Capital Partners (“ACP”) announced today the recapitalization of Cleartelligence (or the “Company”), a data engineering and analytics consulting firm focused on helping enterprise clients envision, design and implement solutions that solve complex business problems. … Align Capital Partners (“ACP”) announced today the recapitalization of Cleartelligence (or the “Company”), a data engineering and analytics consulting firm focused on helping enterprise clients envision, design and implement solutions that solve complex business problems. With this partnership, our customers can expect the same leading service experience from our highly engaged team, but with additional resources to help us best serve our customers and their ever-evolving needs,” added Keler.",
+  "review_status": "machine-extracted",
+  "review_notes": null,
+  "is_inferred": false
+ },
+ {
+  "data_status": "collected",
+  "deal_id": "ec8a8495da",
+  "announcement_ids": [
+   "ec8a8495da"
+  ],
+  "publisher_pe_firm": "Tonka Bay Equity Partners",
+  "source_url": [
+   "https://tonkabayequity.com/news/tonka-bay-announces-sale-of-esp/"
+  ],
+  "headline": "Tonka Bay Announces Sale of ESP",
+  "publication_date": "2023-01-04",
+  "buyer_or_investor": null,
+  "target_company": "Engineered Specialty Products",
+  "transaction_type": "Exit",
+  "transaction_status": null,
+  "target_industry": "Industrial manufacturing",
+  "target_geography": "Georgia",
+  "rationale_tags": [
+   "Product / service expansion",
+   "Technology / capability"
+  ],
+  "price": null,
+  "currency": null,
+  "evidence_excerpt": "MINNETONKA, MN (January 4, 2023) — Tonka Bay Equity Partners has announced the sale of Engineered Specialty Products (“ESP”). … During Tonka Bay’s ownership, ESP realized growth by increasing engineering capabilities, expanding exclusive supplier agreements, launching new proprietary product lines and completing an add-on acquisition.",
+  "review_status": "needs review",
+  "review_notes": "buyer not found; date from dateline",
+  "is_inferred": false
+ }
+]
