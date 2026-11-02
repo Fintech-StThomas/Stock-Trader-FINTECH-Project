@@ -12,6 +12,8 @@ def workspace_switch() -> str:
 
     def update_url():
         st.query_params["workspace"] = st.session_state.workspace_choice
+        if st.session_state.workspace_choice != "pe":
+            st.query_params.pop("pe_page", None)  # PE sidebar section; meaningless in Stock Research
 
     st.markdown("""
     <style>

@@ -1,0 +1,88 @@
+[
+  {
+    "data_status": "demo", "deal_id": "DEMO-001", "announcement_ids": ["ANN-DEMO-001"],
+    "publisher_pe_firm": "Northstar Capital (demo)", "source_url": [],
+    "headline": "Illustrative announcement: industrial distribution expansion",
+    "publication_date": "2026-03-18", "buyer_or_investor": "Northstar Capital (demo)",
+    "target_company": "Harbor Industrial Supply (demo)", "transaction_type": "acquisition",
+    "transaction_status": "announced", "target_industry": "Industrials", "target_geography": "United States",
+    "rationale_tags": ["distribution expansion", "geographic expansion"], "price": null, "currency": null,
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: expand distribution reach in underserved regions.",
+    "review_status": "demo only", "is_inferred": false
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-002", "announcement_ids": ["ANN-DEMO-002", "ANN-DEMO-002B"],
+    "publisher_pe_firm": "Cedar Ridge Partners (demo)", "source_url": [],
+    "headline": "Illustrative announcement: healthcare technology investment",
+    "publication_date": "2026-02-09", "buyer_or_investor": "Cedar Ridge Partners (demo)",
+    "target_company": "Clearpath Clinical Systems (demo)", "transaction_type": "investment",
+    "transaction_status": "announced", "target_industry": "Healthcare", "target_geography": "United States",
+    "rationale_tags": ["technology expansion", "product expansion"], "price": 125000000, "currency": "USD",
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: accelerate development of digital clinical workflow products.",
+    "review_status": "demo only", "is_inferred": false
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-003", "announcement_ids": ["ANN-DEMO-003"],
+    "publisher_pe_firm": "Summit Field Equity (demo)", "source_url": [],
+    "headline": "Illustrative announcement: regional food platform acquisition",
+    "publication_date": "2025-12-14", "buyer_or_investor": "Summit Field Equity (demo)",
+    "target_company": "Maple Table Foods (demo)", "transaction_type": "acquisition",
+    "transaction_status": "closed", "target_industry": "Consumer", "target_geography": "Canada",
+    "rationale_tags": ["product expansion", "geographic expansion"], "price": null, "currency": null,
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: expand the product portfolio and enter neighboring markets.",
+    "review_status": "demo only", "is_inferred": true
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-004", "announcement_ids": ["ANN-DEMO-004"],
+    "publisher_pe_firm": "Northstar Capital (demo)", "source_url": [],
+    "headline": "Illustrative announcement: logistics software add-on acquisition",
+    "publication_date": "2025-10-22", "buyer_or_investor": "Fleetwise Group (demo)",
+    "target_company": "RouteLogic Software (demo)", "transaction_type": "acquisition",
+    "transaction_status": "announced", "target_industry": "Technology", "target_geography": "United Kingdom",
+    "rationale_tags": ["technology expansion", "product expansion"], "price": 48000000, "currency": "GBP",
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: add route-optimization capabilities to the existing platform.",
+    "review_status": "demo only", "is_inferred": false
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-005", "announcement_ids": ["ANN-DEMO-005"],
+    "publisher_pe_firm": "Cedar Ridge Partners (demo)", "source_url": [],
+    "headline": "Illustrative announcement: business services investment",
+    "publication_date": "2025-07-03", "buyer_or_investor": "Cedar Ridge Partners (demo)",
+    "target_company": "Brightline Compliance (demo)", "transaction_type": "investment",
+    "transaction_status": "announced", "target_industry": "Business Services", "target_geography": "United States",
+    "rationale_tags": ["technology expansion"], "price": null, "currency": null,
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: invest in workflow automation and reporting capabilities.",
+    "review_status": "demo only", "is_inferred": true
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-006", "announcement_ids": ["ANN-DEMO-006"],
+    "publisher_pe_firm": "Summit Field Equity (demo)", "source_url": [],
+    "headline": "Illustrative announcement: specialty manufacturing acquisition",
+    "publication_date": "2025-04-16", "buyer_or_investor": "ForgeWorks Holdings (demo)",
+    "target_company": "Precision Cast Components (demo)", "transaction_type": "acquisition",
+    "transaction_status": "closed", "target_industry": "Industrials", "target_geography": "Germany",
+    "rationale_tags": ["distribution expansion", "product expansion"], "price": 91000000, "currency": "EUR",
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: broaden the product offering and expand European distribution.",
+    "review_status": "demo only", "is_inferred": false
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-007", "announcement_ids": ["ANN-DEMO-007"],
+    "publisher_pe_firm": "Northstar Capital (demo)", "source_url": [],
+    "headline": "Illustrative announcement: education services exit",
+    "publication_date": "2024-11-05", "buyer_or_investor": "Unknown", "target_company": "Pioneer Learning Network (demo)",
+    "transaction_type": "exit", "transaction_status": "announced", "target_industry": "Education", "target_geography": "United States",
+    "rationale_tags": ["other / unknown"], "price": null, "currency": null,
+    "evidence_excerpt": null, "review_status": "needs review", "is_inferred": false
+  },
+  {
+    "data_status": "demo", "deal_id": "DEMO-008", "announcement_ids": ["ANN-DEMO-008"],
+    "publisher_pe_firm": "Cedar Ridge Partners (demo)", "source_url": [],
+    "headline": "Illustrative announcement: consumer brand geographic expansion",
+    "publication_date": "2024-08-29", "buyer_or_investor": "Cedar Ridge Partners (demo)",
+    "target_company": "Evergreen Home Goods (demo)", "transaction_type": "acquisition",
+    "transaction_status": "announced", "target_industry": "Consumer", "target_geography": "Australia",
+    "rationale_tags": ["geographic expansion", "distribution expansion"], "price": null, "currency": null,
+    "evidence_excerpt": "DEMO RECORD — illustrative rationale: extend the brand into new regional markets and retail channels.",
+    "review_status": "demo only", "is_inferred": true
+  }
+]
