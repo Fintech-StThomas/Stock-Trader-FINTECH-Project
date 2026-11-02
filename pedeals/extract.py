@@ -33,12 +33,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from .parse import Article, DATE_RE, MONTHS, to_date
 from .sources import FIRM_ALIASES, SOURCES
-from .taxonomy import (AMBIGUOUS_CITIES, CITY_STATE, END_MARKETS, FOCUS_SECTOR_OF, INDUSTRIES, NICHES, OUTSIDE_FOCUS,
-                       RATIONALE_TAGS, STATE_ABBR, US_STATES, region_of)
+from .taxonomy import (AMBIGUOUS_CITIES, CITY_STATE, END_MARKETS, FOCUS_SECTOR_OF, GENERIC_STEMS, INDUSTRIES, NICHES,
+                       OUTSIDE_FOCUS, RATIONALE_TAGS, STATE_ABBR, US_STATES, WHOLE_WORD, region_of)
 
 UNKNOWN = "Unknown"
 
@@ -150,6 +150,8 @@ LOCATION = re.compile(r"(?:\b(?:[Bb]ased|[Hh]eadquartered|[Ll]ocated|[Hh]eadquar
                       r"(?:(?:central|northern|southern|eastern|western|north|south|east|west|greater|downtown|suburban|metro)\s+)?|"
                       r"\b(?:of|in)\s+(?=[A-Z][a-z]+,\s*(?:" + _STATE_ALT + r")\b))"
                       r"(" + _PLACE + r"(?:,\s*(?:" + _STATE_ALT + r"))?)(?=[\s,.;)]|$)")
+SPONSOR_CLAUSE = re.compile(r"private equity|private investment|equity firm|investment firm|investment partner|"
+                            r"capital partner|buyout|middle[- ]market firm|merchant bank", re.I)
 LOCATION_PREFIX = re.compile(r"\b((?:[A-Z][A-Za-z.'\-]+\s?){1,3}(?:,\s*(?:" + _STATE_ALT + r"))?)-based\b")
 
 # headline patterns: the fallback when the lead sentence gives no target
@@ -159,6 +161,7 @@ TRAIL_NOISE = re.compile(r"\s*(?:,\s+(?:a|an|the|its|which|who|based|headquarter
                          r"as (?:a|an|its)|with (?:the|its)|through|expanding|strengthening|broadening|adding|creating|"
                          r"enhancing|bolstering|extending)\b.*|[.!:;,]+$)", re.I)
 HEADLINE_PATTERNS: List[Tuple[str, re.Pattern]] = [
+    ("merger", re.compile(r"\bmerger of (?:(?:their |its )?portfolio companies\s+)?(?P<buyer>.+?)\s+(?:and|&)\s+(?P<target>.+)$", re.I)),
     ("merger", re.compile(r"^(?P<buyer>.+?)\s+(?:and|&)\s+(?P<target>.+?)\s+(?:join(?:s|ed)? forces|merge|combine|unite|"
                           r"announce (?:a |their )?(?:merger|combination|partnership))\b", re.I)),
     ("merger", re.compile(r"^(?P<buyer>.+?)\s+(?:merges with|combines with|joins forces with|join forces with)\s+(?P<target>.+)$", re.I)),
@@ -205,9 +208,20 @@ def sentences(text: str) -> List[str]:
     return out
 
 
+_STEM_RX: Dict[str, "re.Pattern"] = {}
+
+
+def _stem_rx(stem: str) -> "re.Pattern":
+    rx = _STEM_RX.get(stem)
+    if rx is None:
+        tail = r"(?:e?s)?(?![a-z])" if stem in WHOLE_WORD else ""
+        rx = _STEM_RX[stem] = re.compile(r"(?<![a-z])" + re.escape(stem) + tail)
+    return rx
+
+
 def stems_in(text: str, stems: List[str]) -> List[str]:
     low = (text or "").lower()
-    return [s for s in stems if re.search(r"(?<![a-z])" + re.escape(s), low)]
+    return [s for s in stems if _stem_rx(s).search(low)]
 
 
 def strip_dateline(s: str) -> str:
@@ -256,6 +270,8 @@ def plausible_company(name: str) -> str:
     n = re.sub(r"^(?:(?:[A-Z][\w.']+\s?){1,3},\s*)?(?:[A-Z][\w.']+[\s-]?){1,3}-based\s+", "", n)
     n = re.sub(r"^(?:LLC|Inc\.?|Corp\.?|LP)\s+and\s+", "", n)
     words = n.split()
+    if words and words[0].lower() in ("and", "&", "or", "with"):    # "... Gridiron and Stella Point Capital": a fragment
+        return ""
     if not words or n.lower() in _NOT_COMPANY or words[0].lower() in HEADLINE_VERB_WORDS:
         return ""
     if (n in US_STATES or n in US_STATES.values() or n.rstrip(".") + "." in STATE_ABBR or MONTH_SPAN.match(n)
@@ -627,10 +643,15 @@ def describe_target(targets: List[str], aliases: Dict[str, str], tail: str, art:
     return "", ""
 
 
-def industry_of(description: str) -> Tuple[str, List[str], bool]:
+def industry_of(description: str, mask: Iterable[str] = ()) -> Tuple[str, List[str], bool]:
     """(category, matched stems, ambiguous). Only the description's business clause counts: in 'a manufacturer of
     bearings used in industrial applications' the business is manufacturing; what follows 'used in' / 'serving' is
-    the customers' industry and goes to customer_markets."""
+    the customers' industry and goes to customer_markets. Words that also describe customers or functions
+    (GENERIC_STEMS: "consulting", "consumer") weigh less than words that only name a business. `mask`: names to
+    blank out first (the sponsor's: "Gridiron" is not the power grid)."""
+    for name in mask:
+        if name:
+            description = re.sub(r"(?<!\w)" + re.escape(name) + r"(?!\w)", " ", description or "", flags=re.I)
     if not description:
         return UNKNOWN, [], False
     business = re.split(r"\b(?:used (?:in|by)|utilized|serving|serves|for (?:the )?customers|customers (?:in|across|such as)|"
@@ -639,17 +660,22 @@ def industry_of(description: str) -> Tuple[str, List[str], bool]:
     scores: Dict[str, float] = {}
     hits: Dict[str, List[str]] = {}
     first: Dict[str, int] = {}
+    head_w: Dict[str, Tuple[int, float]] = {}
     low = business.lower()
     for cat, stems in INDUSTRIES.items():
         h = stems_in(business, stems)
         if h:
-            scores[cat] = len(h)
+            scores[cat] = sum(0.4 if x in GENERIC_STEMS else 1.0 for x in h)
             hits[cat] = h
-            first[cat] = min(re.search(r"(?<![a-z])" + re.escape(x), low).start() for x in h)
+            pos = {x: _stem_rx(x).search(low).start() for x in h}
+            first[cat] = min(pos.values())
+            if cat not in head_w or first[cat] < head_w[cat][0]:
+                x0 = min(pos, key=pos.get)
+                head_w[cat] = (first[cat], 0.4 if x0 in GENERIC_STEMS else 1.0)
     if not scores:
         return UNKNOWN, [], False
     head = min(first, key=first.get)             # "a distributor of oil seals": the head noun names the business
-    scores[head] += 1
+    scores[head] += head_w[head][1]
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], first[kv[0]]))
     ambiguous = len(ranked) > 1 and ranked[1][1] >= ranked[0][1]
     return ranked[0][0], hits[ranked[0][0]], ambiguous
@@ -687,10 +713,12 @@ def location_of(targets: List[str], aliases: Dict[str, str], description: str, b
         if not s:
             continue
         s2 = strip_dateline(s)
-        m = LOCATION.search(s2)
+        # "Gryphon, a San Francisco-based private equity firm, ... invested in X": that place is the sponsor's
+        m = next((x for x in LOCATION.finditer(s2) if not SPONSOR_CLAUSE.search(s2[max(0, x.start() - 60):x.start()])), None)
         if not m:
             m = next((x for x in LOCATION_PREFIX.finditer(s2)
-                      if re.match(r"\s*(?:[\w&\-]+\s+){0,4}?" + generic, s2[x.end():], re.I)), None)
+                      if re.match(r"\s*(?:[\w&\-]+\s+){0,4}?" + generic, s2[x.end():], re.I)
+                      and not SPONSOR_CLAUSE.search(s2[x.end():x.end() + 45])), None)
         if m:
             return m.group(1).strip(" ,"), state_code(m.group(1))
     m = re.search(r"\bin\s+(?:the\s+)?(?:state of\s+)?(" + "|".join(US_STATES.values()) + r")\b", description or "")
@@ -924,7 +952,7 @@ def extract(art: Article, source: str, collected_at: str = "", url: str = "") ->
     desc, desc_src = describe_target(targets, p["aliases"], p["target_tail"], art, source, p["lead_sentence"])
     ind, ind_hits, ambiguous = industry_of(desc)
     if ind == UNKNOWN and targets:               # "Sheridan Plumbing & Sewer": the name itself says the business
-        ind, ind_hits, ambiguous = industry_of(" ".join(targets) + " " + (art.title or ""))
+        ind, ind_hits, ambiguous = industry_of(" ".join(targets) + " " + (art.title or ""), mask=_aliases(source))
         if ind != UNKNOWN:
             ind_hits = [f"name/headline: {h}" for h in ind_hits]
     focus = FOCUS_SECTOR_OF.get(ind, OUTSIDE_FOCUS)

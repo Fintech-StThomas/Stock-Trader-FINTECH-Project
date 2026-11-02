@@ -45,7 +45,7 @@ def canonical_url(url: str) -> str:
 
 def norm_name(name: str) -> str:
     n = (name or "").lower()
-    n = re.sub(r"[“”\"'’.,()]", " ", n)
+    n = re.sub(r"[“”\"'’.,()]", " ", n).replace("&", " and ")
     n = re.sub(r"\b(inc|llc|ltd|corp|corporation|company|co|lp|holdings|group|the)\b", " ", n)
     return re.sub(r"\s+", " ", n).strip()
 
@@ -106,6 +106,14 @@ class DealDataset:
         p = out_dir / "deal_brief.md"
         p.write_text(dataset_brief(self))
         written.append(str(p))
+        from . import sourcing as so                       # the deal-sourcing tables
+        led = so.ledger(self.records)
+        recent = self.unique_deals[self.unique_deals["published_date"] >= "2022-01-01"]
+        for name, df in (("portfolio_ledger", led), ("exit_watch", so.exit_watch(led, so.TYPICAL_HOLD_YEARS, so.FOCUS_SECTORS)),
+                         ("consolidation_since_2022", so.consolidation(recent))):
+            p = out_dir / f"{name}.csv"
+            df.to_csv(p, index=False)
+            written.append(str(p))
         return written
 
 
@@ -141,6 +149,21 @@ def infer_ownership(df: pd.DataFrame) -> pd.DataFrame:
                 df.at[i, "review_flags"] = "; ".join(flags + ["relationship inferred from another announcement"])
                 break
         else:
+            # a third party acquiring a company the publisher invested in earlier: the publisher is selling (an exit)
+            held = next((o for o in owned_rows[(owned_rows["source"] == r["source"])
+                                               & owned_rows["transaction_type"].isin(["Platform investment", "Growth / minority investment"])
+                                               & (owned_rows["published_date"].fillna("") <= (r["published_date"] or ""))].itertuples()
+                         if r["target"] != "Unknown" and any(_names_match(t, n) for t in r["target"].split(";")
+                                                             for n in [*o.target.split(";"), o.target_short] if n)), None)
+            if held is not None and not _names_match(r["buyer"], r["publisher"]):
+                df.at[i, "transaction_type"] = "Exit"
+                df.at[i, "buyer_role"] = "Third party"
+                df.at[i, "seller"] = r["publisher"]
+                df.at[i, "type_evidence"] = (f"{r['target']} appears as a {r['publisher']} investment in \"{held.headline}\" "
+                                             f"({held.published_date}, {held.url})")
+                flags = [f for f in r["review_flags"].split("; ") if f and f != "type unclear"]
+                df.at[i, "review_flags"] = "; ".join(flags + ["exit inferred from another announcement"])
+                continue
             # sponsors publish their portfolio companies' acquisitions on their own news pages: an acquisition by a
             # company other than the sponsor, announced there, is presumed an add-on; flagged so a reviewer can check
             if r["parties_evidence"] and r["target"] != "Unknown":

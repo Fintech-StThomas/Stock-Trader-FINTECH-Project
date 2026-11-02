@@ -67,6 +67,15 @@ def names_match(a: str, b: str) -> bool:
     return all(any(x == y or (len(x) >= 4 and len(y) >= 4 and (x in y or y in x)) for y in lb) for x in la)
 
 
+def _alternative_names(prog, col: str) -> List[str]:
+    """Other names the program's record gives the same company: the short name the release defines ("Good Sportsman
+    Marketing Outdoors (“GSM”)") and, for a sponsor, its other names ("HCI Equity Partners" is now Oridian)."""
+    from .sources import FIRM_ALIASES
+    out = [str(prog.get(f"{col}_short") or "")]
+    out += [a for names in FIRM_ALIASES.values() if any(names_match(n, prog[col]) for n in names) for a in names]
+    return [x for x in out if x]
+
+
 def _empty(x) -> bool:
     return x is None or (isinstance(x, float) and math.isnan(x)) or str(x).strip() in ("", "Unknown")
 
@@ -179,6 +188,8 @@ def evaluate(ds, labels: pd.DataFrame = None, split: str = "held-out") -> Valida
             if f != "is_deal" and str(lab[f]).strip() == "":
                 continue        # the labeller left it blank: not scored
             ok = compare(lab[f], prog[col], how)
+            if not ok and how == "name":                # the same company under the release's short name or a sponsor's former name
+                ok = any(compare(lab[f], alt, how) for alt in _alternative_names(prog, col))
             rows.append({"field": f, "ok": ok})
             if not ok:
                 errors.append({"headline": prog["headline"], "url": lab["url"], "field": f, "label": lab[f], "program": prog[col]})

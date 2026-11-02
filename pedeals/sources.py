@@ -98,7 +98,7 @@ SOURCES: Dict[str, Source] = {s.key: s for s in [
 FIRM_ALIASES: Dict[str, Tuple[str, ...]] = {
     "tonkabay": ("Tonka Bay Equity Partners", "Tonka Bay Equity", "Tonka Bay"),
     "goldnerhawn": ("Goldner Hawn Johnson & Morrison", "Goldner Hawn"),
-    "huron": ("Huron Capital Partners", "Huron Capital", "Huron"),
+    "huron": ("Huron Capital Partners", "Huron Capital", "Huron Flex Equity", "Huron Flex", "Huron"),
     "align": ("Align Capital Partners", "Align Capital", "Align", "ACP"),
     "fortpoint": ("Fort Point Capital", "Fort Point"),
     "compass": ("Compass Group Equity Partners", "Compass Group", "CGEP"),
