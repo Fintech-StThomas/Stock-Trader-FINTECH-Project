@@ -1,0 +1,202 @@
+{
+ "dataset": {
+  "deals": 115,
+  "firms": 4,
+  "build_fingerprint": "d5e0683fc0f5e0b2",
+  "collected": "2026-10-29",
+  "source": "pedeals collector and rule-based extractor, branch claude/dashboard-functionality-yi0loj, commit 05e825c"
+ },
+ "labels": {
+  "held_out_articles": 38,
+  "development_articles": 71,
+  "labelled_by": "Claude (AI), the same model that wrote the extraction rules, reading each source page",
+  "verified_by_human": false,
+  "held_out_note": "Drawn at random (seed 7) and labelled after the extraction rules were frozen in git.",
+  "development_note": "The rules were tuned while looking at these articles, so their accuracy is in-sample."
+ },
+ "fields": [
+  {
+   "field": "is_deal",
+   "held_out_correct": 38,
+   "held_out_total": 38,
+   "dev_correct": 71,
+   "dev_total": 71
+  },
+  {
+   "field": "news_category",
+   "held_out_correct": 38,
+   "held_out_total": 38,
+   "dev_correct": 71,
+   "dev_total": 71
+  },
+  {
+   "field": "published_date",
+   "held_out_correct": 38,
+   "held_out_total": 38,
+   "dev_correct": 71,
+   "dev_total": 71
+  },
+  {
+   "field": "transaction_type",
+   "held_out_correct": 30,
+   "held_out_total": 30,
+   "dev_correct": 54,
+   "dev_total": 54
+  },
+  {
+   "field": "buyer",
+   "held_out_correct": 30,
+   "held_out_total": 30,
+   "dev_correct": 54,
+   "dev_total": 54
+  },
+  {
+   "field": "target",
+   "held_out_correct": 30,
+   "held_out_total": 30,
+   "dev_correct": 53,
+   "dev_total": 54
+  },
+  {
+   "field": "target_industry",
+   "held_out_correct": 26,
+   "held_out_total": 30,
+   "dev_correct": 49,
+   "dev_total": 53
+  },
+  {
+   "field": "target_state",
+   "held_out_correct": 29,
+   "held_out_total": 30,
+   "dev_correct": 52,
+   "dev_total": 54
+  },
+  {
+   "field": "deal_status",
+   "held_out_correct": 29,
+   "held_out_total": 30,
+   "dev_correct": 54,
+   "dev_total": 54
+  },
+  {
+   "field": "price_disclosure",
+   "held_out_correct": 30,
+   "held_out_total": 30,
+   "dev_correct": 54,
+   "dev_total": 54
+  }
+ ],
+ "deal_detection_held_out": {
+  "deals_found": 30,
+  "false_alarms": 0,
+  "missed": 0
+ },
+ "consistency_checks": [
+  {
+   "check": "publication date after the collection date",
+   "failing": 0
+  },
+  {
+   "check": "publication date in the future",
+   "failing": 0
+  },
+  {
+   "check": "deal without a source URL",
+   "failing": 0
+  },
+  {
+   "check": "deal without category evidence",
+   "failing": 0
+  },
+  {
+   "check": "publisher recorded as an add-on buyer",
+   "failing": 0
+  },
+  {
+   "check": "platform investment not by the publisher",
+   "failing": 0
+  },
+  {
+   "check": "buyer and target the same",
+   "failing": 0
+  },
+  {
+   "check": "price recorded as zero",
+   "failing": 0
+  },
+  {
+   "check": "price disclosed without a value",
+   "failing": 0
+  },
+  {
+   "check": "closing date before the publication date by > 1 year",
+   "failing": 0
+  },
+  {
+   "check": "duplicate deal ids",
+   "failing": 0
+  },
+  {
+   "check": "deal with a type but no buyer and no target",
+   "failing": 0
+  }
+ ],
+ "later_independent_round": {
+  "articles": 44,
+  "rules_commit": "1835b7f",
+  "labelled_by": "Claude Sonnet, run as two independent labellers given only the article text and the written guide",
+  "verified_by_human": false,
+  "scope": "Newer rules on a larger collection (16 firms, articles since 2015). Not the build shipped here; shown because its labeller was independent of the rules.",
+  "fields": {
+   "is_deal": {
+    "correct": 42,
+    "total": 44
+   },
+   "news_category": {
+    "correct": 40,
+    "total": 44
+   },
+   "published_date": {
+    "correct": 44,
+    "total": 44
+   },
+   "transaction_type": {
+    "correct": 30,
+    "total": 36
+   },
+   "buyer": {
+    "correct": 29,
+    "total": 36
+   },
+   "target": {
+    "correct": 32,
+    "total": 36
+   },
+   "target_industry": {
+    "correct": 18,
+    "total": 36
+   },
+   "target_state": {
+    "correct": 25,
+    "total": 36
+   },
+   "deal_status": {
+    "correct": 27,
+    "total": 36
+   },
+   "price_disclosure": {
+    "correct": 33,
+    "total": 36
+   },
+   "focus_sector": {
+    "correct": 18,
+    "total": 36
+   },
+   "niche": {
+    "correct": 8,
+    "total": 27
+   }
+  }
+ },
+ "provenance": "Copied from data/pe_deals/validation/results.md at commits 05e825c (shipped build) and 72a9541 (later round 3)."
+}

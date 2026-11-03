@@ -324,7 +324,7 @@ def _provenance(data: pd.DataFrame) -> str:
     dates = data["publication_date"].dropna()
     span = f", published {dates.min():%b %Y} – {dates.max():%b %Y}" if len(dates) else ""
     return (f"Source: {len(data):,} deal announcements from the news pages of {firms} PE firm"
-            f"{'s' if firms != 1 else ''}{span}, extracted by rules and checked against hand labels. "
+            f"{'s' if firms != 1 else ''}{span}, extracted by fixed rules (accuracy and limits under Quality and Method). "
             "Each deal links to its original announcement.")
 
 

@@ -28,12 +28,8 @@ def _render_sources() -> None:
 
 
 def _render_quality() -> None:
-    st.subheader("Research you can check")
-    st.write("Deal facts should link to supporting announcement excerpts. Missing terms stay unknown, "
-             "and repeated coverage of one transaction is grouped together.")
-    st.write("This page will report measured extraction accuracy, review status and known limitations "
-             "once the team has validated the data.")
-    st.caption("A stated acquisition rationale is a research lead, not proof of improved earnings or returns.")
+    from pe.pages.quality import render_quality
+    render_quality()
 
 
 def render_pe_app() -> None:
