@@ -27,8 +27,6 @@ python scripts/build_pe_explorer_dataset.py path/to/pedeals/deals.json
 
 The conversion keeps short evidence quotes, not article bodies, and keeps unknown values null. `target_geography` is the target's US state, so it is unknown when the announcement names no state. A record is `needs review` when the extractor flagged it for a missing buyer, an ambiguous industry, an inferred relationship or several targets. Date-source flags appear in `review_notes` without changing the status. `is_inferred` is true for an ambiguous industry or an inferred relationship.
 
-`data/pe/sample_deals.json` still holds the earlier fictional demo records. The app no longer reads it.
-
 The expected deal fields include:
 
 - `deal_id` (stable unique transaction ID)
