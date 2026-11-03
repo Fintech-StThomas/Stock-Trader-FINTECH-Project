@@ -19,7 +19,7 @@ The PE Deal Explorer is a Streamlit page under the existing Lighthouse workspace
 
 The explorer reads `data/pe/deals.json`: **115 real deal announcements** (marked `data_status: collected`) published from January 2023 to October 2026 on the news pages of four PE firms: Tonka Bay Equity Partners, Goldner Hawn, Huron Capital and Align Capital Partners. The pages were collected on 2026-10-29.
 
-The records come from the PE deal collector and rule-based extractor on the `claude/dashboard-functionality-yi0loj` branch (`python -m pedeals`, output `data/pe_deals/output/deals.json`, build fingerprint `d5e0683fc0f5e0b2`). On 38 held-out hand-labelled articles, buyer, target, transaction type and price disclosure were 100% correct, target industry 87% and target state 97%. Rebuild the explorer file with:
+The records come from the PE deal collector and rule-based extractor on the `claude/dashboard-functionality-yi0loj` branch (`python -m pedeals`, output `data/pe_deals/output/deals.json`, build fingerprint `d5e0683fc0f5e0b2`). On 38 held-out articles, buyer, target, transaction type and price disclosure were 100% correct, target industry 87% and target state 97%. Those reference labels were written by Claude (AI), the same model that wrote the rules, and no person has checked them yet; a later round with independent AI labellers on newer rules scored lower (industry 50%, state 69%). The **Quality and Method** page shows all of this, read from `data/pe/validation.json`. Rebuild the explorer file with:
 
 ```bash
 python scripts/build_pe_explorer_dataset.py path/to/pedeals/deals.json
