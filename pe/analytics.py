@@ -15,7 +15,7 @@ DEAL_COLUMNS = [
     "deal_id", "announcement_ids", "publisher_pe_firm", "source_url", "headline",
     "publication_date", "buyer_or_investor", "target_company", "transaction_type",
     "transaction_status", "target_industry", "target_geography", "rationale_tags",
-    "price", "currency", "evidence_excerpt", "review_status", "is_inferred",
+    "price", "currency", "evidence_excerpt", "review_status", "review_notes", "is_inferred",
 ]
 
 FILTERABLE_COLUMNS = {
@@ -67,6 +67,13 @@ def load_deals(source: Any) -> pd.DataFrame:
     for col in ["announcement_ids", "rationale_tags"]:
         df[col] = df[col].map(_as_list)
     df["source_url"] = df["source_url"].map(_as_list)
+
+    if df["deal_id"].is_unique:
+        # Nothing to collapse (the usual case, and every re-normalisation of already-loaded deals):
+        # skip the per-group loop below, which costs about a second per call on a hundred deals.
+        for col in ["announcement_ids", "source_url", "rationale_tags"]:
+            df[col] = df[col].map(lambda items: list(dict.fromkeys(items)))
+        return df.reset_index(drop=True).reindex(columns=DEAL_COLUMNS)
 
     # Collapse repeat rows for a transaction, retaining all source references.
     rows: list[dict[str, Any]] = []
@@ -167,7 +174,7 @@ def summary_metrics(deals: Any) -> dict[str, int]:
         "unique_deals": int(df["deal_id"].nunique()),
         "disclosed_values": int(df["price"].notna().sum()),
         "needs_review": int(df["review_status"].astype("string").str.casefold().isin({"pending", "needs review", "flagged"}).sum()),
-        "with_evidence": int(df["evidence_excerpt"].notna().astype(bool).sum()),
+        "with_evidence": int((df["evidence_excerpt"].notna() & df["evidence_excerpt"].astype("string").str.strip().ne("")).sum()),
     }
 
 

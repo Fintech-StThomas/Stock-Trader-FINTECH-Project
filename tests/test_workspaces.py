@@ -68,7 +68,8 @@ def test_pe_sidebar_switches_sections_and_deep_links():
     assert_pe_only(at)
     assert at.radio(key="pe_page").value == "explorer"
     assert at.sidebar.text_input(key="pe_explorer_search")
-    assert any("Demo dataset" in w.value for w in at.warning)
+    assert not any("Demo dataset" in w.value for w in at.warning)
+    assert any(c.value.startswith("Source: ") and "deal announcements" in c.value for c in at.caption)
 
     at.radio(key="pe_page").set_value("sources").run()
     assert_pe_only(at)
@@ -101,3 +102,27 @@ def test_pe_sidebar_filters_narrow_results_and_clear():
     assert not at.exception
     assert int(at.metric[0].value) == total
     assert at.sidebar.multiselect(key="pe_explorer_industries").value == []
+
+
+def test_pe_rationale_shortlist_add_and_remove():
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.query_params["workspace"] = "pe"
+    at.run()
+    rationale = at.multiselect(key="pe_explorer_shortlist_rationales")
+    rationale.select(rationale.options[0]).run()
+    candidates = at.multiselect(key="pe_explorer_shortlist_add_selection")
+    assert len(candidates.options) >= 2
+    first, second = candidates.options[:2]  # display labels such as "Buyer → Target (deal_id)"
+    candidates.select(first).select(second).run()
+    first, second = (label.rsplit("(", 1)[1].rstrip(")") for label in (first, second))
+    at.button(key="pe_explorer_shortlist_add").click().run()
+    assert not at.exception
+    assert at.session_state["pe_explorer_shortlist_ids"] == [first, second]
+    assert any("Shortlist now contains 2 unique deal(s)." in s.value for s in at.success)
+
+    remove = at.multiselect(key="pe_explorer_shortlist_remove_selection")
+    remove.select(next(o for o in remove.options if o.endswith(f"({first})"))).run()
+    at.button(key="pe_explorer_shortlist_remove").click().run()
+    assert not at.exception
+    assert at.session_state["pe_explorer_shortlist_ids"] == [second]
+    assert at.session_state["pe_selected_deal_id"]  # handoff for the Deal Detail page

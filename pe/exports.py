@@ -1,10 +1,12 @@
 """Export helpers for PE Deal Intelligence."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
+
 import pandas as pd
 
-from pe.analytics import DEAL_COLUMNS, load_deals
+from pe.analytics import DEAL_COLUMNS, filter_deals, load_deals
 
 FIELD_EXPLANATIONS = {
     "deal_id": "Stable identifier for one grouped transaction.",
@@ -24,6 +26,7 @@ FIELD_EXPLANATIONS = {
     "currency": "Currency for the disclosed transaction value.",
     "evidence_excerpt": "Short source excerpt supporting the deal details or rationale.",
     "review_status": "Current validation or human-review status.",
+    "review_notes": "Extraction flags behind the review status, such as where the date came from or an ambiguous industry.",
     "is_inferred": "Whether a classification or value is inferred rather than explicitly stated.",
 }
 
@@ -40,9 +43,15 @@ def export_frame(deals: Any) -> pd.DataFrame:
     return out
 
 
-def export_filtered(deals: Any) -> bytes:
-    """Return UTF-8 CSV bytes for the already-filtered deal records."""
-    return export_frame(deals).to_csv(index=False, lineterminator="\n").encode("utf-8-sig")
+def export_filtered(deals: Any, filters: Mapping[str, Any] | None = None) -> bytes:
+    """Return UTF-8 CSV bytes for unique deals, optionally applying explorer filters.
+
+    Passing the unfiltered shared dataset and the same filter arguments used by the
+    explorer keeps downloadable rows aligned with the charts and results table.
+    Callers may also pass an already-filtered frame (for example, a saved shortlist).
+    """
+    selected = filter_deals(deals, **dict(filters)) if filters else load_deals(deals)
+    return export_frame(selected).to_csv(index=False, lineterminator="\n").encode("utf-8-sig")
 
 
 def data_dictionary_csv() -> bytes:
