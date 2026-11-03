@@ -50,6 +50,7 @@ FILTER_KEYS = (
 )
 SHORTLIST_STATE_KEY = "pe_explorer_shortlist_ids"
 SHORTLIST_RATIONALE_KEY = "pe_explorer_shortlist_rationales"
+SHORTLIST_NOTICE_KEY = "pe_explorer_shortlist_notice"
 
 
 def _clear_filters() -> None:
@@ -206,13 +207,18 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
             )
             if st.button("Add selected deals to my session shortlist", key="pe_explorer_shortlist_add"):
                 st.session_state[SHORTLIST_STATE_KEY] = list(dict.fromkeys(saved_ids + [str(x) for x in to_add]))
-                st.success(f"Shortlist now contains {len(st.session_state[SHORTLIST_STATE_KEY])} unique deal(s).")
+                # Shown after the rerun; a message drawn just before st.rerun() would never reach the screen.
+                st.session_state[SHORTLIST_NOTICE_KEY] = (
+                    f"Shortlist now contains {len(st.session_state[SHORTLIST_STATE_KEY])} unique deal(s).")
                 st.rerun()
     else:
         st.caption("Select at least one rationale to find candidate deals for your shortlist.")
 
     saved_frame = data[data["deal_id"].astype(str).isin(saved_ids)].copy()
     st.markdown("##### Your session shortlist")
+    notice = st.session_state.pop(SHORTLIST_NOTICE_KEY, None)
+    if notice:
+        st.success(notice)
     st.caption("This shortlist is stored only in your current Streamlit session; it is not shared with other visitors or saved as a global list.")
     if saved_frame.empty:
         st.info("Your shortlist is empty. Select rationale categories above and add deals to get started.")

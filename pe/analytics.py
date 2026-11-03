@@ -68,6 +68,13 @@ def load_deals(source: Any) -> pd.DataFrame:
         df[col] = df[col].map(_as_list)
     df["source_url"] = df["source_url"].map(_as_list)
 
+    if df["deal_id"].is_unique:
+        # Nothing to collapse (the usual case, and every re-normalisation of already-loaded deals):
+        # skip the per-group loop below, which costs about a second per call on a hundred deals.
+        for col in ["announcement_ids", "source_url", "rationale_tags"]:
+            df[col] = df[col].map(lambda items: list(dict.fromkeys(items)))
+        return df.reset_index(drop=True).reindex(columns=DEAL_COLUMNS)
+
     # Collapse repeat rows for a transaction, retaining all source references.
     rows: list[dict[str, Any]] = []
     for deal_id, group in df.groupby("deal_id", sort=False, dropna=False):
