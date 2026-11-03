@@ -9,9 +9,11 @@ The PE Deal Explorer is a Streamlit page under the existing Lighthouse workspace
 - Show unique-deal counts, disclosed-value counts, records needing review, and records with evidence.
 - Chart unique deals by publication quarter and target-industry mix.
 - Inspect a selected deal's rationale, excerpt, source links, review status, and disclosed transaction value.
-- Export the filtered records and a field data dictionary to CSV.
+- Build a rationale-based research shortlist, add/remove deals in the current visitor session, and export the shortlist with evidence and source links.
+- Export the filtered records and a field data dictionary to CSV; export filters can be applied through the shared helper so chart/table/download rules stay aligned.
+- Store the selected `deal_id` as `st.session_state["pe_selected_deal_id"]` for the future Deal Detail handoff while keeping explorer filters in their existing session-state keys.
 - Collapse repeated rows with the same `deal_id`, while preserving all announcement IDs and source URLs.
-- Keep missing transaction values blank/unknown rather than converting them to zero.
+- Keep missing transaction values blank/unknown rather than converting them to zero; undated deals remain visible unless the visitor explicitly applies a publication-date filter.
 
 ## Dataset contract
 
@@ -72,7 +74,7 @@ These tests run the real app with Streamlit's `AppTest`, including selecting a s
 
 - The dataset covers only four firms and the announcements they chose to publish. None disclosed a price or closing date, so those fields are unknown throughout.
 - The data is a saved snapshot. Refreshing it means re-running the collector and the conversion script.
-- The Deal Detail page is still owned by Yuepheng; this version displays evidence in the explorer until that page is integrated.
+- The Deal Detail page is still owned by Yuepheng; this version displays evidence in the explorer and publishes the selected `deal_id` in session state, but page routing awaits that module and Jacob's integration.
 - Source monitoring and refresh remain Nikhil's responsibility.
 - Authentication and persistent personal workspaces are not implemented.
 - Charts describe only the collected dataset, not total private-equity market activity.

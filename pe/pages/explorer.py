@@ -48,6 +48,8 @@ FILTER_KEYS = (
     "pe_explorer_search", "pe_explorer_publishers", "pe_explorer_types", "pe_explorer_industries",
     "pe_explorer_geographies", "pe_explorer_rationales", "pe_explorer_dates",
 )
+SHORTLIST_STATE_KEY = "pe_explorer_shortlist_ids"
+SHORTLIST_RATIONALE_KEY = "pe_explorer_shortlist_rationales"
 
 
 def _clear_filters() -> None:
@@ -90,6 +92,10 @@ def render_filter_sidebar(data: pd.DataFrame) -> dict[str, Any]:
         st.button("Clear filters", key="pe_explorer_clear", on_click=_clear_filters, width="stretch")
 
     start_date, end_date = _date_bounds(date_range)
+    # The default full range means "no date filter"; otherwise records with unknown
+    # publication dates would disappear even though the visitor did not filter by date.
+    if (start_date, end_date) == (default_start, default_end):
+        start_date, end_date = None, None
     return dict(search=query, publishers=publishers, start_date=start_date, end_date=end_date,
                 transaction_types=transaction_types, industries=industries, geographies=geographies,
                 rationales=rationales)
@@ -98,10 +104,7 @@ def render_filter_sidebar(data: pd.DataFrame) -> dict[str, Any]:
 def _active_filter_count(filters: dict[str, Any], data: pd.DataFrame) -> int:
     count = sum(bool(filters[k]) for k in ("search", "publishers", "transaction_types", "industries",
                                            "geographies", "rationales"))
-    lo, hi = data["publication_date"].min(), data["publication_date"].max()
-    full_start = lo.date() if pd.notna(lo) else None
-    full_end = hi.date() if pd.notna(hi) else None
-    if (filters["start_date"], filters["end_date"]) != (full_start, full_end):
+    if filters["start_date"] is not None or filters["end_date"] is not None:
         count += 1
     return count
 
@@ -168,6 +171,80 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
             st.bar_chart(industry_counts.set_index("category")["deal_count"], width="stretch")
     st.caption("Counts use unique deal IDs in the selected dataset. Coverage reflects only the sources and dates collected; it is not a complete measure of the PE market.")
 
+    # A per-session shortlist supports the presentation workflow without storing visitor choices globally.
+    # Candidate deals respect the active filters, then narrow to the selected rationale tags.
+    st.markdown("#### Rationale-based research shortlist")
+    st.write("Find transactions associated with a stated or classified value-creation rationale. These are research leads, not evidence of realized returns.")
+    rationale_options = filter_options(data)["rationale"]
+    selected_rationales = st.multiselect(
+        "Rationales to investigate", rationale_options,
+        key=SHORTLIST_RATIONALE_KEY,
+        help="Choose one or more available rationale categories, such as product, distribution, technology or geographic expansion.",
+    )
+    shortlist_candidates = filter_deals(filtered, rationales=selected_rationales) if selected_rationales else filtered.iloc[0:0].copy()
+    all_ids = set(data["deal_id"].astype(str))
+    saved_ids = [str(value) for value in st.session_state.get(SHORTLIST_STATE_KEY, []) if str(value) in all_ids]
+    st.session_state[SHORTLIST_STATE_KEY] = saved_ids
+
+    if selected_rationales:
+        st.caption(f"{len(shortlist_candidates):,} candidate deal(s) match the selected rationale(s) and current filters.")
+        if shortlist_candidates.empty:
+            st.info("No deals match these rationales and filters. Try another rationale or broaden the filters.")
+        else:
+            candidate_view = shortlist_candidates[["deal_id", "buyer_or_investor", "target_company", "rationale_tags", "evidence_excerpt", "review_status"]].copy()
+            candidate_view["rationale_tags"] = candidate_view["rationale_tags"].map(lambda x: ", ".join(x) if isinstance(x, list) and x else "Unknown")
+            candidate_view = candidate_view.rename(columns={
+                "deal_id": "Deal ID", "buyer_or_investor": "Buyer / investor", "target_company": "Target",
+                "rationale_tags": "Rationale", "evidence_excerpt": "Supporting excerpt", "review_status": "Review status",
+            })
+            st.dataframe(candidate_view, width="stretch", hide_index=True)
+            candidate_ids = shortlist_candidates["deal_id"].astype(str).tolist()
+            already_selected = [deal_id for deal_id in saved_ids if deal_id in candidate_ids]
+            to_add = st.multiselect(
+                "Choose candidate deals to add", candidate_ids, default=already_selected,
+                format_func=lambda deal_id: _deal_label(data, deal_id), key="pe_explorer_shortlist_add_selection",
+            )
+            if st.button("Add selected deals to my session shortlist", key="pe_explorer_shortlist_add"):
+                st.session_state[SHORTLIST_STATE_KEY] = list(dict.fromkeys(saved_ids + [str(x) for x in to_add]))
+                st.success(f"Shortlist now contains {len(st.session_state[SHORTLIST_STATE_KEY])} unique deal(s).")
+                st.rerun()
+    else:
+        st.caption("Select at least one rationale to find candidate deals for your shortlist.")
+
+    saved_frame = data[data["deal_id"].astype(str).isin(saved_ids)].copy()
+    st.markdown("##### Your session shortlist")
+    st.caption("This shortlist is stored only in your current Streamlit session; it is not shared with other visitors or saved as a global list.")
+    if saved_frame.empty:
+        st.info("Your shortlist is empty. Select rationale categories above and add deals to get started.")
+    else:
+        shortlist_view = saved_frame[["deal_id", "buyer_or_investor", "target_company", "publication_date", "rationale_tags", "evidence_excerpt", "review_status"]].copy()
+        shortlist_view["publication_date"] = shortlist_view["publication_date"].map(_fmt_date)
+        shortlist_view["rationale_tags"] = shortlist_view["rationale_tags"].map(lambda x: ", ".join(x) if isinstance(x, list) and x else "Unknown")
+        shortlist_view = shortlist_view.rename(columns={
+            "deal_id": "Deal ID", "buyer_or_investor": "Buyer / investor", "target_company": "Target",
+            "publication_date": "Publication date", "rationale_tags": "Rationale",
+            "evidence_excerpt": "Supporting excerpt", "review_status": "Review status",
+        })
+        st.dataframe(shortlist_view, width="stretch", hide_index=True)
+        remove_ids = st.multiselect(
+            "Remove deals from my shortlist", saved_ids,
+            format_func=lambda deal_id: _deal_label(data, deal_id), key="pe_explorer_shortlist_remove_selection",
+        )
+        shortlist_actions = st.columns([1, 1, 3])
+        with shortlist_actions[0]:
+            if st.button("Remove selected", key="pe_explorer_shortlist_remove"):
+                remove_set = {str(x) for x in remove_ids}
+                st.session_state[SHORTLIST_STATE_KEY] = [deal_id for deal_id in saved_ids if deal_id not in remove_set]
+                st.rerun()
+        with shortlist_actions[1]:
+            st.download_button(
+                "Export shortlist CSV", data=export_filtered(saved_frame),
+                file_name="lighthouse_pe_research_shortlist.csv", mime="text/csv",
+                key="pe_explorer_shortlist_download",
+            )
+        with shortlist_actions[2]:
+            st.caption("Includes evidence excerpts, source URLs, review status, unknown fields and the data dictionary field note.")
+
     st.markdown("#### Matching deals")
     display_cols = ["publication_date", "publisher_pe_firm", "buyer_or_investor", "target_company", "transaction_type", "target_industry", "target_geography", "rationale_tags", "price", "currency", "review_status"]
     table = filtered[display_cols].copy()
@@ -195,6 +272,8 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
         key="pe_explorer_selected_deal",
     )
     selected = filtered.loc[filtered["deal_id"].astype(str).eq(str(selected_id))].iloc[0]
+    # Stable handoff contract for Yuepheng's Deal Detail page; filter widgets stay in session state.
+    st.session_state["pe_selected_deal_id"] = str(selected_id)
     with st.container(border=True):
         st.markdown(f"### {_display(selected['buyer_or_investor'], 'Unknown buyer')} → {_display(selected['target_company'], 'Unknown target')}")
         if pd.notna(selected["headline"]) and str(selected["headline"]).strip():
@@ -227,7 +306,7 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
     st.markdown("#### Export this research set")
     export_cols = st.columns([1, 1, 2])
     with export_cols[0]:
-        st.download_button("Download filtered deals (CSV)", data=export_filtered(filtered), file_name="lighthouse_pe_deals.csv", mime="text/csv", key="pe_explorer_download_csv")
+        st.download_button("Download filtered deals (CSV)", data=export_filtered(data, filters=filters), file_name="lighthouse_pe_deals.csv", mime="text/csv", key="pe_explorer_download_csv")
     with export_cols[1]:
         st.download_button("Download data dictionary", data=data_dictionary_csv(), file_name="lighthouse_pe_data_dictionary.csv", mime="text/csv", key="pe_explorer_download_dictionary")
     with export_cols[2]:

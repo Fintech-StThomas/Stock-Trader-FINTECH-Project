@@ -167,7 +167,7 @@ def summary_metrics(deals: Any) -> dict[str, int]:
         "unique_deals": int(df["deal_id"].nunique()),
         "disclosed_values": int(df["price"].notna().sum()),
         "needs_review": int(df["review_status"].astype("string").str.casefold().isin({"pending", "needs review", "flagged"}).sum()),
-        "with_evidence": int(df["evidence_excerpt"].notna().astype(bool).sum()),
+        "with_evidence": int((df["evidence_excerpt"].notna() & df["evidence_excerpt"].astype("string").str.strip().ne("")).sum()),
     }
 
 

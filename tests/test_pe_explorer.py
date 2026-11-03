@@ -60,10 +60,13 @@ def test_date_filter_and_missing_date_handling():
 
 
 def test_metrics_and_category_counts_use_unique_deals():
-    metrics = summary_metrics(sample_records())
-    assert metrics["unique_deals"] == 2
+    records = sample_records()
+    records.append({**records[1], "deal_id": "D3", "announcement_ids": ["A4"], "evidence_excerpt": ""})
+    metrics = summary_metrics(records)
+    assert metrics["unique_deals"] == 3
     assert metrics["disclosed_values"] == 1
     assert metrics["needs_review"] == 1
+    assert metrics["with_evidence"] == 1
     categories = count_by_category(sample_records(), "rationale_tags").set_index("category")
     assert categories.loc["distribution expansion", "deal_count"] == 1
 
@@ -78,6 +81,20 @@ def test_csv_export_keeps_unknown_price_blank_and_source_links():
     assert "https://example.com/a" in csv and "https://example.com/b" in csv
     assert "Unknown" not in csv  # missing values remain blank, not fabricated labels
     assert "field_explanations" in csv
+
+
+def test_export_can_apply_the_same_filters_as_the_explorer():
+    csv = export_filtered(sample_records(), filters={"publishers": ["Firm B"]}).decode("utf-8-sig")
+    assert "Target B" in csv
+    assert "Target A" not in csv
+
+
+def test_rationale_shortlist_export_contains_only_matching_unique_deals_and_evidence():
+    shortlist = filter_deals(sample_records(), rationales=["distribution expansion"])
+    csv = export_filtered(shortlist).decode("utf-8-sig")
+    assert csv.count("D1") == 1
+    assert "Evidence for distribution expansion." in csv
+    assert "Target B" not in csv
 
 
 ROOT = Path(__file__).resolve().parent.parent
