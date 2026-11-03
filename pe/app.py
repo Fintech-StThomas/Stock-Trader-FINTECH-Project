@@ -23,10 +23,8 @@ def _sidebar_nav() -> str:
 
 
 def _render_sources() -> None:
-    st.subheader("Know where the information comes from")
-    st.write("This page will show the monitored PE firms, collection period, source links, "
-             "last successful refresh and any gaps in coverage.")
-    st.caption("Source monitoring is being developed by the collection owner. Public page visits do not trigger scraping.")
+    from pe.pages.sources import render_sources
+    render_sources()
 
 
 def _render_quality() -> None:

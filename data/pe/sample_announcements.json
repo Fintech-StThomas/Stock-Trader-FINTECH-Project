@@ -1,0 +1,42 @@
+[
+  {
+    "announcement_id": "ann_d26025ccf138ae9a20f973d1",
+    "source_id": "example_firm",
+    "publisher_pe_firm": "Example Firm",
+    "source_url": "https://example.com/news/synthetic-example_firm",
+    "source_urls": [
+      "https://example.com/news/synthetic-example_firm"
+    ],
+    "headline": "SYNTHETIC fixture for Example Firm",
+    "publication_date": "2026-10-02",
+    "collected_at": "2026-11-03T00:00:00Z",
+    "full_text": "This is an invented announcement for offline interface development, not a real investment. The example describes a fictional transaction whose terms are intentionally not supplied. Do not include it in real coverage or accuracy claims.",
+    "content_hash": "479ab3e4fda976c4d50294930bba0b8813921c4c7c7ab86e180f73578bf7041e",
+    "collection_status": "success",
+    "is_cached": true,
+    "date_status": "known",
+    "within_requested_period": true,
+    "is_synthetic": true,
+    "raw_path": null
+  },
+  {
+    "announcement_id": "ann_d16d5c71026072abc2980059",
+    "source_id": "example_other",
+    "publisher_pe_firm": "Example Other Firm",
+    "source_url": "https://example.com/news/synthetic-example_other",
+    "source_urls": [
+      "https://example.com/news/synthetic-example_other"
+    ],
+    "headline": "SYNTHETIC fixture for Example Other Firm",
+    "publication_date": null,
+    "collected_at": "2026-11-03T00:00:00Z",
+    "full_text": "This is an invented announcement for offline interface development, not a real investment. The example describes a fictional transaction whose terms are intentionally not supplied. Do not include it in real coverage or accuracy claims.",
+    "content_hash": "479ab3e4fda976c4d50294930bba0b8813921c4c7c7ab86e180f73578bf7041e",
+    "collection_status": "success",
+    "is_cached": true,
+    "date_status": "unknown",
+    "within_requested_period": null,
+    "is_synthetic": true,
+    "raw_path": null
+  }
+]

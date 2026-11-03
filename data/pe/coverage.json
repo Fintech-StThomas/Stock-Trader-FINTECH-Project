@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-03T14:20:32.700303Z",
+  "delivery_mode": "cached",
+  "sources": [
+    {
+      "source_id": "riverside",
+      "publisher_pe_firm": "The Riverside Company",
+      "listing_url": "https://www.riversidecompany.com/currents/",
+      "enabled": true,
+      "access_status": "internal_research",
+      "terms_url": "https://www.riversidecompany.com/terms-of-use",
+      "access_note": "Pilot. Terms permit personal/internal copies; retain raw notices. Full articles are private team inputs, not public website content. Review conditions before expanding use.",
+      "access_reviewed_on": "2026-11-03",
+      "last_successful_run": "2026-11-03T14:20:32.695075Z",
+      "published_run_id": "run_20261103T142016Z_93f3ac0e",
+      "published_coverage": {
+        "run_id": "run_20261103T142016Z_93f3ac0e",
+        "started_at": "2026-11-03T14:20:16.604969Z",
+        "mode": "live",
+        "requested_period": {
+          "start": "2026-01-01",
+          "end": "2026-11-03"
+        },
+        "limits": {
+          "max_pages": 3,
+          "max_articles": 6
+        },
+        "counts": {
+          "attempted_pages": 7,
+          "successful_pages": 7,
+          "failed_pages": 0,
+          "listing_pages": 1,
+          "article_pages": 6,
+          "discovered_urls": 229,
+          "duplicate_links": 0,
+          "duplicate_content": 0,
+          "outside_period": 0,
+          "unknown_dates": 0,
+          "announcements": 6
+        },
+        "errors": [],
+        "pages": [
+          {
+            "url": "https://www.riversidecompany.com/currents",
+            "kind": "listing",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/wb-blends-add-on-csb-nutrition-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/dastex-add-on-abovo-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/safebuilt-add-on-neic-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/dawgs-add-on-ebs-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/selenium-medical-new-investment",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/altius-add-on-converge-news-release",
+            "kind": "article",
+            "status": "success"
+          }
+        ],
+        "truncated": true,
+        "stop_reasons": [
+          "Article limit reached"
+        ],
+        "coverage_note": "Announcements from the configured public listing only. Not a complete market or deal count; missing dates remain unverified.",
+        "observed_period": {
+          "start": "2026-09-23",
+          "end": "2026-10-27"
+        },
+        "status": "success",
+        "finished_at": "2026-11-03T14:20:32.695075Z"
+      },
+      "latest_attempt": {
+        "run_id": "run_20261103T142016Z_93f3ac0e",
+        "started_at": "2026-11-03T14:20:16.604969Z",
+        "mode": "live",
+        "requested_period": {
+          "start": "2026-01-01",
+          "end": "2026-11-03"
+        },
+        "limits": {
+          "max_pages": 3,
+          "max_articles": 6
+        },
+        "counts": {
+          "attempted_pages": 7,
+          "successful_pages": 7,
+          "failed_pages": 0,
+          "listing_pages": 1,
+          "article_pages": 6,
+          "discovered_urls": 229,
+          "duplicate_links": 0,
+          "duplicate_content": 0,
+          "outside_period": 0,
+          "unknown_dates": 0,
+          "announcements": 6
+        },
+        "errors": [],
+        "pages": [
+          {
+            "url": "https://www.riversidecompany.com/currents",
+            "kind": "listing",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/wb-blends-add-on-csb-nutrition-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/dastex-add-on-abovo-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/safebuilt-add-on-neic-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/dawgs-add-on-ebs-news-release",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/selenium-medical-new-investment",
+            "kind": "article",
+            "status": "success"
+          },
+          {
+            "url": "https://www.riversidecompany.com/currents/altius-add-on-converge-news-release",
+            "kind": "article",
+            "status": "success"
+          }
+        ],
+        "truncated": true,
+        "stop_reasons": [
+          "Article limit reached"
+        ],
+        "coverage_note": "Announcements from the configured public listing only. Not a complete market or deal count; missing dates remain unverified.",
+        "observed_period": {
+          "start": "2026-09-23",
+          "end": "2026-10-27"
+        },
+        "status": "success",
+        "finished_at": "2026-11-03T14:20:32.695075Z"
+      }
+    },
+    {
+      "source_id": "advent",
+      "publisher_pe_firm": "Advent International",
+      "listing_url": "https://www.adventinternational.com/news/",
+      "enabled": false,
+      "access_status": "needs_review",
+      "terms_url": "https://www.adventinternational.com/terms-and-conditions/",
+      "access_note": "Candidate only. Terms limit content use; resolve permitted collection and sharing before enabling. Robots specifies a 10-second delay. HTML adapter supports linked pagination.",
+      "access_reviewed_on": "2026-11-03",
+      "last_successful_run": null,
+      "published_run_id": null,
+      "published_coverage": null,
+      "latest_attempt": null
+    },
+    {
+      "source_id": "bain",
+      "publisher_pe_firm": "Bain Capital",
+      "listing_url": "https://www.baincapital.com/news",
+      "enabled": false,
+      "access_status": "permission_required",
+      "terms_url": "https://www.baincapital.com/terms-use",
+      "access_note": "Candidate only, adapter not validated. Terms expressly require consent for automated collection. Do not enable without permission and a tested layout adapter.",
+      "access_reviewed_on": "2026-11-03",
+      "last_successful_run": null,
+      "published_run_id": null,
+      "published_coverage": null,
+      "latest_attempt": null
+    }
+  ]
+}

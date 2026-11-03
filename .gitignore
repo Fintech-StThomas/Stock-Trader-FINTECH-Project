@@ -12,3 +12,6 @@ dist/
 .DS_Store
 .venv/
 data/journal/
+
+# PE source inputs are private; publish only reviewed metadata and extracted facts.
+data/pe/private/
