@@ -57,3 +57,32 @@ def export_filtered(deals: Any, filters: Mapping[str, Any] | None = None) -> byt
 def data_dictionary_csv() -> bytes:
     frame = pd.DataFrame([{"field": key, "explanation": value} for key, value in FIELD_EXPLANATIONS.items()])
     return frame.to_csv(index=False, lineterminator="\n").encode("utf-8-sig")
+
+
+def export_competitive_summary(deals: Any) -> bytes:
+    """Descriptive summary of exactly the current filtered records, with source evidence."""
+    from pe.analytics import count_by_category
+    df = load_deals(deals)
+    lines = ['# Lighthouse competitive research summary', '',
+             'Audience: PE investment analysts monitoring competing firms.', '',
+             f'Selected unique deal records: {len(df)}', '',
+             'This summary describes the selected saved records, not all market or firm activity. '
+             'Categories may be inferred. Announced rationale does not establish realized returns. '
+             'Curated additions are flagged in review notes and excluded from historical extraction accuracy results.', '']
+    known = df['publication_date'].dropna()
+    lines += [f'Known publication dates: {known.min():%Y-%m-%d} to {known.max():%Y-%m-%d}' if len(known) else 'Known publication dates: Unknown',
+              f'Records with unknown publication dates: {df["publication_date"].isna().sum()}', '']
+    for title,col in [('Activity by firm','publisher_pe_firm'),('Target sectors','target_industry'),
+                      ('Target geography','target_geography'),('Strategic rationales','rationale_tags')]:
+        lines += ['## '+title,'']
+        lines += [f'- {r.category}: {r.deal_count}' for r in count_by_category(df,col).itertuples()]
+        lines += ['']
+    lines += ['## Announcements and evidence','']
+    for row in df.to_dict('records'):
+        lines += [f'### {row["publisher_pe_firm"]}: {row["target_company"] or "Unknown target"}', '',
+                  f'Transaction: {row["transaction_type"]} | Status: {row["transaction_status"]}',
+                  f'Review: {row["review_status"]}', f'Notes: {row["review_notes"] or "None saved"}', '',
+                  str(row['evidence_excerpt'] or 'No evidence excerpt saved.'), '']
+        lines += [f'- Source: {url}' for url in row['source_url']]
+        lines += ['']
+    return '\n'.join(lines).encode('utf-8')

@@ -5,6 +5,7 @@ from pathlib import Path
 import streamlit as st
 from pe.collectors.config import load_sources
 from pe.storage import DEFAULT_COVERAGE
+from pe.published import published_records, published_inventory
 
 
 def _display_time(value):
@@ -32,6 +33,13 @@ def render_sources(coverage=None):
     if not isinstance(coverage, dict) or not isinstance(coverage.get('sources'), list):
         st.error('The coverage snapshot is invalid. Please ask the team to republish it.')
         return
+    records = published_records()
+    inventory = published_inventory(records)
+    st.markdown('### Firms available in Deal Explorer')
+    st.write('Choose these firms in the explorer to investigate competing investment activity. Counts reflect saved records, not complete firm activity.')
+    st.dataframe(inventory, hide_index=True, width='stretch')
+    st.caption('Curated samples are source-linked research entries awaiting team review. They are separate from automated collection and its validation results.')
+    st.markdown('### Announcement collection coverage')
     sources = coverage['sources']
     st.info('Saved snapshot · This page uses cached coverage. Opening it never starts a collection.')
     st.caption('Announcement counts are not deal counts. The Deal Explorer has its own dataset; these raw inputs still need extraction and validation.')
@@ -47,8 +55,14 @@ def render_sources(coverage=None):
             st.caption(source.get('access_note', ''))
             saved = source.get('published_coverage')
             latest = source.get('latest_attempt')
+            curated = [r for r in records if r['publisher_pe_firm'] == source['publisher_pe_firm'] and r.get('data_status') == 'curated']
+            if curated:
+                st.success(f'{len(curated)} curated announcement samples available in Deal Explorer.')
+                for row in curated:
+                    st.markdown(f"- [{row['headline']}]({row['source_url'][0]})")
+                st.caption('Short evidence and classified facts only; no full article archive or automated refresh for these samples.')
             if not source.get('enabled'):
-                st.warning('Candidate — not enabled for automated collection.')
+                st.warning('Automated collection is disabled; source-linked samples may still be available above.')
             if not saved:
                 st.write('No successful collection has been published for this firm.')
             else:

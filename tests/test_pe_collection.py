@@ -249,7 +249,7 @@ def test_sources_screen_is_read_only(tmp_path, monkeypatch):
     assert not app.exception
     assert not app.button and not app.text_area
     assert any('cached coverage' in value.value for value in app.info)
-    assert any('not enabled' in value.value for value in app.warning)
+    assert any('Automated collection is disabled' in value.value for value in app.warning)
 
 
 def test_sources_failed_attempt_displays_fallback(cfg,tmp_path,monkeypatch):

@@ -173,6 +173,8 @@ def render_quality(data: Any | None = None, validation: dict[str, Any] | None = 
                  "and state, so expect more errors in those fields than the shipped build's own test suggests.")
         st.dataframe(later_round_table(validation), width="stretch", hide_index=True)
 
+    st.info("The historical accuracy evaluation covers the original extraction build only. Curated Advent and Bain additions await team review and are outside those accuracy figures. Their notes identify editorial classifications and uncertain publication dates.")
+
     st.markdown("#### What this dataset leaves out")
     total = len(data)
     review = data["review_status"].astype("string").str.casefold()

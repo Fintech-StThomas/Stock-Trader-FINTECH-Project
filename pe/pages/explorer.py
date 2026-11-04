@@ -16,7 +16,8 @@ from pe.analytics import (
     load_deals,
     summary_metrics,
 )
-from pe.exports import data_dictionary_csv, export_filtered
+from pe.exports import data_dictionary_csv, export_filtered, export_competitive_summary
+from pe.published import published_records
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "pe" / "deals.json"
@@ -27,7 +28,7 @@ def load_explorer_dataset(path: str | Path = DEFAULT_DATA_PATH) -> tuple[pd.Data
     path = Path(path)
     if not path.exists():
         return load_deals([]), False
-    raw = pd.read_json(path)
+    raw = pd.DataFrame(published_records(path) if path.resolve() == DEFAULT_DATA_PATH.resolve() else pd.read_json(path))
     is_demo = bool(raw.get("data_status", pd.Series(dtype=str)).astype(str).eq("demo").any())
     return load_deals(raw), is_demo
 
@@ -83,7 +84,7 @@ def render_filter_sidebar(data: pd.DataFrame) -> dict[str, Any]:
                               placeholder="e.g., distribution, healthcare, buyer name",
                               help="Matches buyer, target, publisher, headline, industry, geography, "
                                    "transaction type, rationale and evidence text.")
-        publishers = st.multiselect("Publisher / PE firm", options["publisher"], key="pe_explorer_publishers")
+        publishers = st.multiselect("Competing PE firms", options["publisher"], key="pe_explorer_publishers")
         transaction_types = st.multiselect("Transaction type", options["transaction_type"], key="pe_explorer_types")
         industries = st.multiselect("Target industry", options["target_industry"], key="pe_explorer_industries")
         geographies = st.multiselect("Geography", options["geography"], key="pe_explorer_geographies")
@@ -125,10 +126,14 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
     data = load_deals(data)
 
     st.subheader("Deal Explorer")
+    st.caption("For PE investment analysts conducting competitive research: choose firms → filter activity → inspect evidence → export findings.")
     st.write("Search and filter announced transactions with the filters in the sidebar (tap » on small screens), "
              "inspect the supporting evidence, and export a research shortlist.")
     if demo_data:
         st.warning("Demo dataset: these records are illustrative and must not be treated as verified transactions.")
+
+    if dataset is None and inferred_demo is False:
+        st.caption("Includes curated Advent and Bain samples, pending team review. These samples are outside the historical extraction accuracy evaluation; some publication dates remain unknown.")
 
     if data.empty:
         st.info("No deal records are available yet. Add a published dataset at `data/pe/deals.json` or pass records to `render_explorer(dataset)`. The explorer does not scrape sources when a visitor opens the page.")
@@ -310,6 +315,8 @@ def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None
             st.write("No source URL has been saved.")
 
     st.markdown("#### Export this research set")
+    st.download_button("Download competitive research summary", data=export_competitive_summary(filtered),
+                       file_name="lighthouse_competitive_research.md", mime="text/markdown", key="pe_competitive_summary")
     export_cols = st.columns([1, 1, 2])
     with export_cols[0]:
         st.download_button("Download filtered deals (CSV)", data=export_filtered(data, filters=filters), file_name="lighthouse_pe_deals.csv", mime="text/csv", key="pe_explorer_download_csv")
@@ -324,7 +331,7 @@ def _provenance(data: pd.DataFrame) -> str:
     dates = data["publication_date"].dropna()
     span = f", published {dates.min():%b %Y} – {dates.max():%b %Y}" if len(dates) else ""
     return (f"Source: {len(data):,} deal announcements from the news pages of {firms} PE firm"
-            f"{'s' if firms != 1 else ''}{span}, extracted by fixed rules (accuracy and limits under Quality and Method). "
+            f"{'s' if firms != 1 else ''}{span}, from saved extraction output and curated additions (review status and limits under Quality and Method). "
             "Each deal links to its original announcement.")
 
 
