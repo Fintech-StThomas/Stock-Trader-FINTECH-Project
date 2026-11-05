@@ -1,0 +1,41 @@
+[
+  {
+    "announcement_id": "ANN-DEMO-SOURCE-001",
+    "publisher_pe_firm": "Northstar Capital (demo)",
+    "source_url": "https://example.invalid/demo-acquisition-announcement",
+    "collected_at": "2026-11-02T12:00:00+00:00",
+    "headline": "Illustrative demo: Northstar Capital acquired Harbor Industrial Supply",
+    "publication_date": "2026-03-18",
+    "full_text": "DEMO ONLY — fictional example, not a real announcement. Northstar Capital acquired Harbor Industrial Supply. The illustrative transaction is intended to expand distribution into new regional markets and broaden the product portfolio. No purchase price is disclosed in this fictional example.",
+    "content_hash": "demo-hash-001",
+    "collection_status": "demo",
+    "is_cached": true,
+    "data_status": "demo"
+  },
+  {
+    "announcement_id": "ANN-DEMO-SOURCE-002",
+    "publisher_pe_firm": "Cedar Ridge Partners (demo)",
+    "source_url": "https://example.invalid/demo-quarterly-results",
+    "collected_at": "2026-11-02T12:00:00+00:00",
+    "headline": "Illustrative demo: quarterly results update",
+    "publication_date": "2026-02-09",
+    "full_text": "DEMO ONLY — fictional example. The company reported quarterly results and discussed its market outlook. No transaction is announced.",
+    "content_hash": "demo-hash-002",
+    "collection_status": "demo",
+    "is_cached": true,
+    "data_status": "demo"
+  },
+  {
+    "announcement_id": "ANN-DEMO-SOURCE-003",
+    "publisher_pe_firm": "Summit Field Equity (demo)",
+    "source_url": "https://example.invalid/demo-uncertain-update",
+    "collected_at": "2026-11-02T12:00:00+00:00",
+    "headline": "Illustrative demo: company update",
+    "publication_date": null,
+    "full_text": "DEMO ONLY — fictional example. The company announced a leadership update and described plans to explore new markets. The text does not identify a transaction or a buyer and target.",
+    "content_hash": "demo-hash-003",
+    "collection_status": "demo",
+    "is_cached": true,
+    "data_status": "demo"
+  }
+]

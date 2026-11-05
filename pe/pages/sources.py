@@ -33,7 +33,8 @@ def render_sources(coverage=None):
     if not isinstance(coverage, dict) or not isinstance(coverage.get('sources'), list):
         st.error('The coverage snapshot is invalid. Please ask the team to republish it.')
         return
-    records = published_records()
+    from pe.repository import load_dataset
+    records = load_dataset()["records"]
     inventory = published_inventory(records)
     st.markdown('### Firms available in Deal Explorer')
     st.write('Choose these firms in the explorer to investigate competing investment activity. Counts reflect saved records, not complete firm activity.')
@@ -86,3 +87,13 @@ def render_sources(coverage=None):
                 if latest['errors']:
                     st.dataframe(latest['errors'], hide_index=True, width='stretch')
     st.caption('Full article text and raw pages stay in the private team archive. Public visitors cannot run refreshes or download that archive here.')
+
+    st.markdown('### Additional research publishers')
+    from pe.collectors.core import CONFIG_PATH
+    try:
+        configured=json.loads(CONFIG_PATH.read_text()).get('sources',[])
+    except (OSError,ValueError):
+        configured=[]
+    st.dataframe([{'Source':r['name'],'Role':r.get('role'), 'Collection status':'Reviewed configuration' if r.get('access_reviewed') else 'Configured — access/layout review pending',
+                   'Starting page':r.get('urls',[''])[0]} for r in configured],hide_index=True,width='stretch')
+    st.caption('Configuration is not proof of article collection. Market and legal reports are context, not deal records. Bain & Company research is distinct from Bain Capital investment announcements. No new live collection is triggered here.')

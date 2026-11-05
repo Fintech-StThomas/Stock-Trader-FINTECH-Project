@@ -43,13 +43,11 @@ def test_unknown_and_flag_tables_count_from_the_data():
     assert flags.loc["Date from the release's dateline", "Deals"] == 1
 
 
-def test_quality_page_renders_in_the_app():
+def test_archived_quality_renderer_is_still_available_for_team_review():
     pytest.importorskip("streamlit")
     from streamlit.testing.v1 import AppTest
 
-    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
-    at.query_params["workspace"] = "pe"
-    at.query_params["pe_page"] = "quality"
+    at = AppTest.from_string("from pe.pages.quality import render_quality\nrender_quality()", default_timeout=60)
     at.run()
     assert not at.exception
     assert any(s.value == "Research you can check" for s in at.subheader)

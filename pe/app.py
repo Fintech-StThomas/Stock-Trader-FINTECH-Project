@@ -1,15 +1,18 @@
 """PE workspace shell: sidebar navigation between PE pages, with each page in its own module."""
 import streamlit as st
 
-PAGES = {"explorer": "Deal Explorer", "sources": "Sources and Coverage", "quality": "Quality and Method"}
-PAGE_ICONS = {"explorer": "🔎", "sources": "🗂️", "quality": "✅"}
+PAGES = {"explorer": "AI Deal Research", "detail": "Deal Detail"}
+PAGE_ICONS = {"explorer": "🔎", "detail": "🧾"}
 
 
 def _sidebar_nav() -> str:
     """Sidebar page switch. The page is mirrored in `?pe_page=` so a section can be linked directly."""
-    if "pe_page" not in st.session_state:
+    if st.session_state.get("pe_page") not in PAGES:
         requested = st.query_params.get("pe_page", "explorer")
         st.session_state.pe_page = requested if requested in PAGES else "explorer"
+
+    if st.query_params.get("pe_page") and st.query_params["pe_page"] not in PAGES:
+        st.query_params["pe_page"] = st.session_state.pe_page
 
     def update_url():
         st.query_params["pe_page"] = st.session_state.pe_page
@@ -22,16 +25,6 @@ def _sidebar_nav() -> str:
     return page
 
 
-def _render_sources() -> None:
-    from pe.pages.sources import render_sources
-    render_sources()
-
-
-def _render_quality() -> None:
-    from pe.pages.quality import render_quality
-    render_quality()
-
-
 def render_pe_app() -> None:
     page = _sidebar_nav()
     st.caption("LIGHTHOUSE  /  PRIVATE EQUITY  /  " + PAGES[page].upper())
@@ -41,9 +34,8 @@ def render_pe_app() -> None:
                  "who bought whom, why the transaction matters, and what the source actually says.")
         from pe.pages.explorer import render_explorer
         render_explorer()
-    elif page == "sources":
-        _render_sources()
-        st.sidebar.caption("Pick **Deal Explorer** above to search and filter deals.")
-    else:
-        _render_quality()
-        st.sidebar.caption("Pick **Deal Explorer** above to search and filter deals.")
+    elif page == "detail":
+        from pe.repository import load_dataset
+        from pe.pages.deal_detail import render_deal_detail
+        snapshot = load_dataset()
+        render_deal_detail(snapshot["deals"], snapshot.get("evidence", []))

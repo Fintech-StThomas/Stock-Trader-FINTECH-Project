@@ -16,8 +16,17 @@ def main():
     p.add_argument('--max-pages', type=int); p.add_argument('--max-articles', type=int)
     p.add_argument('--private-dir', default=str(DEFAULT_PRIVATE))
     p.add_argument('--coverage-output', default=str(DEFAULT_COVERAGE))
+    p.add_argument('--research-sources', action='store_true', help='Use the additional research-publisher collector')
     p.add_argument('--cached', action='store_true', help='Read last successful snapshot without requests or writes')
     args = p.parse_args()
+    if args.research_sources:
+        if args.source or args.start or args.end or args.max_pages or args.max_articles:
+            p.error('Research-publisher mode uses its own bounded source configuration, not firm/date overrides')
+        from pe.collectors.core import collect as collect_research, load_source_config, CONFIG_PATH as RESEARCH_CONFIG
+        config_path = RESEARCH_CONFIG if args.config == str(CONFIG_PATH) else args.config
+        rows, report = collect_research(load_source_config(config_path), cached=args.cached)
+        print(json.dumps({'announcements': len(rows), 'report': report}, indent=2))
+        return 1 if report.get('failed') else 0
     configs = load_sources(args.config)
     ids = set(args.source or [s.source_id for s in configs if s.enabled])
     unknown = ids - {s.source_id for s in configs}

@@ -26,6 +26,10 @@ DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "pe" / "deals.json"
 def load_explorer_dataset(path: str | Path = DEFAULT_DATA_PATH) -> tuple[pd.DataFrame, bool]:
     """Load saved PE deal records. Returns (records, is_demo_data)."""
     path = Path(path)
+    if path.resolve() == DEFAULT_DATA_PATH.resolve():
+        from pe.repository import load_dataset
+        snapshot = load_dataset()
+        return snapshot["deals"], snapshot["metadata"].get("is_demo", False)
     if not path.exists():
         return load_deals([]), False
     raw = pd.DataFrame(published_records(path) if path.resolve() == DEFAULT_DATA_PATH.resolve() else pd.read_json(path))
@@ -111,7 +115,7 @@ def _active_filter_count(filters: dict[str, Any], data: pd.DataFrame) -> int:
     return count
 
 
-def render_explorer(dataset: Any | None = None, *, demo_data: bool | None = None) -> None:
+def render_legacy_explorer(dataset: Any | None = None, *, demo_data: bool | None = None) -> None:
     """Render sidebar filters, overview charts, results, detail evidence, and CSV downloads.
 
     `dataset` is injectable so the team can use a published repository dataset and tests
@@ -340,3 +344,10 @@ def _deal_label(df: pd.DataFrame, deal_id: str) -> str:
     buyer = _display(row["buyer_or_investor"], "Unknown buyer")
     target = _display(row["target_company"], "Unknown target")
     return f"{buyer} → {target} ({deal_id})"
+
+
+def render_explorer(dataset=None, *, demo_data=None):
+    """Primary PE entry point: a single AI question replaces sidebar filters."""
+    from pe.pages.agent_search import render_agent_search
+    records = dataset.to_dict('records') if isinstance(dataset, pd.DataFrame) else dataset
+    render_agent_search(records)

@@ -15,3 +15,15 @@ data/journal/
 
 # PE source inputs are private; publish only reviewed metadata and extracted facts.
 data/pe/private/
+
+# Server-only API credentials
+.streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+
+# Generated research source inputs and extraction results stay private
+data/pe/cache/
+data/pe/announcements-*.json
+data/pe/extraction_output.json
+data/pe/collection_report.json

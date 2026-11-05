@@ -52,7 +52,7 @@ def test_unknown_dates_stay_visible_until_explicit_date_filter():
 
 def test_ui_firm_choice_evidence_and_summary():
     from streamlit.testing.v1 import AppTest
-    app=AppTest.from_string('from pe.pages.explorer import render_explorer\nrender_explorer()').run(timeout=30)
+    app=AppTest.from_string('from pe.pages.explorer import render_legacy_explorer\nrender_legacy_explorer()').run(timeout=30)
     firms=app.sidebar.multiselect(key='pe_explorer_publishers')
     assert 'Bain Capital' in firms.options and 'Advent International' in firms.options
     firms.select('Advent International').run()

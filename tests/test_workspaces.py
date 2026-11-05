@@ -14,7 +14,7 @@ def assert_pe_only(at):
     assert any(t.value == "PE Deal Intelligence" for t in at.title)
     # PE navigation lives in the sidebar; the stock workspace's tabs and sidebar controls are absent.
     assert at.sidebar.radio(key="pe_page").options == [
-        "🔎  Deal Explorer", "🗂️  Sources and Coverage", "✅  Quality and Method"]
+        "🔎  AI Deal Research", "🧾  Deal Detail"]
     assert "📍 Analyse a stock" not in [t.label for t in at.tabs]
     assert not [w for w in at.sidebar.text_input if w.key == "ticker"]
     assert not at.sidebar.slider
@@ -67,47 +67,36 @@ def test_pe_sidebar_switches_sections_and_deep_links():
     at.run()
     assert_pe_only(at)
     assert at.radio(key="pe_page").value == "explorer"
-    assert at.sidebar.text_input(key="pe_explorer_search")
+    assert at.text_area(key="pe_ai_question")
     assert not any("Demo dataset" in w.value for w in at.warning)
-    assert any(c.value.startswith("Source: ") and "deal announcements" in c.value for c in at.caption)
+    assert not at.sidebar.multiselect and not at.sidebar.date_input
 
-    at.radio(key="pe_page").set_value("sources").run()
+    at.radio(key="pe_page").set_value("detail").run()
     assert_pe_only(at)
-    assert at.query_params["pe_page"] in ("sources", ["sources"])
-    assert any(s.value == "Know where the information comes from" for s in at.subheader)
-    assert not [w for w in at.sidebar.text_input if w.key == "pe_explorer_search"]
+    assert at.query_params["pe_page"] in ("detail", ["detail"])
+    assert at.selectbox(key="pe_detail_choice")
 
     linked = AppTest.from_file(APP, default_timeout=60)
     linked.query_params["workspace"] = "pe"
-    linked.query_params["pe_page"] = "quality"
+    linked.query_params["pe_page"] = "sources"
     linked.run()
     assert_pe_only(linked)
-    assert linked.radio(key="pe_page").value == "quality"
+    assert linked.radio(key="pe_page").value == "explorer"
+    assert linked.query_params["pe_page"] in ("explorer", ["explorer"])
 
 
-def test_pe_sidebar_filters_narrow_results_and_clear():
+def test_ai_sidebar_replaces_manual_filters():
     at = AppTest.from_file(APP, default_timeout=60)
     at.query_params["workspace"] = "pe"
     at.run()
-    total = int(at.metric[0].value)
-    assert total > 1
-    industry = at.sidebar.multiselect(key="pe_explorer_industries")
-    industry.select(industry.options[0]).run()
-    assert not at.exception
-    narrowed = int(at.metric[0].value)
-    assert 0 < narrowed < total
-    assert any("1 filter active" in c.value for c in at.caption)
-
-    at.sidebar.button(key="pe_explorer_clear").click().run()
-    assert not at.exception
-    assert int(at.metric[0].value) == total
-    assert at.sidebar.multiselect(key="pe_explorer_industries").value == []
+    assert_pe_only(at)
+    assert not at.sidebar.text_input and len(at.text_area) == 1
+    assert not at.sidebar.multiselect and not at.sidebar.date_input
+    assert any("Research private equity deals" in x.value for x in at.markdown)
 
 
 def test_pe_rationale_shortlist_add_and_remove():
-    at = AppTest.from_file(APP, default_timeout=60)
-    at.query_params["workspace"] = "pe"
-    at.run()
+    at = AppTest.from_string("from pe.pages.explorer import render_legacy_explorer\nrender_legacy_explorer()", default_timeout=60).run()
     rationale = at.multiselect(key="pe_explorer_shortlist_rationales")
     rationale.select(rationale.options[0]).run()
     candidates = at.multiselect(key="pe_explorer_shortlist_add_selection")
@@ -126,3 +115,23 @@ def test_pe_rationale_shortlist_add_and_remove():
     assert not at.exception
     assert at.session_state["pe_explorer_shortlist_ids"] == [second]
     assert at.session_state["pe_selected_deal_id"]  # handoff for the Deal Detail page
+
+
+def test_inspect_saved_deal_callback_navigates_without_widget_error():
+    from pe.repository import load_dataset
+    from pe.agent import FIELDS, ground_results
+    records=load_dataset()['records']
+    selected=records[0]['deal_id']
+    payload={'interpretation':'A saved deal','limitations':[], 'results':[{'saved_deal_id':selected,**{f:None for f in FIELDS},'evidence':[]}]}
+    result=ground_results(payload,records,set())
+    result.update(query='Show a saved deal',model='test',web_search_enabled=False)
+    at=AppTest.from_file(APP,default_timeout=60)
+    at.query_params['workspace']='pe'
+    at.session_state['pe_ai_result']=result
+    at.run()
+    assert not at.exception
+    at.button(key='pe_ai_detail_'+selected).click().run()
+    assert not at.exception
+    assert at.radio(key='pe_page').value=='detail'
+    assert at.session_state['pe_selected_deal_id']==selected
+    assert at.selectbox(key='pe_detail_choice').value==selected

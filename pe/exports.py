@@ -9,6 +9,11 @@ import pandas as pd
 from pe.analytics import DEAL_COLUMNS, filter_deals, load_deals
 
 FIELD_EXPLANATIONS = {
+    "source_name": "Publisher of the source article.",
+    "source_role": "Primary firm announcement, secondary deal news, market context, or legal context.",
+    "content_type": "Source content classification, not proof of a deal.",
+    "extractor_version": "Rules version used for extraction, when recorded.",
+    "data_status": "Collected, curated, or explicitly fictional demo input.",
     "deal_id": "Stable identifier for one grouped transaction.",
     "announcement_ids": "Identifiers for all source announcements associated with this deal.",
     "publisher_pe_firm": "PE firm or publisher associated with the announcement; not necessarily the direct buyer.",
