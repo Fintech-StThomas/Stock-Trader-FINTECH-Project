@@ -6,3 +6,4 @@ id,recorded_at,decision_id,ticker,kind,date,price,shares,detail,run_id
 5,2026-10-29T01:47:50+00:00,9,BRK-B,opened,2026-10-28,540.34,2,"{""rule"": ""fills at the next session's open"", ""stop"": 455.64223559570314, ""exit_style"": ""trend""}",20261029T014750Z
 6,2026-10-29T01:47:50+00:00,11,JPM,opened,2026-10-28,339.3,4,"{""rule"": ""fills at the next session's open"", ""stop"": 294.35248121948246, ""exit_style"": ""trend""}",20261029T014750Z
 7,2026-10-29T01:47:50+00:00,12,V,opened,2026-10-28,400.6,2,"{""rule"": ""fills at the next session's open"", ""stop"": 313.35186677856444, ""exit_style"": ""trend""}",20261029T014750Z
+8,2026-11-06T02:23:36+00:00,3,NVDA,exit,2026-11-05,187.53382351684573,3,"{""status"": ""STOP HIT"", ""action"": ""Sell the shares: the stop was hit on 2026-11-05 (fill $187.53). Result \u2212$80 (-1.00R)."", ""pnl"": -80.4785312805175, ""r"": -1.0, ""entry"": 214.36000061035156, ""entry_date"": ""2026-10-29""}",20261106T022336Z

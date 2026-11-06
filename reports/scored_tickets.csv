@@ -1,1 +1,2 @@
-
+decision_id,ticker,side,as_of,date,status,pnl,r,won,p_win,hist_trades,exit_style
+3,NVDA,long,2026-10-28,2026-11-05,STOP HIT,-80.4785312805175,-1.0,0.0,0.5769230769230769,3,trend
