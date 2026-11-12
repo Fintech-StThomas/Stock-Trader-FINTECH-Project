@@ -294,15 +294,24 @@ def test_latest_held_out_round_does_not_regress(ds):
     assert acc["target_industry"] >= 0.45
 
 
-# ----------------------------------------------------------------------------- the dashboard tab
-def test_pe_tab_renders_in_the_dashboard():
+# ----------------------------------------------------------------------------- the parked app
+
+
+def test_parked_project_imports_nothing_from_the_lighthouse_app():
+    """Parked means independent: no module here may import the stock app or its packages."""
+    import re
+    project = Path(__file__).resolve().parent.parent
+    pattern = re.compile(r"^\s*(?:from|import)\s+(?:lighthouse|workspace_ui)\b|^\s*import\s+app\b", re.M)
+    offenders = [str(p.relative_to(project)) for p in project.rglob("*.py")
+                 if p.name != Path(__file__).name and pattern.search(p.read_text(encoding="utf-8"))]
+    assert offenders == []
+def test_parked_app_renders():
     pytest.importorskip("streamlit")
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=300)
     at.run()
     assert not at.exception, at.exception
     labels = [t.label for t in at.tabs]
-    assert "🤝 PE deals" in labels
     assert {"🎯 Sourcing radar", "⏳ Exit watch", "🏁 Competing buyers", "🧭 Sourcing brief", "🔎 Deal finder",
             "✅ Data quality"} <= set(labels)
     text = " ".join(str(m.value) for m in at.markdown)

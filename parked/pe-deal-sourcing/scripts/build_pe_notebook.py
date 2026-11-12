@@ -1,6 +1,7 @@
 """Builds notebooks/PE_Deal_Intelligence.ipynb (kept as a script so the notebook is reproducible and diff-friendly).
 
-The committed notebook is this output executed once on the saved pages, so it opens with its results:
+The committed notebook is this output executed once on the saved pages, so it opens with its results (run from
+parked/pe-deal-sourcing/):
     python scripts/build_pe_notebook.py
     cd notebooks && LIGHTHOUSE_OFFLINE=1 python -m nbconvert --to notebook --execute --inplace PE_Deal_Intelligence.ipynb
 """
@@ -35,18 +36,19 @@ This notebook runs the whole workflow:
 > in every record), so the notebook gives the same result even if a website changes or goes offline. Set `LIVE = True`
 > in step 2 to fetch new pages first (slow by design: up to 10 seconds between pages on some sites).
 
-The same product is the **🤝 PE deals** tab of the web app (`streamlit run app.py`). Method, data dictionary and
-limitations: `docs/PE_DEALS.md`.
+The same product runs as its own app: `streamlit run app.py` inside `parked/pe-deal-sourcing/` (it is parked, separate
+from the Lighthouse stock app). Method, data dictionary and limitations: `docs/PE_DEALS.md`.
 """)
 md("## 1 · Setup")
-code("""# On Google Colab this clones the project; inside the repo (or its notebooks/ folder) it just finds the package.
+code("""# On Google Colab this clones the repository; inside it (or this project's notebooks/ folder) it just finds the package.
 import os, sys, subprocess, pathlib
-REPO_URL = "https://github.com/lotainc0/Stock-Trader-FINTECH-Project.git"
+REPO_URL = "https://github.com/Fintech-StThomas/Stock-Trader-FINTECH-Project.git"
+PROJECT = pathlib.Path("parked") / "pe-deal-sourcing"          # where the parked project lives in the repository
 here = pathlib.Path.cwd()
-root = next((p for p in [here, *here.parents] if (p / "pedeals" / "__init__.py").exists()), None)
+root = next((p for c in [here, *here.parents] for p in (c, c / PROJECT) if (p / "pedeals" / "__init__.py").exists()), None)
 if root is None:
     subprocess.run(["git", "clone", "-q", REPO_URL, "lighthouse_repo"], check=True)
-    root = here / "lighthouse_repo"
+    root = here / "lighthouse_repo" / PROJECT
 os.chdir(root); sys.path.insert(0, str(root))
 try:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pandas", "numpy", "requests", "beautifulsoup4", "lxml",

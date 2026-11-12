@@ -1,0 +1,6 @@
+pandas>=2.0
+requests>=2.28
+streamlit>=1.49
+lxml>=4.9
+jsonschema>=4.0
+pytest>=7.0

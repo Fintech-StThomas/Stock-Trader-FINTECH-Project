@@ -1,5 +1,5 @@
 """
-The PE deal-sourcing tab of the dashboard (app.py calls `render()` inside its own tab).
+The PE deal-sourcing page (the parked project's app.py calls `render()`).
 
 A separate product from the stock tabs: it reads nothing from the sidebar and keeps its state under "pe_" keys. Its
 user is a deal team at a lower-middle-market sponsor sourcing in five sectors. It runs on the saved pages by default

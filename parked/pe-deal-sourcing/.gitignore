@@ -1,0 +1,3 @@
+# local parse cache (rebuilt in seconds from the saved pages) and an old local output folder
+data/pe_deals/cache/derived/
+pe_deals_output/

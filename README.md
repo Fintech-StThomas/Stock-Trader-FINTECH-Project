@@ -221,12 +221,8 @@ machine learning could be added safely. Lighthouse is decision support, not inve
 
 MIT licensed.
 
-### Stock Research and PE Deal Intelligence workspaces
+## Parked projects (not part of the app)
 
-The centered switch above the app selects one complete workspace. **Stock Research** retains the existing stock tools. **PE Deal Intelligence** opens a separate workspace with its own sidebar; stock controls and results are not rendered in PE mode. A direct link to the PE workspace is `https://fintech-class-project.streamlit.app/?workspace=pe`, and `&pe_page=detail` opens Deal Detail. Removed source/quality links return to AI research.
-
-In PE mode the sidebar holds **AI Deal Research** and **Deal Detail**. The main screen has a large centered search box with suggested prompts. Search scans the complete saved dataset before supplying relevant candidates to the configured OpenAI model, with optional web research. Result cards preserve evidence and review status; downloads include all returned facts, article titles/URLs, saved excerpts and per-field evidence. A ZIP also supplies separate article and evidence tables. The shared repository reads reviewed published versions or the real bundled snapshot, preserving the separate curated additions. See [AI setup and behavior](docs/PE_AI_SEARCH.md) and [pipeline integration](docs/LOCAL_PE_MERGE.md). The former filter-based explorer remains in code for regression checks.
-
-### Integrated PE research pipeline
-
-The PE workspace now uses a single AI research question, with a supporting Deal Detail page. The downloaded collection/extraction modules are integrated with the current real snapshot and server-side AI adapter. The additional publisher configuration is a proposed research source list; it does not establish that live collection has run. See [local PE integration notes](docs/LOCAL_PE_MERGE.md) for source roles, private caches, reviewed publication, validation and reproduction commands.
+`parked/` holds two private-equity projects kept separate from Lighthouse: the app does not import them, the test
+suite and CI do not collect them, and nothing in them is deployed. Each runs on its own from its folder; see
+[parked/README.md](parked/README.md).

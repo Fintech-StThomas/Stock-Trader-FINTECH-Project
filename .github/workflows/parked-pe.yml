@@ -1,0 +1,23 @@
+name: Parked PE projects
+# Manual only: the parked projects never run on a push or pull request. Actions -> Parked PE projects -> Run workflow.
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ["pe-deal-sourcing", "pe-deal-explorer"]
+    defaults:
+      run:
+        working-directory: parked/${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest
+        env:
+          LIGHTHOUSE_OFFLINE: "1"

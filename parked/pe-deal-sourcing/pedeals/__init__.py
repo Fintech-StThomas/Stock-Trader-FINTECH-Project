@@ -1,8 +1,8 @@
 """
 PE Deal Sourcing - public private-equity deal announcements turned into an evidence-backed sourcing record.
 
-A separate product that lives in the Lighthouse dashboard (its own tab) and shares nothing with the stock engine but
-the app. For a deal team at a lower-middle-market sponsor sourcing in five sectors: which niches are being rolled
+A separate product, parked in parked/pe-deal-sourcing/ with its own app (`streamlit run app.py` there); it shares
+nothing with the Lighthouse stock app. For a deal team at a lower-middle-market sponsor sourcing in five sectors: which niches are being rolled
 up, which sponsor-owned companies are due to trade (the exit watch), and who they would bid against.
 
 >>> from pedeals import sourcing

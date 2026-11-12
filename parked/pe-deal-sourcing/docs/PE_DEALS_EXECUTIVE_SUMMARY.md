@@ -6,7 +6,7 @@ manufacturing and value-added distribution. Each week it asks which niches other
 sponsor-owned companies have been held long enough to be sold, and who it would bid against. The evidence is in
 sponsors' own press releases, spread across dozens of websites, with no common record and no links back to the source.
 
-**The product.** A tab of the existing Lighthouse dashboard (and a Colab notebook) that reads the news pages of sixteen
+**The product.** A standalone Streamlit app, parked separately from the Lighthouse stock app (and a Colab notebook), that reads the news pages of sixteen
 buy-and-build sponsors, chosen from a state-by-state research list and vetted for permission to crawl and for dated
 pages. It turns each deal announcement since 2015 into a record (buyer, target, transaction type, the target's
 business, sector and niche, state, status, disclosure gaps), each value next to the sentence it came from. On top of

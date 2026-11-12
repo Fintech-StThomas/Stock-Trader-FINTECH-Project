@@ -19,7 +19,7 @@ from typing import Dict, Optional
 from urllib import robotparser
 from urllib.parse import urlparse
 
-USER_AGENT = "Lighthouse-PE-Deals/1.0 (+https://github.com/lotainc0/Stock-Trader-FINTECH-Project)"
+USER_AGENT = "Lighthouse-PE-Deals/1.0 (+https://github.com/Fintech-StThomas/Stock-Trader-FINTECH-Project)"
 DEFAULT_DELAY = 5.0          # seconds between requests to one host that states no Crawl-delay
 TIMEOUT = 30.0
 

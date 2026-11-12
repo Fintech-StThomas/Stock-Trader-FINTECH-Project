@@ -1,15 +1,39 @@
 """PE-specific transport adapted from Lighthouse's rate/retry helper.
 
-Reuse its per-host limiter and retry status policy, but never its SEC identity or
-unrestricted automatic redirects. Each redirect is scope/robots checked before following.
+A self-contained copy of its per-host limiter and retry status policy (this parked project imports nothing from the
+Lighthouse app), never its SEC identity or unrestricted automatic redirects. Each redirect is scope/robots checked
+before following.
 """
 import os
+import threading
 import time
+from typing import Dict
 from urllib.parse import urlsplit, urljoin
 from urllib.robotparser import RobotFileParser
 import requests
-from lighthouse.http import _RateLimiter, RETRY_STATUS, PROJECT_URL
 from .config import canonical_url
+
+PROJECT_URL = "https://github.com/Fintech-StThomas/Stock-Trader-FINTECH-Project"
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+class _RateLimiter:
+    """At most `rate` calls per second per host, shared by every thread."""
+
+    def __init__(self) -> None:
+        self._next: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def wait(self, host: str, rate: float) -> None:
+        interval = 1.0 / max(rate, 1e-6)
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._next.get(host, 0.0))
+            self._next[host] = slot + interval
+        delay = slot - now
+        if delay > 0:
+            time.sleep(delay)
+
 
 USER_AGENT = f'LighthouseResearch/0.1 (+{PROJECT_URL})'
 _limiter = _RateLimiter()

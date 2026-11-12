@@ -1,7 +1,7 @@
 # PE Deal Sourcing: method, data dictionary and limitations
 
-A separate product inside the Lighthouse dashboard (tab **🤝 PE deals**, package `pedeals/`, notebook
-`notebooks/PE_Deal_Intelligence.ipynb`). It reads the deal announcements that private-equity sponsors publish on their
+A separate product, **parked** in `parked/pe-deal-sourcing/` with its own app (package `pedeals/`, notebook
+`notebooks/PE_Deal_Intelligence.ipynb`); it is not part of the deployed Lighthouse stock app. It reads the deal announcements that private-equity sponsors publish on their
 own websites and turns them into a sourcing record: which niches are being rolled up, which sponsor-owned companies
 are due to trade, and who a deal team would bid against. Every value sits next to the sentence it came from.
 
@@ -221,11 +221,12 @@ disclosure-gap report.
 ## 10. Run it
 
 ```bash
+cd parked/pe-deal-sourcing                 # every command runs from this folder
 pip install -r requirements.txt
-streamlit run app.py                       # tab "🤝 PE deals"
+streamlit run app.py                       # the PE Deal Sourcing app
 python -m pedeals build                    # parse + extract the saved pages; export data/pe_deals/output/
 python -m pedeals validate                 # validation report -> data/pe_deals/validation/results.md
 python -m pedeals new-since 2026-09-01     # monitoring digest
 python -m pedeals collect --firm gryphon   # polite live refresh of one sponsor (minutes), then build again
-python -m pytest tests/test_pedeals.py
+python -m pytest
 ```
