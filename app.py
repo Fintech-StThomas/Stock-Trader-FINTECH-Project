@@ -68,10 +68,18 @@ from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_idea
                                   TIME_STOP_DEFAULT, StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
 
+# Who made Lighthouse (name, field of study), shown under every tab, in "How it works" and in the About menu.
+SCHOOL = "University of St. Thomas"
+CREATORS = [("Yuepheng Yang", "Economics"), ("Nikhil Jangir", "Computer Science"), ("Cole Pawlenty", "Finance"),
+            ("Jacob Moreno", "Finance")]
+LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "stthomas_logo.png")
+
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
                    menu_items={"About": "Lighthouse turns a ticker and a few facts about you into an explainable Buy / Hold / Sell "
                                         "decision, a trade ticket for the cash you have, portfolio allocations with a risk report, "
-                                        "and honest backtests. Decision support, not investment advice."})
+                                        "and honest backtests. Decision support, not investment advice.\n\n"
+                                        f"Created at the {SCHOOL} by "
+                                        + ", ".join(f"{n} ({f})" for n, f in CREATORS) + "."})
 
 # ----------------------------------------------------------------------------- look & accessibility
 st.markdown("""
@@ -89,6 +97,17 @@ st.markdown("""
 .lh-kpi-sub { font-size: .82rem; opacity: .8; margin-top: .2rem; }
 .lh-verdict { display: inline-block; padding: .15rem .7rem; border-radius: 999px; color: white; font-weight: 700; font-size: 1.05rem; vertical-align: middle; }
 .lh-muted { opacity: .72; }
+/* the makers: a quiet line under every tab, and name cards in "How it works" */
+.lh-credit { margin-top: 2.2rem; padding-top: .9rem; border-top: 1px solid rgba(128,128,128,.28); font-size: .86rem;
+             line-height: 1.7; }
+.lh-credit b { font-weight: 650; }
+.lh-credit .lh-school { color: #510c76; font-weight: 650; }
+.lh-person { padding: .7rem .95rem; border: 1px solid rgba(128,128,128,.28); border-left: 4px solid #510c76;
+             border-radius: .7rem; background: var(--secondary-background-color); margin-bottom: .5rem; }
+.lh-person-name { font-weight: 650; font-size: 1.05rem; line-height: 1.25; }
+.lh-person-field { font-size: .86rem; opacity: .8; }
+/* the school's logo sits above the title, close to it */
+[data-testid="stSidebar"] [data-testid="stImage"] { margin-bottom: -.6rem; }
 h2, h3, h4 { scroll-margin-top: 4rem; }
 /* universe pickers: one line that scrolls sideways instead of a block of wrapped chips */
 [class*="st-key-uscroll_"] [data-testid="stElementContainer"], [class*="st-key-uscroll_"] [data-testid="stButtonGroup"] {
@@ -297,6 +316,8 @@ if st.session_state.get("open_ticker"):
     st.session_state["auto_run"] = True
 st.session_state.setdefault("ticker", "MSFT")
 with st.sidebar:
+    if os.path.exists(LOGO):
+        st.image(LOGO, width=190)       # University of St. Thomas, where Lighthouse was made
     st.title("🔦 Lighthouse")
     st.caption("A clear signal in a noisy market. Explainable Buy / Hold / Sell decisions for self-directed investors.")
 
@@ -1216,6 +1237,14 @@ def research_summary() -> None:
                    "count behind the deflated Sharpe ratios). Method and results: docs/METHODOLOGY.md §8.")
 
 
+def creators_cards() -> None:
+    st.markdown("### Who built it")
+    st.caption(f"Lighthouse is a student project of the {SCHOOL}.")
+    for col, (name, field) in zip(st.columns(len(CREATORS)), CREATORS):
+        col.markdown(f"<div class='lh-person'><div class='lh-person-name'>{_h(name)}</div>"
+                     f"<div class='lh-person-field'>{_h(field)}</div></div>", unsafe_allow_html=True)
+
+
 with tab_about:
     st.markdown("### How Lighthouse decides")
     a1, a2 = st.columns([1.2, 1])
@@ -1239,9 +1268,18 @@ with tab_about:
         st.dataframe(pres, width="stretch")
     st.markdown("### What the research behind it found")
     research_summary()
+    creators_cards()
     guide = os.path.join(os.path.dirname(__file__), "docs", "USER_GUIDE.md")
     with st.expander("Full user guide", expanded=False):
         st.markdown(esc(open(guide).read()) if os.path.exists(guide) else "See docs/USER_GUIDE.md")
     st.caption("Lighthouse is decision support, not investment advice. The memo's sector norms and DCF inputs are "
                "assumptions, the backtests ignore taxes, stops are orders rather than guaranteed prices, and the "
                "per-stock backtests run on today's companies (the research uses the point-in-time members).")
+
+
+# ----------------------------------------------------------------------------- the makers, under every tab
+st.markdown("<div class='lh-credit'><span class='lh-muted'>Created at the</span> "
+            f"<span class='lh-school'>{_h(SCHOOL)}</span> <span class='lh-muted'>by</span> "
+            + " <span class='lh-muted'>·</span> ".join(
+                f"<b>{_h(n)}</b> <span class='lh-muted'>{_h(f)}</span>" for n, f in CREATORS)
+            + "</div>", unsafe_allow_html=True)

@@ -45,14 +45,22 @@ the default branch only); the first forward snapshot is due after the close of 3
     on the 20 sample companies and the fixtures.
   * 10-K text: `edgar.fetch_documents` downloads three documents at a time per process under the same SEC rate
     limiter; `text_history` is incremental (a new 10-K costs two documents, not the company's history;
-    `refresh=True` reads all again); the fog index is computed from the word counts. **Not measured live**: the
-    download gain needs a session with an approved SEC contact e-mail.
+    `refresh=True` reads all again); the fog index is computed from the word counts.
   * Also: `edgar.warm_company_facts` / `warm_submissions` fill the caches from the SEC's nightly archives (opt-in,
     not called by any run; the facts archive is over a gigabyte); the document cache is gzip (old JSON copies still
     read); `delistings` reads four quarters at a time; the segment instance and labels download together.
+  * **Measured live against EDGAR** (12 November 2026, a contact e-mail approved for that test; old code against new,
+    each run twice in both orders, every output identical): 84 10-Ks of KO, MSFT, PG and CVX in 25-29 s before and
+    14-17 s after; one new 10-K for each of the four in 4 s; eight quarterly form indexes in 5.3 s before and 2.8 s
+    after; the segment tables unchanged at about 1 s. `warm_company_facts` wrote 471 of the first 500 filers in 81 s
+    (a 1.42 GB archive) against about 105 s one by one (0.21 s a company): a small gain, larger only when the rate
+    limit is shared between processes. `warm_submissions` was not run live.
   * Housekeeping: the repository URL is Fintech-StThomas everywhere; the User-Agent carries `__version__`; the unused
     `localhost` host policy is gone; CI installs `.[app,dev]` with a pip cache and `tests/test_packaging.py` keeps
     `requirements.txt` in step with `pyproject.toml`.
+  * App: the peer comparison is part of every memo (its sidebar checkbox is gone); the University of St. Thomas
+    logo (`assets/stthomas_logo.png`) sits above the title and the four creators are named under every tab, in
+    How it works, in the About menu and in the README.
 
 ## Open items (the user's choice)
 

@@ -54,6 +54,22 @@ def test_every_analysis_carries_the_full_memo_with_peers_and_no_switch_for_it():
     assert "Investment memo" in text and "**Peers**" in text and "peer median" in text
 
 
+def test_app_shows_the_school_logo_and_its_creators():
+    """The University of St. Thomas logo sits above the title; the four creators are named under every tab and in
+    How it works."""
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    assert not at.exception, at.exception
+    side = [type(e).__name__ for e in at.sidebar]
+    kinds = [getattr(e, "type", "") for e in at.sidebar]
+    assert "image" in kinds and kinds.index("image") < kinds.index("title"), (side, kinds)   # the logo, then the title
+    text = " ".join(str(m.value) for m in at.markdown)
+    for name, field in [("Yuepheng Yang", "Economics"), ("Nikhil Jangir", "Computer Science"),
+                        ("Cole Pawlenty", "Finance"), ("Jacob Moreno", "Finance")]:
+        assert text.count(name) >= 2 and field in text                # the footer line and the card
+    assert "University of St. Thomas" in text and "Who built it" in text
+
+
 def test_app_without_filings_keeps_the_verdict_and_says_why_there_is_no_memo():
     """An index (or an ETF, or a company that does not file with the SEC) has no memo; the rule's verdict stands."""
     at = AppTest.from_file(APP, default_timeout=300)
