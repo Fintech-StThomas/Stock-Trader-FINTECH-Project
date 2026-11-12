@@ -221,6 +221,17 @@ machine learning could be added safely. Lighthouse is decision support, not inve
 
 MIT licensed.
 
+## Creators
+
+Lighthouse was created at the University of St. Thomas by:
+
+| Name | Field |
+|---|---|
+| Yuepheng Yang | Economics |
+| Nikhil Jangir | Computer Science |
+| Cole Pawlenty | Finance |
+| Jacob Moreno | Finance |
+
 ## Parked projects (not part of the app)
 
 `parked/` holds two private-equity projects kept separate from Lighthouse: the app does not import them, the test
