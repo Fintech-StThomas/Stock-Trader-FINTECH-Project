@@ -23,8 +23,12 @@ from urllib.parse import urlparse
 
 from .data import DataUnavailable, offline_mode
 
-PROJECT_URL = "https://github.com/lotainc0/Stock-Trader-FINTECH-Project"
-PROJECT_UA = f"Lighthouse/1.3 (+{PROJECT_URL})"
+PROJECT_URL = "https://github.com/Fintech-StThomas/Stock-Trader-FINTECH-Project"
+
+
+def _project_ua() -> str:
+    from . import __version__
+    return f"Lighthouse/{__version__} (+{PROJECT_URL})"
 RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
@@ -68,14 +72,13 @@ class HostPolicy:
 SEC_RATE = min(float(os.environ.get("LIGHTHOUSE_SEC_RATE", "8") or 8), 8.0)
 POLICIES: Dict[str, HostPolicy] = {
     "sec.gov": HostPolicy(rate=SEC_RATE, user_agent=sec_user_agent),
-    "wikipedia.org": HostPolicy(rate=2.0, user_agent=lambda: PROJECT_UA),
-    "finra.org": HostPolicy(rate=4.0, user_agent=lambda: PROJECT_UA),
+    "wikipedia.org": HostPolicy(rate=2.0, user_agent=_project_ua),
+    "finra.org": HostPolicy(rate=4.0, user_agent=_project_ua),
     "dartmouth.edu": HostPolicy(rate=2.0, user_agent=None),
     "stlouisfed.org": HostPolicy(rate=2.0, user_agent=None),
     "githubusercontent.com": HostPolicy(rate=4.0, user_agent=None),
-    "nd.edu": HostPolicy(rate=1.0, user_agent=lambda: PROJECT_UA),
+    "nd.edu": HostPolicy(rate=1.0, user_agent=_project_ua),
     "alpaca.markets": HostPolicy(rate=3.0, user_agent=None),     # paper trading: 200 requests/minute per key
-    "localhost": HostPolicy(rate=50.0, user_agent=None),         # a local Ollama server (optional text reading)
 }
 DEFAULT_POLICY = HostPolicy(rate=4.0, user_agent=None)
 

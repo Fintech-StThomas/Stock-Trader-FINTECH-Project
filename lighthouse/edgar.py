@@ -10,6 +10,8 @@ Endpoints (all free; the SEC asks for a User-Agent with a contact e-mail and at 
   www.sec.gov/Archives/edgar/full-index/YYYY/QTRn/form.idx  every filing of a quarter by form type (all filers,
                                                       including companies that no longer exist)
   www.sec.gov/files/dera/data/financial-statement-data-sets/YYYYqN.zip   the bulk quarterly statement data sets
+  www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip      every company's facts in one nightly archive
+  www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip   every company's filing list, likewise
 
 XBRL coverage starts in 2009 (large filers) and 2011 (everyone). Before that EDGAR has filings but no machine-readable
 numbers, so Lighthouse treats fundamentals before a company's first XBRL filing as unknown.
@@ -36,6 +38,8 @@ FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 FORM_INDEX_URL = "https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{qtr}/form.idx"
 FSDS_URL = "https://www.sec.gov/files/dera/data/financial-statement-data-sets/{year}q{qtr}.zip"
 ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accn_nodash}/{doc}"
+BULK_FACTS_URL = "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
+BULK_SUBMISSIONS_URL = "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip"
 FRESH_HOURS = 24.0                         # filings arrive daily; a day-old copy is current enough for research
 
 # The delisting and deregistration forms: Form 25 (25-NSE when the exchange files it) removes a security from listing;
@@ -445,12 +449,15 @@ def delistings(start_year: int = 2001, end_year: Optional[int] = None, refresh: 
     exchange and the company; the exchanges (filers of many such forms) are dropped."""
     end_year = end_year or datetime.now().year
     now = pd.Timestamp.now()
-    parts = []
-    for y in range(start_year, end_year + 1):
-        for q in range(1, 5):
-            if (y, q) > (now.year, (now.month - 1) // 3 + 1):
-                break
-            parts.append(filing_index(y, q, DELISTING_FORMS, refresh=refresh))
+    quarters = [(y, q) for y in range(start_year, end_year + 1) for q in range(1, 5)
+                if (y, q) <= (now.year, (now.month - 1) // 3 + 1)]
+    # a first run downloads a hundred quarterly indexes: four at a time, under the shared SEC rate limit
+    if len(quarters) > 1 and not offline_mode():
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            parts = list(pool.map(lambda yq: filing_index(yq[0], yq[1], DELISTING_FORMS, refresh=refresh), quarters))
+    else:
+        parts = [filing_index(y, q, DELISTING_FORMS, refresh=refresh) for y, q in quarters]
     if not parts:
         return pd.DataFrame(columns=["cik", "name", "form", "filed", "accn"])
     df = pd.concat(parts, ignore_index=True)
@@ -553,21 +560,166 @@ def bulk_quarter(year: int, qtr: int, ciks: Optional[Iterable[int]] = None, tags
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Bulk: the nightly archives of every company's facts and filing lists
+# --------------------------------------------------------------------------- #
+def _bulk_archive(name: str, url: str, refresh: bool = False):
+    """The path of a nightly SEC archive in the cache (data/cache/edgar_bulk/), downloaded when it is missing, older
+    than a day or `refresh` is set. It is streamed to disk (the facts archive is over a gigabyte, the filing lists
+    several) and replaces the previous copy when complete. With EDGAR unreachable an older copy is used."""
+    path = store.cache_dir() / "edgar_bulk" / name
+    have = path.exists()
+    if have and not refresh and (offline_mode() or store.age_hours(path) < FRESH_HOURS):
+        return path
+    try:
+        resp = _get(url, stream=True, timeout=600)
+    except DataUnavailable:
+        if have:
+            return path
+        raise
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(tmp) -> None:
+        with open(tmp, "wb") as fh:
+            for chunk in resp.iter_content(chunk_size=1 << 20):
+                fh.write(chunk)
+    try:
+        store._data._atomic_write(path, write)
+    except DataUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - a dropped connection mid-download: the old copy, if any, is untouched
+        if have:
+            return path
+        raise DataUnavailable(f"{name}: download did not finish ({type(exc).__name__}: {str(exc)[:120]})") from exc
+    finally:
+        resp.close()
+    return path
+
+
+def warm_company_facts(ciks: Iterable[int], concepts: Optional[Iterable[str]] = None, refresh: bool = False) -> List[int]:
+    """Fill the company-facts cache for many companies from the SEC's nightly `companyfacts.zip`: one download instead
+    of one rate-limited request per company (worth it from a few hundred companies; the archive is over a gigabyte
+    and is kept in data/cache/edgar_bulk/ for a day). Each company's table is written exactly as `company_facts`
+    writes it (the same concept filter and record), so every later read is a fresh cache hit. A company whose cache
+    is already fresh and holds the concepts is left alone; one that is not in the archive is skipped (it is then
+    fetched on demand as before). Returns the CIKs written."""
+    import json
+    from .pit import CONCEPTS
+    want = _concept_names(list(concepts) if concepts is not None else CONCEPTS)
+    todo = []
+    for cik in dict.fromkeys(int(c) for c in ciks):
+        key = f"{cik:010d}"
+        cached = store.read_frame("edgar_facts", key)
+        have: set = set()
+        if cached is not None:
+            recorded = cached_fact_concepts(key, cached)
+            have = recorded if recorded is not None else set(cached["concept"].dropna().astype(str))
+            if not refresh and want <= have and store.age_hours(store.path_for("edgar_facts", key)) < FRESH_HOURS:
+                continue
+        todo.append((cik, key, have))
+    if not todo:
+        return []
+    written = []
+    with zipfile.ZipFile(_bulk_archive("companyfacts.zip", BULK_FACTS_URL, refresh)) as zf:
+        names = set(zf.namelist())
+        for cik, key, have in todo:
+            name = f"CIK{key}.json"
+            if name not in names:
+                continue
+            keep = sorted(want | have | _concept_names(CONCEPTS))
+            df = flatten_company_facts(json.loads(zf.read(name)), keep)
+            store.write_frame("edgar_facts", key, df)
+            _record_concepts("edgar_facts", key, keep, df)
+            written.append(cik)
+    return written
+
+
+def warm_submissions(ciks: Iterable[int], refresh: bool = False) -> List[int]:
+    """Fill the filing-list cache for many companies from the SEC's nightly `submissions.zip` (profile, filings and
+    their older pages), as `warm_company_facts` does for the facts. Returns the CIKs written."""
+    import json
+    todo = []
+    for cik in dict.fromkeys(int(c) for c in ciks):
+        key = f"{cik:010d}"
+        p = store.path_for("edgar_filings", key)
+        if not refresh and p.exists() and store.read_json("edgar_profile", key) is not None \
+                and store.age_hours(p) < FRESH_HOURS:
+            continue
+        todo.append((cik, key))
+    if not todo:
+        return []
+    written = []
+    with zipfile.ZipFile(_bulk_archive("submissions.zip", BULK_SUBMISSIONS_URL, refresh)) as zf:
+        names = set(zf.namelist())
+        for cik, key in todo:
+            name = f"CIK{key}.json"
+            if name not in names:
+                continue
+            payload = json.loads(zf.read(name))
+            pages = [json.loads(zf.read(p["name"])) for p in payload.get("filings", {}).get("files", [])
+                     if p.get("name") in names]
+            prof, filings = parse_submissions(payload, pages)
+            store.write_frame("edgar_filings", key, filings)
+            store.write_json("edgar_profile", key, prof)
+            written.append(cik)
+    return written
+
+
 def document_url(cik: int, accn: str, doc: str) -> str:
     return ARCHIVE_URL.format(cik=int(cik), accn_nodash=str(accn).replace("-", ""), doc=doc)
 
 
 def fetch_document(cik: int, accn: str, doc: str, cache: bool = True) -> str:
     """The text of one filed document (HTML or text), cached by accession number unless `cache=False` (bulk text
-    research reads thousands of 10-Ks and keeps only the numbers it computes from them)."""
+    research reads thousands of 10-Ks and keeps only the numbers it computes from them). The cache holds the text
+    gzip-compressed (a 10-K's HTML shrinks about tenfold); a copy stored before that, as JSON, is still read."""
     key = f"{int(cik)}_{str(accn).replace('-', '')}_{doc}"
-    hit = store.read_json("edgar_docs", key) if cache else None
-    if hit is not None:
-        return hit
+    if cache:
+        hit = store.read_text("edgar_docs", key)
+        if hit is None:
+            hit = store.read_json("edgar_docs", key)
+        if isinstance(hit, str):
+            return hit
     txt = _get(document_url(cik, accn, doc), timeout=90).text
     if cache:
-        store.write_json("edgar_docs", key, txt)
+        store.write_text("edgar_docs", key, txt)
     return txt
+
+
+DOCUMENT_THREADS = 3
+
+
+def fetch_documents(jobs: Sequence[tuple], threads: int = DOCUMENT_THREADS, cache: bool = True):
+    """The documents of `jobs` ((cik, accn, doc) each), yielded in the jobs' order while the next ones download in
+    `threads` threads. A document takes a second or more to arrive and a fraction of that to parse, so a reader that
+    asks for one at a time mostly waits; here the waiting overlaps. Every request still passes this process's SEC
+    rate limiter (`lighthouse.http`), which the threads share, so the budget is unchanged. At most `threads` + 1
+    documents are held at once (a 10-K can be 10 MB). An error is raised when its document's turn comes."""
+    jobs = list(jobs)
+    if threads <= 1 or len(jobs) <= 1 or offline_mode():
+        for cik, accn, doc in jobs:
+            yield fetch_document(cik, accn, doc, cache=cache)
+        return
+    from collections import deque
+    from concurrent.futures import ThreadPoolExecutor
+    pending: deque = deque()
+    todo = iter(jobs)
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        def more() -> None:
+            while len(pending) <= threads:
+                job = next(todo, None)
+                if job is None:
+                    return
+                pending.append(pool.submit(fetch_document, *job, cache=cache))
+        try:
+            more()
+            while pending:
+                text = pending.popleft().result()
+                more()
+                yield text
+        finally:
+            for f in pending:
+                f.cancel()
 
 
 def filing_documents(cik: int, accn: str) -> pd.DataFrame:
@@ -583,5 +735,5 @@ def filing_documents(cik: int, accn: str) -> pd.DataFrame:
 
 
 __all__ = ["ticker_table", "cik_for", "submissions", "company_facts", "flatten_company_facts", "filing_index",
-           "delistings", "parse_fsds_zip", "bulk_quarter", "earnings_release_dates", "normalize_ticker",
-           "fetch_document", "filing_documents", "document_url", "company_filings", "SAMPLE_FILING_FORMS"]
+           "delistings", "parse_fsds_zip", "bulk_quarter", "warm_company_facts", "warm_submissions", "earnings_release_dates", "normalize_ticker",
+           "fetch_document", "fetch_documents", "filing_documents", "document_url", "company_filings", "SAMPLE_FILING_FORMS"]

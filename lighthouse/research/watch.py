@@ -258,8 +258,8 @@ def known_tenk_rows(ticker: str, as_of, source: str = "auto", lm=None) -> pd.Dat
     the 10-K before it, exactly as text_history computes it. Read from the research run's cache when that holds the
     filing, else from this module's cache (watch_text), else computed: the two documents are read and not stored, only
     the numbers are cached. Empty when no 10-K is known."""
-    from ..edgar import cik_for, company_filings, fetch_document, registrant_cik
-    from ..text import features, lm_dictionary
+    from ..edgar import cik_for, company_filings, fetch_documents, registrant_cik
+    from ..text import features, lm_dictionary, word_counts
     from . import event_signals as EV
     as_of = pd.Timestamp(as_of)
     _, filings = company_filings(ticker, source=source)
@@ -278,11 +278,10 @@ def known_tenk_rows(ticker: str, as_of, source: str = "auto", lm=None) -> pd.Dat
             return hit[hit["accn"] == last["accn"]].tail(1)
     lm = lm if lm is not None else lm_dictionary()
     cik = cik_for(ticker)
-    prev = None
-    if len(tenk) > 1:
-        p = tenk.iloc[-2]
-        prev = features(fetch_document(registrant_cik(p, cik), p["accn"], p["doc"], cache=False), lm)[1]
-    feats, _ = features(fetch_document(registrant_cik(last, cik), last["accn"], last["doc"], cache=False), lm, prev)
+    pair = [tenk.iloc[-2], last] if len(tenk) > 1 else [last]
+    docs = list(fetch_documents([(registrant_cik(f, cik), f["accn"], f["doc"]) for f in pair], cache=False))
+    prev = word_counts(docs[0]) if len(pair) > 1 else None          # the two documents download together
+    feats, _ = features(docs[-1], lm, prev)
     row = pd.DataFrame([{"filed": pd.Timestamp(last["filed"]), "accn": last["accn"], **feats}]).set_index("filed")
     old = store.read_frame("watch_text", ticker)
     store.write_frame("watch_text", ticker, row if old is None or old.empty else pd.concat([old, row]))

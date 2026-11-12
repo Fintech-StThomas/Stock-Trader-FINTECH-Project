@@ -8,8 +8,8 @@ entry, stop-loss, exits, worst-case loss) from a price rule whose past behaviour
 **analyst memo** read from the company's SEC filings next to it: valuation, peers, earnings quality and what would prove
 the thesis wrong. It also allocates whole portfolios, a basket you choose or one built for a goal, with a risk report.
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lotainc0/Stock-Trader-FINTECH-Project/blob/main/notebooks/Lighthouse.ipynb)
-![tests](https://github.com/lotainc0/Stock-Trader-FINTECH-Project/actions/workflows/ci.yml/badge.svg)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Fintech-StThomas/Stock-Trader-FINTECH-Project/blob/main/notebooks/Lighthouse.ipynb)
+![tests](https://github.com/Fintech-StThomas/Stock-Trader-FINTECH-Project/actions/workflows/ci.yml/badge.svg)
 
 An example, from the offline sample (Microsoft, November 2017): the [report](reports/examples/MSFT/MSFT_report.md),
 the [analyst memo](reports/examples/MSFT/MSFT_memo.md) and the
@@ -112,7 +112,7 @@ the filings made by that date). Keyboard focus is always visible and no informat
 The app runs as-is on [Streamlit Community Cloud](https://share.streamlit.io):
 
 1. Sign in at https://share.streamlit.io with your GitHub account.
-2. *Create app* → *Deploy a public app from GitHub* → repository `lotainc0/Stock-Trader-FINTECH-Project`, branch `main`, main file `app.py`.
+2. *Create app* → *Deploy a public app from GitHub* → repository `Fintech-StThomas/Stock-Trader-FINTECH-Project`, branch `main`, main file `app.py`.
 3. For live memos, add `LIGHTHOUSE_SEC_EMAIL = "you@example.com"` under *Advanced settings* → *Secrets*.
 4. Press *Deploy*. The first build installs `requirements.txt`; after that the app is live at a `*.streamlit.app` URL you can share.
 
@@ -167,7 +167,7 @@ lighthouse/            the product (pure Python: pandas, numpy, scipy, plotly)
   data.py              live/offline price loading, cleaning report, caching, NYSE calendar
   http.py · store.py · cache.py   polite HTTP per host (SEC User-Agent and rate limit, retries, offline guard) ·
                        Parquet cache · in-memory memo of indicator work
-  edgar.py · pit.py    SEC EDGAR client (facts, filings, form indexes, bulk data sets) · point-in-time statements and
+  edgar.py · pit.py    SEC EDGAR client (facts, filings, form indexes, bulk data sets and nightly archives) · point-in-time statements and
                        the cover-page share count
   membership.py        historical S&P 500 membership; total_return.py dividends, splits (and the one share-count
                        restatement every market value uses), delisting rules

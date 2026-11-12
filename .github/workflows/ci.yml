@@ -11,7 +11,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -r requirements.txt
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      # the package's own dependency lists (pyproject.toml), so the tests run on what an install gets;
+      # tests/test_packaging.py keeps requirements.txt (read by Streamlit Cloud and the devcontainer) in step
+      - run: pip install -e ".[app,dev]"
       - run: python -m pytest -q
         env:
           LIGHTHOUSE_OFFLINE: "1"

@@ -22,6 +22,7 @@ from typing import Dict, Iterable, List, Tuple
 import numpy as np
 import pandas as pd
 
+from . import store
 from .edgar import PERIODIC_FORMS
 from .fundamentals import StatementHistory
 
@@ -164,7 +165,7 @@ def _days(f: pd.DataFrame) -> pd.Series:
 def flow_values(f: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """(quarterly, annual) values of one concept's duration facts, each indexed by period end with columns val, filed.
     Quarters: reported 3-month values, else the difference of two year-to-date values with the same start."""
-    f = f.dropna(subset=["start"])
+    f = f[f["start"].notna()]
     if f.empty:
         empty = pd.DataFrame(columns=["val", "filed"])
         return empty, empty
@@ -173,16 +174,16 @@ def flow_values(f: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     annual = annual.sort_values("filed").drop_duplicates("end").set_index("end")[["val", "filed"]]
     direct = f[(d >= QUARTER_DAYS[0]) & (d <= QUARTER_DAYS[1])]
     direct = direct.sort_values("filed").drop_duplicates("end").set_index("end")[["val", "filed"]]
-    derived = []
     ytd = f[(d >= QUARTER_DAYS[0]) & (d <= YEAR_DAYS[1])].sort_values("filed").drop_duplicates(["start", "end"])
-    for _, g in ytd.groupby("start"):
-        g = g.sort_values("end")
-        ends, vals, filed = g["end"].to_list(), g["val"].to_numpy(float), g["filed"].to_list()
-        for k in range(1, len(g)):
-            gap = (ends[k] - ends[k - 1]).days
-            if QUARTER_DAYS[0] <= gap <= QUARTER_DAYS[1]:
-                derived.append((ends[k], vals[k] - vals[k - 1], max(filed[k], filed[k - 1])))
-    der = pd.DataFrame(derived, columns=["end", "val", "filed"]).sort_values("filed").drop_duplicates("end").set_index("end")
+    # consecutive year-to-date values with the same start, one quarter apart: their difference is that quarter
+    ytd = ytd.sort_values(["start", "end"], kind="stable")
+    gap = ytd["end"].diff().dt.days.to_numpy()
+    ok = (ytd["start"] == ytd["start"].shift()).to_numpy() & (gap >= QUARTER_DAYS[0]) & (gap <= QUARTER_DAYS[1])
+    val, filed = ytd["val"].to_numpy(float), ytd["filed"]
+    before = filed.shift()
+    der = pd.DataFrame({"end": ytd["end"].to_numpy()[ok], "val": (val - np.roll(val, 1))[ok],
+                        "filed": filed.where(filed >= before, before).to_numpy()[ok]})
+    der = der.sort_values("filed").drop_duplicates("end").set_index("end")
     quarterly = direct.combine_first(der) if len(der) else direct
     return quarterly.sort_index(), annual.sort_index()
 
@@ -194,15 +195,25 @@ def stock_values(f: pd.DataFrame) -> pd.DataFrame:
     return f.sort_values("filed").drop_duplicates("end").set_index("end")[["val", "filed"]].sort_index()
 
 
-def _item_values(orig: pd.DataFrame, item: LineItem) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """(quarterly, annual) values of a line item. Companies switch concepts over time and sometimes report the same
+def concept_groups(orig: pd.DataFrame) -> Dict[Tuple[str, str], pd.DataFrame]:
+    """{(concept, unit): its facts (start, end, val, filed)} of `original_facts(...)`, split once: every line item
+    then looks its concepts up instead of filtering the whole table again (about a hundred times per company)."""
+    if orig is None or orig.empty:
+        return {}
+    slim = orig[["concept", "unit", "start", "end", "val", "filed"]]
+    return {(str(c), str(u)): g[["start", "end", "val", "filed"]]
+            for (c, u), g in slim.groupby(["concept", "unit"], sort=False)}
+
+
+def _item_values(groups: Dict[Tuple[str, str], pd.DataFrame], item: LineItem) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """(quarterly, annual) values of a line item, from `concept_groups(original_facts(...))`. Companies switch concepts over time and sometimes report the same
     number under two of them in different filings (equity "including non-controlling interests" in the 10-K, the plain
     concept only in a later 10-Q's comparative column). Each period therefore takes the value that became public
     first, whichever of the item's concepts carried it; equal dates go to the concept listed first."""
     q_parts, a_parts = [], []
     for rank, concept in enumerate(item.concepts):
-        f = orig[(orig["concept"] == concept) & (orig["unit"] == item.unit)]
-        if f.empty:
+        f = groups.get((concept, item.unit))
+        if f is None or f.empty:
             continue
         if item.kind == "stock":
             q = a = stock_values(f)
@@ -221,12 +232,13 @@ def _item_values(orig: pd.DataFrame, item: LineItem) -> Tuple[pd.DataFrame, pd.D
     return merge(q_parts), merge(a_parts)
 
 
-def item_values(orig: pd.DataFrame, item: LineItem) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def item_values(orig, item: LineItem) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """(quarterly, annual) values of one line item, each indexed by period end with `val` and `filed` (the filing
     that first made the value public; for a quarter derived from two year-to-date values, the later of the two).
-    `orig` is `original_facts(...)`. The public form of the per-item step of `build_statements`, for metrics that
+    `orig` is `original_facts(...)`, or `concept_groups` of it when many items are read from one company (the split
+    is then made once). The public form of the per-item step of `build_statements`, for metrics that
     need each value's own filing date (`lighthouse.analyst.industry`)."""
-    return _item_values(orig, item)
+    return _item_values(orig if isinstance(orig, dict) else concept_groups(orig), item)
 
 
 def _period_table(values: Dict[str, pd.DataFrame], ends: pd.DatetimeIndex) -> pd.DataFrame:
@@ -255,10 +267,10 @@ def build_statements(facts: pd.DataFrame, source: str = "SEC EDGAR XBRL") -> Sta
     public."""
     if facts is None or facts.empty:
         return StatementHistory(source=source)
-    orig = original_facts(facts)
+    groups = concept_groups(original_facts(facts))
     q_vals, a_vals = {}, {}
     for item in LINE_ITEMS:
-        q, a = _item_values(orig, item)
+        q, a = _item_values(groups, item)
         if len(q):
             q_vals[item.key] = q
         if len(a):
@@ -344,8 +356,11 @@ def as_of(statements: pd.DataFrame, date) -> pd.DataFrame:
 
 def load_statements(ticker: str, source: str = "auto", refresh: bool = False) -> StatementHistory:
     """Point-in-time statements for a ticker from EDGAR (cache, live, or the sample pack's recorded facts).
-    Returns an empty StatementHistory when there are none (a non-US filer, an ETF, no connection)."""
-    from .edgar import company_facts
+    Returns an empty StatementHistory when there are none (a non-US filer, an ETF, no connection).
+
+    Building the tables from the facts takes most of a second per company, so the result is kept on disk
+    (`cached_statements`) and reused while the facts and this module are unchanged; `refresh=True` rebuilds it."""
+    from .edgar import company_facts, normalize_ticker
     from .data import DataUnavailable
     try:
         facts = company_facts(ticker=ticker, refresh=refresh, source=source)
@@ -357,4 +372,70 @@ def load_statements(ticker: str, source: str = "auto", refresh: bool = False) ->
         h = StatementHistory(source="unavailable")
         h.notes.append(f"EDGAR statements unavailable: {type(exc).__name__}: {str(exc)[:160]}")
         return h
-    return build_statements(facts)
+    return cached_statements(normalize_ticker(ticker), facts, refresh=refresh)
+
+
+# --------------------------------------------------------------------------- #
+# The built statements, kept on disk
+# --------------------------------------------------------------------------- #
+_STAMP_COLUMN = "_built_from"
+_code_stamp_value: List[str] = []
+
+
+def _code_stamp() -> str:
+    """A fingerprint of the code that builds statements: this file and the forms it reads. Any edit to this module
+    changes it, so a cached table can never outlive the rules that made it."""
+    if not _code_stamp_value:
+        import hashlib
+        from pathlib import Path
+        h = hashlib.sha1(Path(__file__).read_bytes())
+        h.update(repr(PERIODIC_FORMS).encode())
+        _code_stamp_value.append(h.hexdigest()[:16])
+    return _code_stamp_value[0]
+
+
+def facts_fingerprint(facts: pd.DataFrame) -> str:
+    """Identifies one facts table and the code that reads it: a hash of every row (in order) and `_code_stamp`."""
+    import hashlib
+    rows = pd.util.hash_pandas_object(facts.reset_index(drop=True), index=True).to_numpy()
+    h = hashlib.sha1(rows.tobytes())
+    h.update(",".join(map(str, facts.columns)).encode())
+    return f"{h.hexdigest()[:24]}-{_code_stamp()}"
+
+
+def _read_built(key: str, stamp: str):
+    tab = store.read_frame("edgar_statements", key)
+    if tab is None or _STAMP_COLUMN not in tab.columns or not len(tab) or not (tab[_STAMP_COLUMN] == stamp).all():
+        return None
+    tab = tab.drop(columns=_STAMP_COLUMN)
+    for c in tab.columns:                          # one date unit, whichever pandas wrote the file (see edgar._ns)
+        if pd.api.types.is_datetime64_any_dtype(tab[c]):
+            tab[c] = tab[c].astype("datetime64[ns]")
+    tab.index = pd.DatetimeIndex(tab.index).astype("datetime64[ns]")
+    tab.index.name = "period_end"
+    return tab
+
+
+def cached_statements(key: str, facts: pd.DataFrame, refresh: bool = False) -> StatementHistory:
+    """`build_statements(facts)`, read from data/cache/edgar_statements/<key>_{annual,quarterly}.parquet when those
+    tables were built from exactly these facts by this version of the module (each file carries the fingerprint it
+    was built from, so a half-finished write or a changed rule is rebuilt, never read). A company without both tables
+    is built each time (there is little to build)."""
+    if facts is None or facts.empty:
+        return build_statements(facts)
+    try:
+        stamp = facts_fingerprint(facts)
+    except Exception:  # noqa: BLE001 - an unhashable table is simply built
+        return build_statements(facts)
+    if not refresh:
+        annual, quarterly = _read_built(f"{key}_annual", stamp), _read_built(f"{key}_quarterly", stamp)
+        if annual is not None and quarterly is not None:
+            return StatementHistory(annual=annual, quarterly=quarterly, source="SEC EDGAR XBRL")
+    h = build_statements(facts)
+    if len(h.annual) and len(h.quarterly):
+        try:
+            for name, tab in (("annual", h.annual), ("quarterly", h.quarterly)):
+                store.write_frame("edgar_statements", f"{key}_{name}", tab.assign(**{_STAMP_COLUMN: stamp}))
+        except Exception:  # noqa: BLE001 - a cache that cannot be written (read-only disk) costs time, not results
+            pass
+    return h

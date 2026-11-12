@@ -36,6 +36,24 @@ the default branch only); the first forward snapshot is due after the close of 3
   * The MSFT example (`reports/examples/MSFT/`) regenerated with HTML charts and its memo; its six PNGs deleted with
     the user's consent.
 
+* **Speed, no change to any number** (12 November 2026, the user's request; `tests/test_sec_speed.py`):
+  * Statements: `pit.build_statements` splits the facts by concept once and differences year-to-date values without a
+    Python loop (about 1.07 s -> 0.60 s per company); `pit.load_statements` keeps the built tables in
+    `data/cache/edgar_statements/`, each file stamped with a hash of the facts and of `pit.py` (a new filing or an edit
+    to the module rebuilds them); the memo passes its statements to `daily_values`. A memo on the sample pack:
+    about 2.6 s -> 0.5 s. Statements, industry values, memos and text features compared equal, old code against new,
+    on the 20 sample companies and the fixtures.
+  * 10-K text: `edgar.fetch_documents` downloads three documents at a time per process under the same SEC rate
+    limiter; `text_history` is incremental (a new 10-K costs two documents, not the company's history;
+    `refresh=True` reads all again); the fog index is computed from the word counts. **Not measured live**: the
+    download gain needs a session with an approved SEC contact e-mail.
+  * Also: `edgar.warm_company_facts` / `warm_submissions` fill the caches from the SEC's nightly archives (opt-in,
+    not called by any run; the facts archive is over a gigabyte); the document cache is gzip (old JSON copies still
+    read); `delistings` reads four quarters at a time; the segment instance and labels download together.
+  * Housekeeping: the repository URL is Fintech-StThomas everywhere; the User-Agent carries `__version__`; the unused
+    `localhost` host policy is gone; CI installs `.[app,dev]` with a pip cache and `tests/test_packaging.py` keeps
+    `requirements.txt` in step with `pyproject.toml`.
+
 ## Open items (the user's choice)
 
 1. **Check the watch list's first run**: the repository secret `LIGHTHOUSE_SEC_EMAIL` must exist (without it only
@@ -78,7 +96,7 @@ of the 1996 cohort and 66% of 2009; every priced member still trades); EDGAR is 
 
 ## Kickoff prompt for the next session
 
-> Continue Lighthouse in lotainc0/Stock-Trader-FINTECH-Project. Read `docs/NEXT_SESSION.md` and METHODOLOGY §8-8d and
+> Continue Lighthouse in Fintech-StThomas/Stock-Trader-FINTECH-Project. Read `docs/NEXT_SESSION.md` and METHODOLOGY §8-8d and
 > §11 first. If the pull request for `claude/ecstatic-wright-3w8w59` was merged, start a new branch from `main`. No
 > signal survived and the timing test failed; do not add weight to any signal in `decision.py`, and do not change the
 > trading rule, without the user's decision and, for a new signal, a new pre-registered test; never let the watch list

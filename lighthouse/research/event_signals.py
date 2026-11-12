@@ -23,7 +23,7 @@ computed from them are cached (data/cache/research_text).
 from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -124,25 +124,54 @@ def text_signal_daily(history: pd.DataFrame, index: pd.DatetimeIndex, col: str, 
     return hold_daily(ev, index, TEXT_MAX_AGE_DAYS)
 
 
-def text_history(ticker: str, lm, start: str = TEXT_START, refresh: bool = False, source: str = "auto") -> pd.DataFrame:
-    """Text features of every 10-K the company filed since `start`, oldest first, indexed by filing date (cached)."""
-    from ..edgar import cik_for, company_filings, fetch_document, registrant_cik
-    from ..text import features
+def text_history(ticker: str, lm, start: str = TEXT_START, refresh: bool = False, source: str = "auto",
+                 threads: Optional[int] = None) -> pd.DataFrame:
+    """Text features of every 10-K the company filed since `start`, oldest first, indexed by filing date (cached).
+
+    The cache is incremental: a 10-K whose row is cached is not read again, so a company's new annual report costs two
+    documents (the new one and the one before it, which it is compared with), not its whole history. `refresh=True`
+    reads every document again. Offline, or when the filing list cannot be read, the cached table is returned as it
+    is. The documents download `threads` at a time (`edgar.fetch_documents`: default `edgar.DOCUMENT_THREADS`) under
+    this process's SEC rate limit and are parsed in filing order."""
+    from .. import edgar
+    from ..data import DataUnavailable, offline_mode
+    from ..text import features, word_counts
     hit = None if refresh else store.read_frame("research_text", ticker)
-    if hit is not None:
+    if hit is not None and offline_mode():
         return hit
-    cik = cik_for(ticker)
-    _, filings = company_filings(ticker, source=source)
+    try:
+        cik = edgar.cik_for(ticker)
+        _, filings = edgar.company_filings(ticker, source=source)
+    except DataUnavailable:
+        if hit is not None:
+            return hit
+        raise
     tenk = tenk_filings(filings, start)
+    tenk = tenk[[isinstance(d, str) and bool(d) for d in tenk["doc"]]] if len(tenk) else tenk
+    known = set(hit["accn"].astype(str)) if hit is not None and "accn" in hit else set()
+    rows_in = list(tenk.to_dict("records"))
+    new = [str(f["accn"]) not in known for f in rows_in]
+    if hit is not None and not any(new):
+        return hit
+    # a document is read when its filing is new (its features) or when the next filing is (what that one is
+    # compared with)
+    need = [new[i] or (i + 1 < len(new) and new[i + 1]) for i in range(len(rows_in))]
+    jobs = [(edgar.registrant_cik(f, cik), f["accn"], f["doc"]) for f, n in zip(rows_in, need) if n]
+    docs = edgar.fetch_documents(jobs, threads=threads if threads is not None else edgar.DOCUMENT_THREADS, cache=False)
     rows, prev = [], None
-    for _, f in tenk.iterrows():
-        if not f.get("doc"):
+    for f, is_new, needed in zip(rows_in, new, need):
+        if not needed:
+            prev = None                     # never the comparison of a new filing (the filing after it is cached)
             continue
-        doc = fetch_document(registrant_cik(f, cik), f["accn"], f["doc"], cache=False)
-        feats, counts = features(doc, lm, prev)
-        prev = counts
-        rows.append({"filed": f["filed"], "accn": f["accn"], **feats})
+        doc = next(docs)
+        if is_new:
+            feats, prev = features(doc, lm, prev)
+            rows.append({"filed": f["filed"], "accn": f["accn"], **feats})
+        else:
+            prev = word_counts(doc)
     out = pd.DataFrame(rows).set_index("filed") if rows else pd.DataFrame(columns=["accn"]).rename_axis("filed")
+    if hit is not None and len(hit):
+        out = pd.concat([hit, out]).sort_index(kind="stable") if len(out) else hit
     store.write_frame("research_text", ticker, out)
     return out
 

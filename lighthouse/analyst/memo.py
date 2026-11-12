@@ -266,7 +266,7 @@ def build(ticker: str, as_of=None, source: str = "auto", result=None, peers: boo
     val = None
     try:
         from ..research.fundamental_signals import daily_values
-        dv = daily_values(t, prices[prices.index <= f.as_of], source=source)
+        dv = daily_values(t, prices[prices.index <= f.as_of], source=source, statements=statements)
         bands = {k: dv[k] for k in ("earnings_yield", "fcf_yield", "ebitda_ev") if k in dv}
     except Exception as exc:  # noqa: BLE001
         bands = {}

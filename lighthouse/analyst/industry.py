@@ -128,13 +128,14 @@ class _Book:
         f = facts[pd.to_datetime(facts["filed"]) < self.date] if facts is not None and len(facts) else facts
         self.facts = f if f is not None else pd.DataFrame(columns=["concept", "unit", "start", "end", "val", "filed"])
         self.orig = pit.original_facts(self.facts) if len(self.facts) else self.facts
+        self._groups = pit.concept_groups(self.orig) if len(self.orig) else {}      # split once for every item
         self._cache: Dict[str, Tuple[pd.DataFrame, pd.DataFrame]] = {}
 
     def values(self, key: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         if key not in self._cache:
             item = pit.INDUSTRY.get(key) or pit.ITEMS[key]
             empty = pd.DataFrame(columns=["val", "filed"])
-            self._cache[key] = pit.item_values(self.orig, item) if len(self.orig) else (empty, empty)
+            self._cache[key] = pit.item_values(self._groups, item) if len(self.orig) else (empty, empty)
         return self._cache[key]
 
     def concepts_of(self, key: str) -> Sequence[str]:

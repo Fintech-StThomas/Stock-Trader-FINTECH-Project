@@ -118,7 +118,10 @@ def lm_dictionary(refresh: bool = False) -> LMDictionary:
 def tone(words: Iterable[str], lm: LMDictionary) -> Dict[str, float]:
     """Share of the words in each list, and the word count."""
     c = Counter(words)
-    n = sum(c.values())
+    return _tone_of(c, sum(c.values()), lm)
+
+
+def _tone_of(c: Counter, n: int, lm: LMDictionary) -> Dict[str, float]:
     out = {"words": float(n)}
     for cat, vocab in lm.words.items():
         out[cat] = float(sum(v for w, v in c.items() if w in vocab) / n) if n else float("nan")
@@ -134,44 +137,62 @@ def cosine(a: Counter, b: Counter) -> float:
     return num / den if den else float("nan")
 
 
+_VOWELS = re.compile(r"[AEIOUY]+")
+FOG_CHARS = 2_000_000          # the fog index reads the first two million characters of a filing
+
+
 def _syllables(word: str, lm: Optional[LMDictionary]) -> int:
     if lm is not None and lm.syllables.get(word):
         return int(lm.syllables[word])
-    groups = re.findall(r"[AEIOUY]+", word)
+    groups = _VOWELS.findall(word)
     n = len(groups) - (1 if word.endswith("E") and len(groups) > 1 else 0)
     return max(n, 1)
 
 
+def _fog_of(counts: Counter, sentences: int, lm: Optional[LMDictionary]) -> float:
+    """The fog index from word counts: syllables are counted once per distinct word, not once per occurrence (a
+    10-K has some 100,000 words and a few thousand distinct ones)."""
+    n = sum(counts.values())
+    if not n:
+        return float("nan")
+    complex_words = sum(k for w, k in counts.items() if _syllables(w, lm) >= 3)
+    return 0.4 * (n / max(sentences, 1) + 100.0 * (complex_words / n))
+
+
 def fog(text: str, lm: Optional[LMDictionary] = None) -> float:
     """Gunning fog index of the text (higher = harder to read)."""
-    ws = tokens(text)
-    sentences = max(len(_SENT.findall(text)), 1)
-    if not ws:
-        return float("nan")
-    complex_share = sum(_syllables(w, lm) >= 3 for w in ws) / len(ws)
-    return 0.4 * (len(ws) / sentences + 100.0 * complex_share)
+    return _fog_of(Counter(tokens(text)), len(_SENT.findall(text)), lm)
+
+
+def word_counts(doc_html: str) -> Dict[str, Counter]:
+    """{'full': Counter, 'risk': Counter} of one filing: what the next filing of the same form compares itself with
+    (the second value of `features`, without computing the features)."""
+    text = html_to_text(doc_html)
+    return {"full": Counter(tokens(text)), "risk": Counter(tokens(risk_factors(text)))}
 
 
 def features(doc_html: str, lm: LMDictionary, previous: Optional[Dict[str, Counter]] = None) -> tuple:
     """(features, counts) for one filing. `previous` is the counts of the company's last filing of the same form
-    ({'full': Counter, 'risk': Counter}); the counts returned are what the next filing compares itself with."""
+    ({'full': Counter, 'risk': Counter}); the counts returned are what the next filing compares itself with.
+    The document is cleaned and split into words once; tone, fog and similarity all read the same counts."""
     text = html_to_text(doc_html)
     full = tokens(text)
-    risk_text = risk_factors(text)
-    risk = tokens(risk_text)
+    risk = tokens(risk_factors(text))
     cf, cr = Counter(full), Counter(risk)
-    out = {f"lm_{k}": v for k, v in tone(full, lm).items() if k != "words"}
-    out["words"] = float(len(full))
+    n = len(full)
+    out = {f"lm_{k}": v for k, v in _tone_of(cf, n, lm).items() if k != "words"}
+    out["words"] = float(n)
     out["risk_words"] = float(len(risk))
-    out["risk_uncertainty"] = tone(risk, lm).get("uncertainty", float("nan")) if risk else float("nan")
-    out["fog"] = fog(text[:2_000_000], lm)
+    out["risk_uncertainty"] = _tone_of(cr, len(risk), lm).get("uncertainty", float("nan")) if risk else float("nan")
+    head = text if len(text) <= FOG_CHARS else text[:FOG_CHARS]
+    out["fog"] = _fog_of(cf if head is text else Counter(tokens(head)), len(_SENT.findall(head)), lm)
     prev = previous or {}
     out["similarity"] = cosine(cf, prev.get("full", Counter()))
     out["risk_similarity"] = cosine(cr, prev.get("risk", Counter())) if risk else float("nan")
     pw = sum(prev.get("full", Counter()).values())
-    out["length_change"] = float(np.log(len(full) / pw)) if pw and full else float("nan")
+    out["length_change"] = float(np.log(n / pw)) if pw and full else float("nan")
     return out, {"full": cf, "risk": cr}
 
 
 __all__ = ["html_to_text", "tokens", "risk_factors", "LMDictionary", "parse_lm_csv", "lm_dictionary", "tone", "cosine",
-           "fog", "features", "LM_CATEGORIES", "LM_CITATION", "LM_URL"]
+           "fog", "features", "word_counts", "LM_CATEGORIES", "LM_CITATION", "LM_URL"]
