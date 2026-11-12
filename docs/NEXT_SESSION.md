@@ -61,6 +61,10 @@ the default branch only); the first forward snapshot is due after the close of 3
   * App: the peer comparison is part of every memo (its sidebar checkbox is gone); the University of St. Thomas
     logo (`assets/stthomas_logo.png`) sits above the title and the four creators are named under every tab, in
     How it works, in the About menu and in the README.
+  * App: an open page refreshes itself when a merge lands (`runOnSave` in `.streamlit/config.toml`; app.py drops
+    the session's results made by the old code and makes the analysis on screen again). Checked in a local browser
+    by changing files under a running server; not checked on Streamlit Community Cloud. A change to the config
+    file or to the dependencies still needs a restart.
 
 ## Open items (the user's choice)
 

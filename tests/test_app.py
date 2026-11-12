@@ -1,4 +1,5 @@
 """Smoke tests of the Streamlit app (through Streamlit's AppTest harness, no browser) and of its interactive charts."""
+import re
 import sys
 from pathlib import Path
 
@@ -217,6 +218,32 @@ def test_app_keeps_lighthouse_while_its_files_are_unchanged():
     at.run()
     assert not at.exception, at.exception
     assert sys.modules["lighthouse"] is lighthouse          # no reload (and no cache wipe) on an ordinary rerun
+
+
+def test_an_open_page_refreshes_itself_when_new_code_lands():
+    """A merge changes the files under a running app: an open page drops the results the old code made and makes the
+    analysis on screen again, without a reboot or a click. The server reruns open pages by itself (runOnSave)."""
+    cfg = (Path(APP).parent / ".streamlit" / "config.toml").read_text()
+    assert re.search(r"^runOnSave\s*=\s*true", cfg, re.M)
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    at.sidebar.text_input(key="ticker").set_value("KO")
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.sidebar.button(key="analyse").click()
+    at.run()
+    assert not at.exception, at.exception
+    first = at.session_state["result"]
+    at.run()                                                     # the same code: nothing is made again
+    assert at.session_state["result"] is first and not at.toast
+    at.session_state["desk"] = {"made by": "the old code"}
+    at.session_state["_code_stamp"] = ("the files as they were before the merge",)
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["result"].ticker == "KO"            # made again (from the cache when only app.py changed)
+    assert "desk" not in at.session_state
+    assert any("Lighthouse was updated" in str(t.value) for t in at.toast)
+    text = " ".join(str(m.value) for m in at.markdown)
+    assert "Lighthouse score" in text and "Investment memo" in text
 
 
 @pytest.mark.parametrize("old_code", ["files changed", "imported before the check existed"])

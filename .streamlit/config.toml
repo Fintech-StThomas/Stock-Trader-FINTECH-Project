@@ -14,3 +14,6 @@ gatherUsageStats = false
 
 [server]
 headless = true
+# When the app's files change under a running server (a merge pulled by Streamlit Community Cloud), every open
+# page reruns by itself instead of waiting for a click or a reboot. app.py then loads the new code (see its top).
+runOnSave = true

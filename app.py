@@ -81,6 +81,36 @@ st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_
                                         f"Created at the {SCHOOL} by "
                                         + ", ".join(f"{n} ({f})" for n, f in CREATORS) + "."})
 
+# ----------------------------------------------------------------------------- new code under a running server
+# A merge reaches a running app as changed files (Streamlit Community Cloud pulls every push without restarting
+# Python). `.streamlit/config.toml` sets runOnSave, so every open page reruns by itself when that happens, and
+# `_drop_stale_lighthouse` above then loads the new package. What is left is this browser session's own results: they
+# were made by the old code and hold its objects, so they are dropped here, and an analysis that was on screen is
+# made again with the new code. Nobody has to reboot the app or reload the page.
+RESULT_KEYS = ("result", "memo", "result_error", "desk", "pf_res", "pf_goal_res", "pf_err", "pf_goal_err")
+
+
+def _code_stamp() -> tuple:
+    import lighthouse
+    return (getattr(lighthouse, "_IMPORTED_STAMP", ()), os.stat(os.path.abspath(__file__)).st_mtime_ns)
+
+
+def _refresh_session_for_new_code() -> None:
+    stamp, seen = _code_stamp(), st.session_state.get("_code_stamp")
+    st.session_state["_code_stamp"] = stamp
+    if seen is None or seen == stamp:
+        return
+    had_analysis = st.session_state.get("result") is not None
+    for k in RESULT_KEYS:
+        st.session_state.pop(k, None)
+    if had_analysis:
+        st.session_state["auto_run"] = True
+    st.toast("Lighthouse was updated. This page now runs the new version"
+             + (", and your analysis was made again." if had_analysis else "."), icon="🔄")
+
+
+_refresh_session_for_new_code()
+
 # ----------------------------------------------------------------------------- look & accessibility
 st.markdown("""
 <style>
