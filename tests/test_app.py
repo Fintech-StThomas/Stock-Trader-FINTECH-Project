@@ -39,6 +39,21 @@ def test_app_runs_an_analysis_offline():
     assert "Does the timing add anything?" in text                # ... read from its result files in How it works
 
 
+def test_every_analysis_carries_the_full_memo_with_peers_and_no_switch_for_it():
+    """The peer comparison is a standard part of the memo: no sidebar control turns it on."""
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    assert not any("memo" in str(c.label).lower() or c.key == "memo_peers" for c in at.sidebar.checkbox)
+    assert not any("memo" in str(b.label).lower() for b in at.sidebar.button)
+    at.sidebar.text_input(key="ticker").set_value("JPM")
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.sidebar.button(key="analyse").click()
+    at.run()
+    assert not at.exception, at.exception
+    text = " ".join(str(m.value) for m in at.markdown)
+    assert "Investment memo" in text and "**Peers**" in text and "peer median" in text
+
+
 def test_app_without_filings_keeps_the_verdict_and_says_why_there_is_no_memo():
     """An index (or an ETF, or a company that does not file with the SEC) has no memo; the rule's verdict stands."""
     at = AppTest.from_file(APP, default_timeout=300)

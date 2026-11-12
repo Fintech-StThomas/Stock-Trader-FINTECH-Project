@@ -35,7 +35,6 @@ ticket still work and the memo says why it is missing; the bundled sample pack h
 | **Value of stocks you already hold** | optional; 0 if this cash is all you have invested | only used for the risk limits: max loss and the concentration cap are a % of cash + holdings |
 | Years of history | default 10 (notebook 15) | analysis window and backtest length |
 | Data source | auto / yfinance / stooq / cache / sample | `auto` tries live sources then offline fallbacks; `sample` uses the bundled historical pack |
-| Analyst memo: compare with industry peers | off by default | reads the filings of every S&P 500 company with the same SIC code for the peer medians (slower); off, the memo compares with sector norms |
 | 🔄 Refresh live prices | sidebar button | fetches the latest quote now; otherwise an analysis and its quote are reused for 15 minutes |
 
 Example: $5,000 cash and $20,000 of stocks already held, 2% max loss. The account is $25,000, so one position may lose at most
