@@ -145,12 +145,13 @@ def memo_problem(exc: Exception) -> str:
 
 
 @st.cache_resource(show_spinner=False, ttl=LIVE_TTL, max_entries=100)
-def _memo(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, as_of, nonce, peers, _result):
+def _memo(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry, exit_, cost, as_of, nonce, _result):
     """The analyst memo of an analysis, under the same key as `_run` (so a cached analysis and its memo go together).
-    Returns (memo, None) or (None, why there is none): the verdict stands without it."""
+    Always the full memo: the industry-peer comparison is part of every analysis (sector norms when a company has no
+    peers with filings). Returns (memo, None) or (None, why there is none): the verdict stands without it."""
     from lighthouse.analyst import memo as memo_mod
     try:
-        return memo_mod.build(ticker, as_of=as_of, source=source, result=_result, peers=peers, peer_norms=True), None
+        return memo_mod.build(ticker, as_of=as_of, source=source, result=_result, peers=True, peer_norms=True), None
     except Exception as exc:  # noqa: BLE001
         return None, memo_problem(exc)
 
@@ -352,10 +353,6 @@ with st.sidebar:
         st.session_state["live_nonce"] = st.session_state.get("live_nonce", 0) + 1
         if st.session_state.get("result") is not None:
             st.session_state["auto_run"] = True
-    memo_peers = st.checkbox("Analyst memo: compare with industry peers", value=False, key="memo_peers",
-                             help="Reads the filings of every S&P 500 company in the same industry (SIC code) for the "
-                                  "peer medians of valuation and margins. Slower, especially the first time; without "
-                                  "it the memo compares with sector norms.")
     deep = st.checkbox("Run deep evaluation (layers, sensitivity, out-of-sample)", value=False, key="deep",
                        help="Adds ~30-60 seconds: strategy layer attribution, threshold sensitivity grid and a walk-forward test.")
     with st.expander("Expert settings"):
@@ -400,7 +397,7 @@ if run:
     res = st.session_state.get("result")
     if res is not None:
         with st.spinner(f"Reading {ticker}'s SEC filings for the analyst memo ..."):
-            st.session_state["memo"] = _memo(*key, memo_peers, res)
+            st.session_state["memo"] = _memo(*key, res)
     if res is not None and deep and "layers" not in res.extras:
         with st.status("Deep evaluation: layer attribution, sensitivity grid and walk-forward test ...", expanded=False) as status:
             res.evaluate()
@@ -776,7 +773,7 @@ def downloads_section(res) -> None:
 def memo_section(res, m, why: str) -> None:
     st.markdown("#### The fundamental case, from the SEC filings")
     st.caption("Valuation (bull / base / bear DCF, reverse DCF, the stock's own valuation bands), the fundamental beacons "
-               "(against industry peers when the sidebar asks for them, else sector norms), earnings-quality and "
+               "(against industry peers with the same SIC code, or sector norms when there are none), earnings-quality and "
                "balance-sheet checks, capital allocation, catalysts, the variant view and what would prove the thesis "
                "wrong. Only filings made before the analysis date are used. The fundamental score in the Lighthouse "
                "score comes from the same numbers; the memo's stance does not change the score.")

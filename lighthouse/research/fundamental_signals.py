@@ -145,9 +145,10 @@ def _beneish(f: pd.DataFrame) -> np.ndarray:
     return np.where(np.isfinite(sgi) & np.isfinite(tata), m, np.nan)
 
 
-def daily_values(ticker: str, frame: pd.DataFrame, source: str = "auto") -> Dict[str, pd.Series]:
-    """Every fundamental signal for one stock, daily, from the session after each filing."""
-    h = load_statements(ticker, source=source)
+def daily_values(ticker: str, frame: pd.DataFrame, source: str = "auto", statements=None) -> Dict[str, pd.Series]:
+    """Every fundamental signal for one stock, daily, from the session after each filing. `statements` (a
+    `StatementHistory` the caller already loaded for this ticker and source) saves loading them again."""
+    h = statements if statements is not None else load_statements(ticker, source=source)
     q = h.quarterly
     if q is None or q.empty or "filed" not in q:
         return {}

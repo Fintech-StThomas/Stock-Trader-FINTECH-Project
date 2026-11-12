@@ -35,7 +35,7 @@ This notebook runs the full product end-to-end:
 md("## 0 · Setup")
 code("""# On Google Colab this clones the project; inside the repo (or its notebooks/ folder) it just finds the package.
 import os, sys, subprocess, pathlib
-REPO_URL = "https://github.com/lotainc0/Stock-Trader-FINTECH-Project.git"
+REPO_URL = "https://github.com/Fintech-StThomas/Stock-Trader-FINTECH-Project.git"
 here = pathlib.Path.cwd()
 root = next((p for p in [here, *here.parents] if (p / "lighthouse" / "__init__.py").exists()), None)
 if root is None:

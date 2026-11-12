@@ -283,8 +283,8 @@ def segments_for(ticker: str, as_of=None, source: str = "auto", forms: Iterable[
                  refresh: bool = False) -> Optional[SegmentReport]:
     """The segment tables of the latest filing among `forms` usable on `as_of` (default: today), or None when there
     is none: no such filing, no XBRL instance, no segment facts, or (offline, or from the sample pack, which holds no
-    instances) a filing whose tables are not cached yet. Downloads: the filing index, the instance and the label
-    document, three requests under the SEC's rate limit."""
+    instances) a filing whose tables are not cached yet. Downloads: the filing index, then the instance and the label
+    document together, three requests under the SEC's rate limit."""
     from ..data import DataUnavailable, offline_mode
     from ..edgar import company_filings, filing_documents, registrant_cik
     t = ticker.upper().strip()
@@ -312,14 +312,22 @@ def segments_for(ticker: str, as_of=None, source: str = "auto", forms: Iterable[
         if inst is None:
             return None
         base = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accn.replace('-', '')}/"
-        table = parse_instance(_fetch_bytes(base + inst))
         lab = label_document(names)
-        labels: Dict[str, str] = {}
-        if lab is not None and len(table):
-            try:
-                labels = parse_labels(_fetch_bytes(base + lab))
-            except (DataUnavailable, ValueError) as exc:
-                notes.append(f"labels not read ({type(exc).__name__}); member names are spelled out")
+        # the instance and the label document download together (two requests under the SEC's rate limit)
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            inst_job = pool.submit(_fetch_bytes, base + inst)
+            lab_job = pool.submit(_fetch_bytes, base + lab) if lab is not None else None
+            table = parse_instance(inst_job.result())
+            labels: Dict[str, str] = {}
+            if lab_job is not None:
+                try:
+                    lab_bytes = lab_job.result()
+                    if len(table):
+                        labels = parse_labels(lab_bytes)
+                except (DataUnavailable, ValueError) as exc:
+                    if len(table):
+                        notes.append(f"labels not read ({type(exc).__name__}); member names are spelled out")
         if labels:
             table["label"] = [labels.get(m, lbl) for m, lbl in zip(table["member"], table["label"])]
         store.write_frame("edgar_segments", key, table)

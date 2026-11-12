@@ -8,6 +8,7 @@ Every file carries its age (the file's modification time); callers decide how ol
 """
 from __future__ import annotations
 
+import gzip
 import json
 import re
 import time
@@ -72,4 +73,27 @@ def write_json(kind: str, key: str, obj: Any) -> Path:
     p = path_for(kind, key, "json")
     p.parent.mkdir(parents=True, exist_ok=True)
     _data._atomic_write(p, lambda tmp: tmp.write_text(json.dumps(obj, default=str)))
+    return p
+
+
+def read_text(kind: str, key: str) -> Optional[str]:
+    """A cached text document (gzip-compressed on disk), or None when it is missing or unreadable."""
+    p = path_for(kind, key, "txt.gz")
+    if not p.exists():
+        return None
+    try:
+        with gzip.open(p, "rt", encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, ValueError, EOFError):
+        return None
+
+
+def write_text(kind: str, key: str, text: str) -> Path:
+    p = path_for(kind, key, "txt.gz")
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(tmp: Path) -> None:
+        with gzip.open(tmp, "wt", encoding="utf-8", compresslevel=6) as fh:
+            fh.write(text)
+    _data._atomic_write(p, write)
     return p
