@@ -1,0 +1,117 @@
+[
+  {
+    "data_status": "curated",
+    "deal_id": "curated_2c7183d58bfd15c8",
+    "announcement_ids": [
+      "curated_2c7183d58bfd15c8"
+    ],
+    "publisher_pe_firm": "Advent International",
+    "source_url": [
+      "https://www.adventinternational.com/news/advent-to-acquire-vermeg-a-global-provider-of-capital-markets-and-life-insurance-technology/"
+    ],
+    "headline": "Advent agrees to acquire Vermeg",
+    "publication_date": "2026-11-02",
+    "buyer_or_investor": "Advent International",
+    "target_company": "Vermeg",
+    "transaction_type": "Acquisition",
+    "transaction_status": "Announced",
+    "target_industry": "Technology",
+    "target_geography": null,
+    "rationale_tags": [
+      "Technology / capability",
+      "Product expansion"
+    ],
+    "price": null,
+    "currency": null,
+    "evidence_excerpt": "investment in Vermeg’s products, AI capabilities, and customer relationships globally",
+    "review_status": "needs review",
+    "review_notes": "Curated source-linked sample checked 2026-11-04; team review pending. Sector and rationale categories are editorial classifications. Target headquarters not established by the announcement; London dateline is not target geography. Signing is not completion. Price unknown.",
+    "is_inferred": true
+  },
+  {
+    "data_status": "curated",
+    "deal_id": "curated_e06b0aebf1311d49",
+    "announcement_ids": [
+      "curated_e06b0aebf1311d49"
+    ],
+    "publisher_pe_firm": "Advent International",
+    "source_url": [
+      "https://www.adventinternational.com/news/advent-announces-majority-investment-in-nzcr-group-in-partnership-with-existing-shareholders/"
+    ],
+    "headline": "Advent announces majority stake in NZCR",
+    "publication_date": "2026-08-20",
+    "buyer_or_investor": "Advent International",
+    "target_company": "NZCR Group",
+    "transaction_type": "Platform investment",
+    "transaction_status": "Announced",
+    "target_industry": "Healthcare",
+    "target_geography": "New Zealand and Australia",
+    "rationale_tags": [
+      "Geographic reach",
+      "Technology / capability"
+    ],
+    "price": null,
+    "currency": null,
+    "evidence_excerpt": "strengthening sponsor and CRO relationships and international reach",
+    "review_status": "needs review",
+    "review_notes": "Curated source-linked sample checked 2026-11-04; team review pending. Geography refers to the stated operating footprint. Transaction subject to regulatory approvals; do not assume completion from its expected closing quarter. Categories are editorial. Terms undisclosed.",
+    "is_inferred": true
+  },
+  {
+    "data_status": "curated",
+    "deal_id": "curated_1f211fa67ba018ac",
+    "announcement_ids": [
+      "curated_1f211fa67ba018ac"
+    ],
+    "publisher_pe_firm": "Bain Capital",
+    "source_url": [
+      "https://www.baincapital.com/news/kahua-secures-strategic-growth-investment-bain-capital-valuation-above-1-billion"
+    ],
+    "headline": "Bain backs Kahua with minority growth investment",
+    "publication_date": null,
+    "buyer_or_investor": "Bain Capital Tech Opportunities",
+    "target_company": "Kahua",
+    "transaction_type": "Growth investment",
+    "transaction_status": "Announced",
+    "target_industry": "Technology",
+    "target_geography": null,
+    "rationale_tags": [
+      "Technology / capability",
+      "Product expansion"
+    ],
+    "price": null,
+    "currency": null,
+    "evidence_excerpt": "continued investment in AI and product innovation",
+    "review_status": "needs review",
+    "review_notes": "Curated source-linked sample checked 2026-11-04; team review pending. Article dateline September 29, 2026 conflicts with the unrelated featured-story header; publication date left unknown for team review. Alpharetta is a dateline, not confirmed target headquarters. Reported company valuation above $1bn is not the amount invested: price stays null. Categories are editorial.",
+    "is_inferred": true
+  },
+  {
+    "data_status": "curated",
+    "deal_id": "curated_e24b18198b09f857",
+    "announcement_ids": [
+      "curated_e24b18198b09f857"
+    ],
+    "publisher_pe_firm": "Bain Capital",
+    "source_url": [
+      "https://www.baincapital.com/news/bain-capital-and-omnam-group-announce-sale-lake-como-edition-hotel-sansiri-capital"
+    ],
+    "headline": "Bain and Omnam exit Lake Como hotel",
+    "publication_date": null,
+    "buyer_or_investor": "Sansiri Capital",
+    "target_company": "The Lake Como EDITION",
+    "transaction_type": "Exit",
+    "transaction_status": "Completed",
+    "target_industry": "Real estate",
+    "target_geography": "Italy",
+    "rationale_tags": [
+      "Geographic reach"
+    ],
+    "price": null,
+    "currency": null,
+    "evidence_excerpt": "Sansiri’s strategic expansion into Europe’s luxury hospitality sector",
+    "review_status": "needs review",
+    "review_notes": "Curated source-linked sample checked 2026-11-04; team review pending. Bain and Omnam are sellers; Sansiri is the buyer. Rationale concerns the buyer. Article dateline October 12, 2026 differs from the featured-story header; publication date remains unknown pending team review. Financial terms undisclosed. Category is editorial.",
+    "is_inferred": true
+  }
+]

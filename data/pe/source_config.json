@@ -1,0 +1,210 @@
+{
+  "notes": "Public-page research sources supplied for the Lighthouse PE project. Collection is bounded to each publisher's listed section, same-host article links, 20 articles per source per run, 2-second delay, and 12-second timeout. Before production use, verify each site's robots.txt, terms, copyright rules, and access restrictions. Do not bypass paywalls, login walls, CAPTCHAs, or technical controls. Premium Alternatives Watch content is excluded; only pages explicitly marked Open Access should be configured.",
+  "sources": [
+    {
+      "name": "Private Equity Wire",
+      "enabled": true,
+      "role": "deal_news",
+      "content_type": "news",
+      "urls": [
+        "https://www.privateequitywire.co.uk/"
+      ],
+      "allowed_hosts": [
+        "www.privateequitywire.co.uk",
+        "privateequitywire.co.uk"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/news/",
+        "/story/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "Private Equity Insights",
+      "enabled": true,
+      "role": "deal_news",
+      "content_type": "news",
+      "urls": [
+        "https://pe-insights.com/"
+      ],
+      "allowed_hosts": [
+        "pe-insights.com",
+        "www.pe-insights.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "ACG Insights / Middle Market Growth",
+      "enabled": true,
+      "role": "deal_news",
+      "content_type": "news",
+      "urls": [
+        "https://middlemarketgrowth.org/category/pe-weekly/"
+      ],
+      "allowed_hosts": [
+        "middlemarketgrowth.org",
+        "www.middlemarketgrowth.org"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "FinSMEs \u2014 Private Equity",
+      "enabled": true,
+      "role": "deal_news",
+      "content_type": "news",
+      "urls": [
+        "https://www.finsmes.com/category/private-equity"
+      ],
+      "allowed_hosts": [
+        "www.finsmes.com",
+        "finsmes.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "Bain \u2014 Global Private Equity Report",
+      "enabled": true,
+      "role": "market_context",
+      "content_type": "research",
+      "urls": [
+        "https://www.bain.com/insights/topics/global-private-equity-report/"
+      ],
+      "allowed_hosts": [
+        "www.bain.com",
+        "bain.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/insights/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "McKinsey \u2014 Private Capital Insights",
+      "enabled": true,
+      "role": "market_context",
+      "content_type": "research",
+      "urls": [
+        "https://www.mckinsey.com/industries/private-capital/our-insights"
+      ],
+      "allowed_hosts": [
+        "www.mckinsey.com",
+        "mckinsey.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/industries/private-capital/our-insights/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "Blackstone \u2014 News",
+      "enabled": true,
+      "role": "firm_primary",
+      "content_type": "press_release",
+      "publisher_pe_firm": "Blackstone",
+      "urls": [
+        "https://www.blackstone.com/news/"
+      ],
+      "allowed_hosts": [
+        "www.blackstone.com",
+        "blackstone.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/news/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "Carlyle \u2014 News & Media",
+      "enabled": true,
+      "role": "firm_primary",
+      "content_type": "press_release",
+      "publisher_pe_firm": "Carlyle",
+      "urls": [
+        "https://www.carlyle.com/news-media"
+      ],
+      "allowed_hosts": [
+        "www.carlyle.com",
+        "carlyle.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/news/",
+        "/media/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "National Law Review",
+      "enabled": true,
+      "role": "legal_regulatory",
+      "content_type": "legal_analysis",
+      "urls": [
+        "https://natlawreview.com/"
+      ],
+      "allowed_hosts": [
+        "natlawreview.com",
+        "www.natlawreview.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/article/"
+      ],
+      "max_articles": 20,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    },
+    {
+      "name": "Alternatives Watch \u2014 Open Access",
+      "enabled": true,
+      "role": "deal_news",
+      "content_type": "news",
+      "urls": [
+        "https://www.alternativeswatch.com/open-access/"
+      ],
+      "allowed_hosts": [
+        "www.alternativeswatch.com",
+        "alternativeswatch.com"
+      ],
+      "discover_articles": true,
+      "article_path_contains": [
+        "/open-access/"
+      ],
+      "max_articles": 20,
+      "open_access_only": true,
+      "access_reviewed": false,
+      "delay_seconds": 2
+    }
+  ]
+}

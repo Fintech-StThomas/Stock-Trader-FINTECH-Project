@@ -60,7 +60,7 @@ python -m lighthouse trade MSFT AAPL JNJ XOM --cash 5000                    # wh
 python -m lighthouse memo MSFT                                              # the analyst memo alone
 python -m lighthouse portfolio AAPL JNJ XOM JPM KO PG --method risk_parity --cash 10000
 python -m lighthouse portfolio --goal balanced --cash 10000                 # Lighthouse picks the stocks
-python -m pytest                # 323 tests, runs offline
+python -m pytest                # 292 tests, runs offline
 ```
 
 ```python
@@ -90,14 +90,13 @@ EDGAR in `LIGHTHOUSE_SEC_EMAIL` (sent to sec.gov only).
 
 ## The web app
 
-`streamlit run app.py` starts a point-and-click site with five tabs:
+`streamlit run app.py` starts a point-and-click site with four tabs:
 
 | Tab | What you can do |
 |---|---|
 | **Analyse a stock** | the verdict dial and five cards (Lighthouse score, fundamental score, technical score, market weather, the memo's stance), then five sub-tabs: **plan & ticket** (how the score is built, a position plan sized from your cash with a *what-if* sizer, the trade ticket with its *when to get out* table and the rules' record on this stock), **analyst memo** (the fundamental case from the SEC filings), **beacons & charts** (the 10 fundamental and 6 technical beacons as bars and tables, a price / volume / RSI / MACD chart with low-lag price bands and the backtested entries and exits), **backtest** (against the same exposure never traded, buy & hold and the S&P 500; deep evaluation with layers, the plain trend rule, sensitivity heatmap and walk-forward) and **data** (sources, cleaning notes, every indicator row, downloads) |
 | **Find trades** | pick a pre-built universe (a sideways-scrolling row: mega caps, dividend & defensive, each sector, semiconductors, sector and index ETFs, all large caps) or type your own; the scan ranks every ticker (select a row to jump to its full analysis) and funds the best setups from your cash, one ticket each, within a total-risk cap |
 | **Portfolio** | allocate your own basket with three methods, or let Lighthouse build one for a goal; whole-share orders, risk report (volatility, VaR, expected shortfall, beta, risk contributions, correlations, stress tests) and a walk-forward test of every method |
-| **PE deals** | a separate product, *PE Deal Sourcing* (below): sixteen sponsors' deal announcements turned into a sourcing record, with a consolidation map, an exit watch, competing buyers, a sourcing brief, a deal finder, a new-deal digest and its validation |
 | **How it works** | the method, verdict bands, risk presets, what the research found and the full user guide |
 
 The theses you follow, the forward decision journal and the watch-only research signals run from the command line and
@@ -119,29 +118,6 @@ The app runs as-is on [Streamlit Community Cloud](https://share.streamlit.io):
 
 Later pushes to `main` reach the running app without a restart; `app.py` notices that the `lighthouse` package changed on disk
 and loads the new code. If a page still shows an error right after a push, *Manage app* → ⋮ → *Reboot app* starts it fresh.
-
-## PE Deal Sourcing (a separate product in the same dashboard)
-
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lotainc0/Stock-Trader-FINTECH-Project/blob/main/notebooks/PE_Deal_Intelligence.ipynb)
-
-For a deal team at a lower-middle-market sponsor sourcing in five sectors (building & facility services, IT services &
-cybersecurity, tech-enabled business services, industrial manufacturing, value-added distribution): which niches are
-being rolled up, which sponsor-owned companies have been held long enough to be sold, and who would bid against you.
-The `pedeals` package reads the news pages of sixteen buy-and-build sponsors politely (robots.txt, crawl delays),
-turns 1,048 deal announcements since 2015 into records with the sentence behind every value, and rebuilds each
-sponsor's portfolio ledger (entry dates, renames, add-ons, exits) for the exit watch. On the latest held-out round
-(44 pages labelled after the rules were frozen), deal detection was 95%, dates 100%, buyer 81% and target 89%; the
-**sector and niche were right only about half and a third of the time**, and the app says so. It runs offline on the
-saved pages (marked as cached data).
-
-```bash
-python -m pedeals build        # parse + extract the saved pages -> data/pe_deals/output/ (CSV, JSON, Markdown brief)
-python -m pedeals validate     # accuracy per held-out round, consistency, repeatability
-python -m pedeals collect      # refresh from the live sites (slow by design)
-```
-
-Method, data dictionary, validation and limitations: [docs/PE_DEALS.md](docs/PE_DEALS.md); executive summary draft:
-[docs/PE_DEALS_EXECUTIVE_SUMMARY.md](docs/PE_DEALS_EXECUTIVE_SUMMARY.md).
 
 ## Results in one table
 
@@ -244,3 +220,13 @@ not guaranteed prices. Paper trading is tested against Alpaca's documented forma
 machine learning could be added safely. Lighthouse is decision support, not investment advice.
 
 MIT licensed.
+
+### Stock Research and PE Deal Intelligence workspaces
+
+The centered switch above the app selects one complete workspace. **Stock Research** retains the existing stock tools. **PE Deal Intelligence** opens a separate workspace with its own sidebar; stock controls and results are not rendered in PE mode. A direct link to the PE workspace is `https://fintech-class-project.streamlit.app/?workspace=pe`, and `&pe_page=detail` opens Deal Detail. Removed source/quality links return to AI research.
+
+In PE mode the sidebar holds **AI Deal Research** and **Deal Detail**. The main screen has a large centered search box with suggested prompts. Search scans the complete saved dataset before supplying relevant candidates to the configured OpenAI model, with optional web research. Result cards preserve evidence and review status; downloads include all returned facts, article titles/URLs, saved excerpts and per-field evidence. A ZIP also supplies separate article and evidence tables. The shared repository reads reviewed published versions or the real bundled snapshot, preserving the separate curated additions. See [AI setup and behavior](docs/PE_AI_SEARCH.md) and [pipeline integration](docs/LOCAL_PE_MERGE.md). The former filter-based explorer remains in code for regression checks.
+
+### Integrated PE research pipeline
+
+The PE workspace now uses a single AI research question, with a supporting Deal Detail page. The downloaded collection/extraction modules are integrated with the current real snapshot and server-side AI adapter. The additional publisher configuration is a proposed research source list; it does not establish that live collection has run. See [local PE integration notes](docs/LOCAL_PE_MERGE.md) for source roles, private caches, reviewed publication, validation and reproduction commands.

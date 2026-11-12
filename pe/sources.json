@@ -1,0 +1,48 @@
+[
+  {
+    "source_id": "riverside",
+    "publisher_pe_firm": "The Riverside Company",
+    "listing_url": "https://www.riversidecompany.com/currents/",
+    "article_prefix": "/currents/",
+    "listing_kind": "riverside_embedded",
+    "body_xpath": "//div[@id='rcPostBody']",
+    "date_xpath": "//*[contains(@class,'rc-currents-detail__meta')]",
+    "enabled": true,
+    "access_status": "internal_research",
+    "terms_url": "https://www.riversidecompany.com/terms-of-use",
+    "access_reviewed_on": "2026-11-03",
+    "access_note": "Pilot. Terms permit personal/internal copies; retain raw notices. Full articles are private team inputs, not public website content. Review conditions before expanding use.",
+    "max_pages": 3,
+    "max_articles": 6,
+    "start_date": "2026-01-01",
+    "end_date": "2026-11-03"
+  },
+  {
+    "source_id": "advent",
+    "publisher_pe_firm": "Advent International",
+    "listing_url": "https://www.adventinternational.com/news/",
+    "article_prefix": "/news/",
+    "body_xpath": "//div[@class='entry-content']",
+    "date_xpath": "//span[@class='c-sidebar__date']",
+    "next_xpath": "//a[contains(@class,'nextpostslink')]/@href",
+    "delay_seconds": 10,
+    "enabled": false,
+    "access_status": "needs_review",
+    "terms_url": "https://www.adventinternational.com/terms-and-conditions/",
+    "access_reviewed_on": "2026-11-03",
+    "access_note": "Two curated, source-linked deal samples are available in Deal Explorer, pending team review. Automated collection remains disabled while content-use conditions are resolved. Robots specifies a 10-second delay."
+  },
+  {
+    "source_id": "bain",
+    "publisher_pe_firm": "Bain Capital",
+    "listing_url": "https://www.baincapital.com/news",
+    "article_prefix": "/news/",
+    "body_xpath": "//article",
+    "date_xpath": "//time/@datetime",
+    "enabled": false,
+    "access_status": "permission_required",
+    "terms_url": "https://www.baincapital.com/terms-use",
+    "access_reviewed_on": "2026-11-03",
+    "access_note": "Two curated, source-linked deal samples are available in Deal Explorer, pending team review. Automated collection remains disabled because the site requires permission; the scraper adapter is not validated."
+  }
+]

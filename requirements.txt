@@ -9,3 +9,4 @@ beautifulsoup4>=4.12
 streamlit>=1.49
 plotly>=5.18
 pytest>=7.0
+jsonschema>=4.0
