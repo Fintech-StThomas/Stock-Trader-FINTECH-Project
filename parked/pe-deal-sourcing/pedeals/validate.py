@@ -1,0 +1,294 @@
+"""
+Validation: how far can the user trust the records, and where do the rules fail.
+
+Three kinds of evidence, kept apart (docs/PE_DEALS.md §6):
+
+1. **Reference labels** (data/pe_deals/validation/reference_labels.csv): a sample of articles labelled by reading
+   the source page, field by field ("none" = the text gives no value, so the program must leave it unknown; a
+   blank cell is not scored). Accuracy per field is the share of
+   labelled articles where the program's value matches the label (names compared after normalisation: case,
+   punctuation and Inc./LLC suffixes ignored; one name containing the other counts). Every mismatch is listed for
+   investigation. This is the validation evidence; the review flags the program prints are not.
+2. **Consistency checks** on every record, no labels needed: a date in the future, a publisher recorded as its own
+   add-on buyer, a price of zero, a deal without its source URL or evidence, and so on. Each should find nothing.
+3. **Repeatability**: building the dataset twice from the same saved pages must give identical records.
+
+Labels are never used to correct the outputs: a field the rules get wrong stays wrong in the dataset (and is
+counted here), so the accuracy reported is the accuracy the user gets.
+"""
+from __future__ import annotations
+
+import math
+import re
+from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
+from typing import Dict, List
+
+import pandas as pd
+
+from .collect import ROOT
+from .pipeline import canonical_url, norm_name
+
+LABELS_FILE = ROOT / "data" / "pe_deals" / "validation" / "reference_labels.csv"
+RESULTS_FILE = ROOT / "data" / "pe_deals" / "validation" / "results.md"
+# label column -> (program column, how to compare); deal-only fields are scored on articles labelled as deals
+FIELDS = {
+    "is_deal": ("is_deal", "bool"),
+    "news_category": ("news_category", "exact"),
+    "published_date": ("published_date", "exact"),
+    "transaction_type": ("transaction_type", "exact"),
+    "buyer": ("buyer", "name"),
+    "target": ("target", "name"),
+    "target_industry": ("target_industry", "exact"),
+    "target_state": ("target_state", "exact"),
+    "deal_status": ("deal_status", "exact"),
+    "price_disclosure": ("price_disclosure", "exact"),
+    "focus_sector": ("focus_sector", "exact"),
+    "niche": ("niche", "exact"),
+}
+# label rounds, newest first. A round is "held out" from the rules frozen before it was labelled; once rules are
+# changed after looking at its mismatches, its current accuracy is in-sample and the number to quote is the one
+# measured at the freeze (FROZEN_SCORES) or on the next round.
+SPLITS = {
+    "held-out-3": "round 3: 44 articles, any sponsor, labelled after the rules were frozen in commit 1835b7f",
+    "held-out-2": "round 2: 60 articles from the twelve added sponsors and 2015-2022, labelled after the freeze in commit 0bf8a14",
+    "held-out": "round 1: 38 articles from the first four sponsors, labelled after the first freeze",
+    "development": "the articles the first rules were written on (in-sample)",
+}
+QUOTE_SPLIT = "held-out-3"
+# round 2 scored at its freeze (commit 0bf8a14) with this scorer, before the rules were changed: (correct, labelled)
+FROZEN_SCORES = {"held-out-2": {
+    "is_deal": (60, 60), "news_category": (58, 60), "published_date": (60, 60), "transaction_type": (43, 48),
+    "buyer": (44, 48), "target": (45, 48), "target_industry": (26, 47), "target_state": (40, 48),
+    "deal_status": (42, 48), "price_disclosure": (46, 48), "focus_sector": (30, 47), "niche": (13, 31)}}
+DEAL_ONLY = {"transaction_type", "buyer", "target", "target_industry", "target_state", "deal_status", "price_disclosure",
+             "focus_sector", "niche"}
+
+
+def _bool(x) -> bool:
+    return str(x).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def names_match(a: str, b: str) -> bool:
+    """Same company name after normalisation; one containing the other counts ('Jones Bearing' ~ 'Jones Bearing Co.').
+    Several names (';') match when every labelled name is found."""
+    la = [norm_name(x) for x in str(a or "").split(";") if norm_name(x)]
+    lb = [norm_name(x) for x in str(b or "").split(";") if norm_name(x)]
+    if not la and not lb:
+        return True
+    if not la or not lb:
+        return False
+    return all(any(x == y or (len(x) >= 4 and len(y) >= 4 and (x in y or y in x)) for y in lb) for x in la)
+
+
+def _alternative_names(prog, col: str) -> List[str]:
+    """Other names the program's record gives the same company: the short name the release defines ("Good Sportsman
+    Marketing Outdoors (“GSM”)") and, for a sponsor, its other names ("HCI Equity Partners" is now Oridian)."""
+    from .sources import FIRM_ALIASES
+    out = [str(prog.get(f"{col}_short") or "")]
+    out += [a for names in FIRM_ALIASES.values() if any(names_match(n, prog[col]) for n in names) for a in names]
+    return [x for x in out if x]
+
+
+def _empty(x) -> bool:
+    return x is None or (isinstance(x, float) and math.isnan(x)) or str(x).strip() in ("", "Unknown")
+
+
+def compare(label, value, how: str) -> bool:
+    """A label of "none" says the text gives no value: the program must leave the field empty / Unknown."""
+    if how == "bool":
+        return _bool(label) == bool(value)
+    if str(label).strip().lower() == "none":
+        return _empty(value)
+    if how == "name":
+        return names_match(label, value)
+    lab = "" if label is None or (isinstance(label, float) and math.isnan(label)) else str(label).strip()
+    val = "" if value is None or (isinstance(value, float) and math.isnan(value)) else str(value).strip()
+    return lab.lower() == val.lower()
+
+
+@dataclass
+class ValidationReport:
+    summary: pd.DataFrame                 # per field: labelled n, correct, accuracy
+    classification: Dict[str, float]      # deal vs non-deal precision / recall / F1
+    type_confusion: pd.DataFrame
+    errors: pd.DataFrame                  # every mismatch, for investigation
+    consistency: pd.DataFrame             # per check: records failing
+    repeatable: bool
+    n_labels: int
+    notes: List[str] = field(default_factory=list)
+    split: str = "held-out"
+
+    def markdown(self) -> str:
+        c = self.classification
+        lines = [f"## Validation against {self.n_labels} reference labels ({self.split})", "",
+                 "| Field | Labelled | Correct | Accuracy (95% interval) |", "|---|---|---|---|"]
+        for r in self.summary.itertuples():
+            lines.append(f"| {r.field} | {r.n} | {r.correct} | {r.accuracy:.0%} ({r.ci_low:.0%}-{r.ci_high:.0%}) |")
+        lines += ["", f"Deal vs other news: precision {c['precision']:.0%}, recall {c['recall']:.0%}, F1 {c['f1']:.0%} "
+                      f"({c['tp']} deals found, {c['fp']} false alarms, {c['fn']} missed).", "",
+                  "### Consistency checks (every record)", "", "| Check | Records failing |", "|---|---|"]
+        lines += [f"| {r.check} | {r.failing} |" for r in self.consistency.itertuples()]
+        lines += ["", f"Repeatability: two builds from the same saved pages are {'identical' if self.repeatable else 'DIFFERENT'}."]
+        if len(self.errors):
+            lines += ["", f"### Mismatches ({len(self.errors)})", "", "| Article | Field | Label | Program |", "|---|---|---|---|"]
+            for r in self.errors.itertuples():
+                lines.append(f"| {str(r.headline)[:60]} | {r.field} | {str(r.label)[:50]} | {str(r.program)[:50]} |")
+        lines += [""] + [f"- {n}" for n in self.notes]
+        return "\n".join(lines)
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple:
+    """95% Wilson score interval of an accuracy of k out of n (honest about small samples)."""
+    if not n:
+        return (math.nan, math.nan)
+    p = k / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return (max(0.0, c - h), min(1.0, c + h))
+
+
+def load_labels(path: Path = LABELS_FILE) -> pd.DataFrame:
+    if not Path(path).exists():
+        return pd.DataFrame(columns=["url", *FIELDS])
+    return pd.read_csv(path, dtype=str).fillna("")
+
+
+def consistency_checks(ds) -> pd.DataFrame:
+    r, d = ds.records, ds.deals
+    today = date.today().isoformat()
+    checks = {
+        "publication date after the collection date": (r["published_date"].fillna("") > r["collected_at"].fillna("").str[:10]) & (r["published_date"].fillna("") != ""),
+        "publication date in the future": r["published_date"].fillna("") > today,
+        "deal without a source URL": d["url"].fillna("") == "",
+        "deal without category evidence": d["category_evidence"].fillna("") == "",
+        "publisher recorded as an add-on buyer": (d["transaction_type"] == "Add-on acquisition") & d.apply(
+            lambda x: norm_name(x["buyer"]) == norm_name(x["publisher"]), axis=1),
+        "platform investment not by the publisher": (d["transaction_type"] == "Platform investment") & d.apply(
+            lambda x: norm_name(x["buyer"]) != norm_name(x["publisher"]), axis=1),
+        "buyer and target the same": d.apply(lambda x: x["target"] != "Unknown" and norm_name(x["buyer"]) == norm_name(x["target"]), axis=1),
+        "price recorded as zero": d["deal_value_usd"].fillna(-1) == 0,
+        "price disclosed without a value": (d["price_disclosure"] == "Disclosed") & d["deal_value_usd"].isna(),
+        "closing date before the publication date by > 1 year": d.apply(
+            lambda x: bool(re.match(r"\d{4}-", str(x["closing_date"]))) and x["closing_date"] < str(int(x["published_date"][:4]) - 1), axis=1),
+        "duplicate deal ids": r["deal_id"].duplicated(),
+        "platform or add-on with no buyer and no target": d["transaction_type"].isin(["Platform investment", "Add-on acquisition"])
+        & (d["buyer"] == "Unknown") & (d["target"] == "Unknown"),
+    }
+    return pd.DataFrame([{"check": k, "failing": int(pd.Series(v).sum())} for k, v in checks.items()])
+
+
+def evaluate(ds, labels: pd.DataFrame = None, split: str = "held-out") -> ValidationReport:
+    """Score the dataset against the labels of one split: "held-out" (labelled after the rules were frozen: the
+    accuracy to quote), "development" (the labels the rules were tuned on: in-sample, optimistic) or "all"."""
+    labels = load_labels() if labels is None else labels
+    if split != "all" and "split" in labels.columns:
+        labels = labels[labels["split"] == split]
+    rec = ds.records.assign(_cu=ds.records["url"].map(canonical_url)).set_index("_cu")
+    rows, errors = [], []
+    matched = 0
+    for lab in labels.itertuples(index=False):
+        lab = lab._asdict()
+        cu = canonical_url(lab["url"])
+        if cu not in rec.index:
+            continue
+        matched += 1
+        prog = rec.loc[cu]
+        is_deal_label = _bool(lab.get("is_deal"))
+        for f, (col, how) in FIELDS.items():
+            if f not in lab or (f in DEAL_ONLY and not is_deal_label):
+                continue
+            if f != "is_deal" and str(lab[f]).strip() == "":
+                continue        # the labeller left it blank: not scored
+            ok = compare(lab[f], prog[col], how)
+            if not ok and how == "name":                # the same company under the release's short name or a sponsor's former name
+                ok = any(compare(lab[f], alt, how) for alt in _alternative_names(prog, col))
+            rows.append({"field": f, "ok": ok})
+            if not ok:
+                errors.append({"headline": prog["headline"], "url": lab["url"], "field": f, "label": lab[f], "program": prog[col]})
+    res = pd.DataFrame(rows, columns=["field", "ok"])
+    summary = (res.groupby("field", sort=False)["ok"].agg(n="count", correct="sum").reset_index()
+               if len(res) else pd.DataFrame(columns=["field", "n", "correct"]))
+    summary["accuracy"] = summary["correct"] / summary["n"].where(summary["n"] > 0)
+    ci = [wilson(int(k), int(n)) for k, n in zip(summary["correct"], summary["n"])]
+    summary["ci_low"], summary["ci_high"] = [c[0] for c in ci], [c[1] for c in ci]
+    summary = summary.set_index("field").reindex([f for f in FIELDS if f in set(summary["field"])]).reset_index()
+
+    lab_d = labels.assign(_cu=labels["url"].map(canonical_url))
+    lab_d = lab_d[lab_d["_cu"].isin(rec.index)]
+    y = lab_d["is_deal"].map(_bool).to_numpy()
+    p = rec.loc[lab_d["_cu"], "is_deal"].astype(bool).to_numpy()
+    tp, fp, fn = int((y & p).sum()), int((~y & p).sum()), int((y & ~p).sum())
+    prec = tp / (tp + fp) if tp + fp else math.nan
+    recall = tp / (tp + fn) if tp + fn else math.nan
+    f1 = 2 * prec * recall / (prec + recall) if prec and recall and not math.isnan(prec + recall) else math.nan
+
+    deal_lab = lab_d[lab_d["is_deal"].map(_bool)]
+    conf = pd.crosstab(deal_lab["transaction_type"].rename("label"),
+                       rec.loc[deal_lab["_cu"], "transaction_type"].rename("program").to_numpy()) if len(deal_lab) else pd.DataFrame()
+
+    from .pipeline import build_dataset
+    again = build_dataset(start=ds.start, pages_file=Path(ds.pages_file))
+    notes = [f"{len(labels) - matched} labelled URLs are not in this dataset (outside the period or not collected)."
+             if len(labels) - matched else "Every labelled URL is in the dataset.",
+             "Labels were made by reading each source page; see data/pe_deals/validation/README.md for who labelled "
+             "what and how. The intervals are 95% Wilson intervals: with 30-50 labelled deals they are wide."]
+    return ValidationReport(summary=summary, classification={"precision": prec, "recall": recall, "f1": f1, "tp": tp, "fp": fp, "fn": fn},
+                            type_confusion=conf, errors=pd.DataFrame(errors, columns=["headline", "url", "field", "label", "program"]),
+                            consistency=consistency_checks(ds), repeatable=again.fingerprint() == ds.fingerprint(),
+                            n_labels=matched, notes=notes, split=split)
+
+
+def full_report(ds, labels: pd.DataFrame = None) -> str:
+    """The validation write-up: per field, the newest held-out round (the number to quote), the earlier rounds at their
+    freeze and now, the consistency checks, repeatability and every mismatch of the quoted round."""
+    labels = load_labels() if labels is None else labels
+    reps = {sp: evaluate(ds, labels, sp) for sp in SPLITS if (labels["split"] == sp).any()}
+    quote = reps.get(QUOTE_SPLIT) or next(iter(reps.values()))
+
+    def cell(rep, f):
+        t = rep.summary.set_index("field")
+        if f not in t.index:
+            return "—"
+        r = t.loc[f]
+        return f"{int(r['correct'])}/{int(r['n'])} ({r['accuracy']:.0%})"
+
+    lines = ["# PE Deal Sourcing: validation", "",
+             "Accuracy per field against articles labelled from the source pages. Each held-out round was labelled after "
+             "the rules were frozen in git; the newest round measures the rules as they are now and is the number to quote. "
+             "Rules changed after a round's mismatches were read make that round in-sample, so its score at the freeze "
+             "is kept next to its score now.", ""]
+    lines += [f"- **{sp}**: {SPLITS[sp]} ({reps[sp].n_labels} matched)" for sp in reps]
+    heads = []
+    for sp in reps:
+        if sp in FROZEN_SCORES:
+            heads.append((f"{sp} at its freeze", sp, True))
+        heads.append((f"{sp} now" if sp != QUOTE_SPLIT else f"**{sp} (quote this)**", sp, False))
+    lines += ["", "| Field | " + " | ".join(h for h, _, _ in heads) + " |", "|---|" + "---|" * len(heads)]
+    for f in FIELDS:
+        row = []
+        for _, sp, frozen in heads:
+            if frozen:
+                k, n = FROZEN_SCORES[sp].get(f, (0, 0))
+                row.append(f"{k}/{n} ({k / n:.0%})" if n else "—")
+            else:
+                row.append(cell(reps[sp], f))
+        lines.append(f"| {f} | " + " | ".join(row) + " |")
+    s = quote.summary.set_index("field")
+    lines += ["", f"95% Wilson intervals, {quote.split}: " + "; ".join(
+        f"{f} {s.loc[f, 'ci_low']:.0%}-{s.loc[f, 'ci_high']:.0%}" for f in s.index), ""]
+    c = quote.classification
+    lines += [f"Deal vs other news ({quote.split}): precision {c['precision']:.0%}, recall {c['recall']:.0%} "
+              f"({c['tp']} deals found, {c['fp']} false alarms, {c['fn']} missed).", "",
+              "## Consistency checks (every record, no labels needed)", "", "| Check | Records failing |", "|---|---|"]
+    lines += [f"| {r.check} | {r.failing} |" for r in quote.consistency.itertuples()]
+    lines += ["", f"Repeatability: two builds from the same saved pages are {'identical' if quote.repeatable else 'DIFFERENT'} "
+                  f"(fingerprint `{ds.fingerprint()}`)."]
+    for sp, rep in reps.items():
+        if len(rep.errors) and sp != "development":
+            lines += ["", f"## Mismatches, {sp} ({len(rep.errors)})", "", "| Article | Field | Label | Program |", "|---|---|---|---|"]
+            lines += [f"| {str(r.headline)[:70]} | {r.field} | {str(r.label)[:60]} | {str(r.program)[:60]} |" for r in rep.errors.itertuples()]
+    lines += ["", "## Notes", ""] + [f"- {n}" for n in quote.notes]
+    return "\n".join(lines) + "\n"

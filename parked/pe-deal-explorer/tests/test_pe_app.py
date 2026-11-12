@@ -1,4 +1,5 @@
-"""Exercise real app routing, including direct PE links, the PE sidebar and switching back."""
+"""Exercise the parked PE app's routing: the PE sidebar, deep links and the saved-deal handoff."""
+import re
 from pathlib import Path
 
 import pytest
@@ -6,65 +7,36 @@ import pytest
 pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest
 
-APP = str(Path(__file__).resolve().parent.parent / "app.py")
+PROJECT = Path(__file__).resolve().parent.parent
+APP = str(PROJECT / "app.py")
 
 
 def assert_pe_only(at):
     assert not at.exception
     assert any(t.value == "PE Deal Intelligence" for t in at.title)
-    # PE navigation lives in the sidebar; the stock workspace's tabs and sidebar controls are absent.
     assert at.sidebar.radio(key="pe_page").options == [
         "🔎  AI Deal Research", "🧾  Deal Detail"]
-    assert "📍 Analyse a stock" not in [t.label for t in at.tabs]
     assert not [w for w in at.sidebar.text_input if w.key == "ticker"]
     assert not at.sidebar.slider
     assert not at.sidebar.title
 
 
-def test_switch_replaces_stock_workspace_and_can_return():
+def test_parked_project_imports_nothing_from_the_lighthouse_app():
+    """Parked means independent: no module here may import the stock app or its packages."""
+    pattern = re.compile(r"^\s*(?:from|import)\s+(?:lighthouse|workspace_ui)\b|^\s*import\s+app\b", re.M)
+    offenders = [str(p.relative_to(PROJECT)) for p in PROJECT.rglob("*.py")
+                 if p.name != Path(__file__).name and pattern.search(p.read_text(encoding="utf-8"))]
+    assert offenders == []
+
+
+def test_app_opens_on_ai_research():
     at = AppTest.from_file(APP, default_timeout=60).run()
-    assert not at.exception
-    assert at.sidebar.text_input(key="ticker")
-    at.radio(key="workspace_choice").set_value("pe").run()
     assert_pe_only(at)
-    assert at.query_params["workspace"] in ("pe", ["pe"])
-    at.run()  # selection persists across reruns
-    assert_pe_only(at)
-    at.radio(key="workspace_choice").set_value("stock").run()
-    assert not at.exception
-    assert at.sidebar.text_input(key="ticker")
-    assert "📍 Analyse a stock" in [t.label for t in at.tabs]
-    assert not [r for r in at.sidebar.radio if r.key == "pe_page"]
-    assert at.query_params["workspace"] in ("stock", ["stock"])
-    assert "pe_page" not in at.query_params
-
-
-def test_pe_deep_link_does_not_call_stock_analysis(monkeypatch):
-    import lighthouse
-
-    def forbidden(*args, **kwargs):
-        pytest.fail("PE mode must not invoke stock analysis")
-
-    monkeypatch.setattr(lighthouse, "analyze", forbidden)
-    at = AppTest.from_file(APP, default_timeout=60)
-    at.query_params["workspace"] = "pe"
-    at.run()
-    assert_pe_only(at)
-
-
-def test_unknown_workspace_defaults_to_stock():
-    at = AppTest.from_file(APP, default_timeout=60)
-    at.query_params["workspace"] = "unknown"
-    at.run()
-    assert not at.exception
-    assert at.radio(key="workspace_choice").value == "stock"
-    assert at.sidebar.text_input(key="ticker")
+    assert at.radio(key="pe_page").value == "explorer"
 
 
 def test_pe_sidebar_switches_sections_and_deep_links():
-    at = AppTest.from_file(APP, default_timeout=60)
-    at.query_params["workspace"] = "pe"
-    at.run()
+    at = AppTest.from_file(APP, default_timeout=60).run()
     assert_pe_only(at)
     assert at.radio(key="pe_page").value == "explorer"
     assert at.text_area(key="pe_ai_question")
@@ -77,7 +49,6 @@ def test_pe_sidebar_switches_sections_and_deep_links():
     assert at.selectbox(key="pe_detail_choice")
 
     linked = AppTest.from_file(APP, default_timeout=60)
-    linked.query_params["workspace"] = "pe"
     linked.query_params["pe_page"] = "sources"
     linked.run()
     assert_pe_only(linked)
@@ -86,9 +57,7 @@ def test_pe_sidebar_switches_sections_and_deep_links():
 
 
 def test_ai_sidebar_replaces_manual_filters():
-    at = AppTest.from_file(APP, default_timeout=60)
-    at.query_params["workspace"] = "pe"
-    at.run()
+    at = AppTest.from_file(APP, default_timeout=60).run()
     assert_pe_only(at)
     assert not at.sidebar.text_input and len(at.text_area) == 1
     assert not at.sidebar.multiselect and not at.sidebar.date_input
@@ -126,7 +95,6 @@ def test_inspect_saved_deal_callback_navigates_without_widget_error():
     result=ground_results(payload,records,set())
     result.update(query='Show a saved deal',model='test',web_search_enabled=False)
     at=AppTest.from_file(APP,default_timeout=60)
-    at.query_params['workspace']='pe'
     at.session_state['pe_ai_result']=result
     at.run()
     assert not at.exception

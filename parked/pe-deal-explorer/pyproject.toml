@@ -1,0 +1,5 @@
+# PE Deal Intelligence (parked). Its own project: run everything from this folder.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
