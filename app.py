@@ -68,10 +68,13 @@ from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_idea
                                   TIME_STOP_DEFAULT, StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
 
-# Who made Lighthouse (name, field of study), shown under every tab, in "How it works" and in the About menu.
+# Who made Lighthouse (name, field of study, LinkedIn), shown in the sidebar, under every tab, in "How it works" and in
+# the About menu.
 SCHOOL = "University of St. Thomas"
-CREATORS = [("Yuepheng Yang", "Economics"), ("Nikhil Jangir", "Computer Science"), ("Cole Pawlenty", "Finance"),
-            ("Jacob Moreno", "Finance")]
+CREATORS = [("Yuepheng Yang", "Economics", "https://www.linkedin.com/in/yuephengyang/"),
+            ("Nikhil Jangir", "Computer Science", "https://www.linkedin.com/in/nikhil-jangir/"),
+            ("Cole Pawlenty", "Finance", "https://www.linkedin.com/in/cole-pawlenty-9a6745385/"),
+            ("Jacob Moreno", "Finance", "https://www.linkedin.com/in/jacob-moreno11/")]
 LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "stthomas_logo.png")
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
@@ -79,7 +82,7 @@ st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_
                                         "decision, a trade ticket for the cash you have, portfolio allocations with a risk report, "
                                         "and honest backtests. Decision support, not investment advice.\n\n"
                                         f"Created at the {SCHOOL} by "
-                                        + ", ".join(f"{n} ({f})" for n, f in CREATORS) + "."})
+                                        + ", ".join(f"{n} ({f})" for n, f, _ in CREATORS) + "."})
 
 # ----------------------------------------------------------------------------- new code under a running server
 # A merge reaches a running app as changed files (Streamlit Community Cloud pulls every push without restarting
@@ -114,28 +117,75 @@ _refresh_session_for_new_code()
 # ----------------------------------------------------------------------------- look & accessibility
 st.markdown("""
 <style>
+/* Streamlit's theme colours (.streamlit/config.toml) are not exposed as CSS variables, so they are repeated here */
+:root { --lh-bg: #fcfcfb; --lh-surface: #f1f0ec; --lh-card: #ffffff; --lh-line: rgba(11,11,11,.1); }
 /* keyboard users always see where they are */
 *:focus-visible { outline: 3px solid #2a78d6 !important; outline-offset: 2px !important; }
 /* st.metric values never get clipped with an ellipsis (the "Market weather" fix) */
 [data-testid="stMetricValue"] { font-size: 1.55rem !important; white-space: normal !important; overflow: visible !important; line-height: 1.2 !important; }
 [data-testid="stMetricLabel"] { white-space: normal !important; }
 /* KPI cards: wrap-safe, themed, readable in light and dark mode */
-.lh-kpi { padding: .7rem .95rem; border: 1px solid rgba(128,128,128,.28); border-radius: .7rem;
-          background: var(--secondary-background-color); min-height: 5.6rem; margin-bottom: .5rem; }
-.lh-kpi-label { font-size: .82rem; opacity: .75; margin-bottom: .15rem; }
-.lh-kpi-value { font-size: 1.65rem; font-weight: 650; line-height: 1.15; word-break: break-word; white-space: normal; }
-.lh-kpi-sub { font-size: .82rem; opacity: .8; margin-top: .2rem; }
+.lh-kpi { padding: .75rem .95rem; border: 1px solid var(--lh-line); border-radius: .75rem; box-shadow: 0 1px 2px rgba(11,11,11,.04);
+          background: var(--lh-card); min-height: 5.6rem; margin-bottom: .5rem; box-sizing: border-box; }
+.lh-kpi-label { font-size: .8rem; font-weight: 500; opacity: .72; margin-bottom: .2rem; }
+.lh-kpi-value { font-size: 1.5rem; font-weight: 650; line-height: 1.15; word-break: break-word; white-space: normal;
+                text-wrap: balance; letter-spacing: -.01em; }
+.lh-kpi-sub { font-size: .8rem; opacity: .78; margin-top: .25rem; line-height: 1.45; }
+/* cards in one row share the tallest card's height */
+[data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:only-child .lh-kpi)
+    > [data-testid="stVerticalBlock"],
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:only-child:has(.lh-kpi),
+[data-testid="stElementContainer"]:only-child:has(.lh-kpi) [data-testid="stMarkdown"],
+[data-testid="stElementContainer"]:only-child:has(.lh-kpi) [data-testid="stMarkdown"] > div,
+[data-testid="stElementContainer"]:only-child:has(.lh-kpi) [data-testid="stMarkdownContainer"] { height: 100%; }
+[data-testid="stElementContainer"]:only-child .lh-kpi { min-height: calc(100% - .5rem); }
+/* less empty space above the page */
+[data-testid="stMainBlockContainer"], .block-container { padding-top: 2.6rem !important; }
+/* the Analyse button stays in reach at the foot of the sidebar while its settings scroll */
+[data-testid="stSidebar"] .st-key-analyse { position: sticky; bottom: 0; z-index: 3; padding: .6rem 0 .7rem;
+    background: var(--lh-surface); box-shadow: 0 -10px 12px -8px rgba(0,0,0,.12); }
+/* the landing page: three numbered steps */
+.lh-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; margin: 1.1rem 0 1.2rem; }
+.lh-step { padding: .95rem 1.05rem; border: 1px solid rgba(128,128,128,.22); border-radius: .8rem;
+           background: var(--lh-card); }
+.lh-step-n { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem;
+             border-radius: 50%; background: #2a78d6; color: #fff; font-weight: 700; font-size: .85rem; margin-bottom: .5rem; }
+.lh-step-t { font-weight: 650; margin-bottom: .2rem; }
+.lh-step-d { font-size: .9rem; opacity: .8; line-height: 1.5; }
 .lh-verdict { display: inline-block; padding: .15rem .7rem; border-radius: 999px; color: white; font-weight: 700; font-size: 1.05rem; vertical-align: middle; }
 .lh-muted { opacity: .72; }
-/* the makers: a quiet line under every tab, and name cards in "How it works" */
-.lh-credit { margin-top: 2.2rem; padding-top: .9rem; border-top: 1px solid rgba(128,128,128,.28); font-size: .86rem;
-             line-height: 1.7; }
-.lh-credit b { font-weight: 650; }
-.lh-credit .lh-school { color: #510c76; font-weight: 650; }
-.lh-person { padding: .7rem .95rem; border: 1px solid rgba(128,128,128,.28); border-left: 4px solid #510c76;
-             border-radius: .7rem; background: var(--secondary-background-color); margin-bottom: .5rem; }
+/* the makers: a quiet "Built by" list at the foot of the sidebar, a credit line under every tab, and name cards in
+   "How it works" */
+:root { --lh-purple: #510c76; --lh-li: #0a66c2; }
+.lh-li-link { display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem;
+              border-radius: .3rem; color: var(--lh-li) !important; text-decoration: none !important; flex: 0 0 auto;
+              opacity: .8; vertical-align: -.22rem; transition: opacity .15s ease, background .15s ease; }
+.lh-li-link:hover { opacity: 1; background: rgba(10,102,194,.1); }
+.lh-li-link svg { width: .9rem; height: .9rem; fill: currentColor; display: block; }
+.lh-eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .6;
+              margin-bottom: .3rem; }
+.lh-side-team { margin-top: 1.2rem; padding-top: .8rem; border-top: 1px solid rgba(128,128,128,.22); }
+.lh-side-row { display: flex; align-items: center; gap: .35rem; padding: .05rem 0; font-size: .85rem; }
+.lh-side-name { opacity: .85; }
+.lh-credit { margin-top: 2.4rem; padding-top: .9rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .9rem;
+             line-height: 1.9; }
+.lh-credit .lh-school { color: var(--lh-purple); font-weight: 650; }
+.lh-credit-name { white-space: nowrap; margin-right: .2rem; }
+.lh-credit-name b { font-weight: 650; }
+.lh-credit .lh-sep { opacity: .4; margin: 0 .45rem; }
+.lh-avatar { flex: 0 0 auto; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--lh-purple); color: #fff;
+             display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem;
+             letter-spacing: .02em; }
+.lh-person { padding: 1rem; border: 1px solid rgba(128,128,128,.25); border-top: 3px solid var(--lh-purple);
+             border-radius: .8rem; background: var(--lh-card); margin-bottom: .5rem;
+             display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
 .lh-person-name { font-weight: 650; font-size: 1.05rem; line-height: 1.25; }
-.lh-person-field { font-size: .86rem; opacity: .8; }
+.lh-person-field { font-size: .86rem; opacity: .78; }
+.lh-li-btn { display: inline-flex; align-items: center; gap: .4rem; margin-top: auto; padding: .3rem .65rem;
+             border-radius: 999px; font-size: .8rem; font-weight: 600; color: var(--lh-li) !important;
+             border: 1px solid rgba(10,102,194,.4); text-decoration: none !important; transition: background .15s ease; }
+.lh-li-btn:hover { background: rgba(10,102,194,.1); }
+.lh-li-btn svg { width: .95rem; height: .95rem; fill: currentColor; }
 /* the school's logo sits above the title, close to it */
 [data-testid="stSidebar"] [data-testid="stImage"] { margin-bottom: -.6rem; }
 h2, h3, h4 { scroll-margin-top: 4rem; }
@@ -204,6 +254,7 @@ def _memo(ticker, horizon, risk, max_loss, cash, holdings, years, source, entry,
     except Exception as exc:  # noqa: BLE001
         return None, memo_problem(exc)
 
+
 @st.cache_resource(show_spinner=False, ttl=LIVE_TTL, max_entries=400)
 def _light(ticker, horizon, risk, max_loss, cash, holdings, years, source, nonce=0):
     """Analysis without the strategy backtest: enough for trade tickets."""
@@ -251,6 +302,25 @@ def esc(text) -> str:
 def _h(text) -> str:
     """HTML-escaped text with $ as an entity, so markdown never sees a math delimiter."""
     return html.escape(str(text), quote=True).replace("$", "&#36;")
+
+
+LINKEDIN_SVG = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04'
+                '-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27'
+                ' 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77'
+                'C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>')
+
+
+def _linkedin(name: str, url: str, button: bool = False) -> str:
+    """A LinkedIn link for one creator: an icon, or a small "LinkedIn" button."""
+    attrs = (f"href='{_h(url)}' target='_blank' rel='noopener noreferrer' "
+             f"aria-label='{_h(name)} on LinkedIn' title='{_h(name)} on LinkedIn'")
+    if button:
+        return f"<a class='lh-li-btn' {attrs}>{LINKEDIN_SVG}<span>LinkedIn</span></a>"
+    return f"<a class='lh-li-link' {attrs}>{LINKEDIN_SVG}</a>"
+
+
+def _initials(name: str) -> str:
+    return "".join(p[0] for p in name.split()[:2]).upper()
 
 
 def kpi(col, label: str, value: str, sub: str = "", color: str | None = None, help_: str | None = None) -> None:
@@ -322,15 +392,19 @@ def figure(owner, name, build):
 
 
 def _pick_ticker() -> None:
+    """Picking a ticker analyses it straight away."""
     v = st.session_state.get("pick")
     if v:
         st.session_state["ticker"] = v
+        st.session_state["auto_run"] = True
 
 
 def _typed_ticker() -> None:
     """Runs before the widgets are drawn, so the typed value can still be normalised here."""
     st.session_state["pick"] = None
     st.session_state["ticker"] = st.session_state.get("ticker", "").upper().strip()
+    if st.session_state["ticker"]:
+        st.session_state["auto_run"] = True    # Enter in the box analyses the ticker, like the button
 
 
 def _open_from_watchlist(ticker: str) -> None:
@@ -408,7 +482,9 @@ with st.sidebar:
                        help="Adds ~30-60 seconds: strategy layer attribution, threshold sensitivity grid and a walk-forward test.")
     with st.expander("Expert settings"):
         entry = st.number_input("Entry score", 40, 90, 60, key="entry", help="Technical score needed to open a position in the backtest")
-        exit_ = st.number_input("Exit score", 10, 60, 35 if horizon == "long" else 40, key="exit", help="Technical score at which an open position is closed")
+        # one box per horizon: a keyed widget keeps its value, so a shared key left short-term trades on the long exit
+        exit_ = st.number_input("Exit score", 10, 60, 35 if horizon == "long" else 40, key=f"exit_{horizon}",
+                                help="Technical score at which an open position is closed")
         cost = st.number_input("Cost per side (bps)", 0, 50, 5, key="cost", help="Commission in basis points; slippage of 5 bps is added on top")
         as_of = st.date_input("Time machine: as-of date", value=None, min_value=date(1990, 1, 1), max_value=date.today(), key="as_of",
                               help="What would Lighthouse have said on this day? Leave empty for today.")
@@ -419,8 +495,12 @@ with st.sidebar:
     if _is_offline():
         st.info("Offline sample pack: " + ", ".join(t for t in sample_pack_tickers() if not t.startswith("^")))
     st.caption("Decision-support tool, not investment advice.")
+    st.markdown("<div class='lh-side-team'><div class='lh-eyebrow'>Built by</div>"
+                + "".join(f"<div class='lh-side-row'><span class='lh-side-name'>{_h(n)}</span>{_linkedin(n, u)}</div>"
+                          for n, f, u in CREATORS)
+                + "</div>", unsafe_allow_html=True)
 
-run = run or st.session_state.pop("auto_run", False)
+run = (run or st.session_state.pop("auto_run", False)) and cash + holdings > 0 and bool(ticker)
 NONCE = st.session_state.get("live_nonce", 0)
 ALLOW_STALE = True if allow_stale else None          # None: the LIGHTHOUSE_ALLOW_STALE_DATA environment variable decides
 try:
@@ -638,7 +718,7 @@ def render_result(res, memo_state) -> None:
     t_plan, t_memo, t_tech, t_bt, t_data = st.tabs(["🎯 Plan & ticket", "🧑‍💼 Analyst memo", "📈 Beacons & charts",
                                                      "🧪 Backtest", "🗂️ Data"])
     with t_plan:
-        c1, c2 = st.columns([1.1, 1.4])
+        c1, c2 = st.columns([1.25, 1.35], gap="large")
         with c1:
             plotly(figure(res, "waterfall", lambda: ix.score_waterfall(d, prof)), key="waterfall")
             if d.regime:
@@ -900,10 +980,18 @@ with tab_analyse:
         st.markdown("You get a verdict that blends the company's fundamentals and its price trend, a trade ticket sized to your maximum acceptable loss, an "
                     "analyst memo read from the company's SEC filings (valuation, peers, earnings quality and what would "
                     "prove the thesis wrong), and an honest backtest of the rule.")
-        g1, g2, g3 = st.columns(3)
-        g1.markdown("**1 · Who you are**\n\nHorizon, risk tolerance, the most you accept losing on one position, and your portfolio size (sidebar).")
-        g2.markdown("**2 · Press Analyse**\n\nLighthouse reads the prices, the market weather and the SEC filings, and scores 10 fundamental and 6 technical beacons.")
-        g3.markdown("**3 · Explore**\n\nThe plan and ticket, the memo, the charts, the backtest and the data, one tab each; download everything.")
+        steps = [("Who you are", "Horizon, risk tolerance, the most you accept losing on one position, and your "
+                                 "portfolio size, in the sidebar."),
+                 ("Press Analyse", "Lighthouse reads the prices, the market weather and the SEC filings, and scores "
+                                   "10 fundamental and 6 technical beacons."),
+                 ("Explore", "The plan and ticket, the memo, the charts, the backtest and the data, one tab each; "
+                             "download everything.")]
+        st.markdown("<div class='lh-steps'>" + "".join(
+            f"<div class='lh-step'><div class='lh-step-n'>{i}</div><div class='lh-step-t'>{_h(t)}</div>"
+            f"<div class='lh-step-d'>{_h(d)}</div></div>" for i, (t, d) in enumerate(steps, 1)) + "</div>",
+            unsafe_allow_html=True)
+        st.button(f"Analyse {ticker or 'a ticker'} now", type="primary", key="analyse_landing",
+                  disabled=not (ACCOUNT_OK and ticker), on_click=lambda: st.session_state.update(auto_run=True))
         st.caption("No internet? Choose the `sample` data source in the sidebar: it ships with real historical data for 20 stocks.")
 
 
@@ -917,7 +1005,11 @@ def universe_picker(key: str, text_key: str, default: str, label: str = "Univers
     Returns the ticker box's text (what will actually be used)."""
     src = "sample" if _is_offline() else source
     names = universe_names(src)
-    st.session_state.setdefault(text_key, default)
+    # the box starts with a default that depends on live vs sample data; follow it until the user edits the box
+    auto_key = f"{text_key}__default"
+    if st.session_state.get(text_key) in (None, st.session_state.get(auto_key)):
+        st.session_state[text_key] = default
+    st.session_state[auto_key] = default
 
     def apply() -> None:
         name = st.session_state.get(key)
@@ -948,6 +1040,21 @@ def _load_many(tickers, label: str):
     return list(results.values()), list(errors.items())
 
 
+def _tidy(table: pd.DataFrame) -> pd.DataFrame:
+    """A table for the screen: blank cells instead of the word "None", no column that is empty everywhere, and no
+    company column that only repeats the tickers (live scans skip the name lookup)."""
+    t = table.copy()
+    for c in t.columns:
+        if t[c].dtype == object:
+            num = pd.to_numeric(t[c], errors="coerce")
+            if num.notna().sum() == t[c].notna().sum():
+                t[c] = num
+    t = t.dropna(axis=1, how="all")
+    if "name" in t and "ticker" in t and (t["name"].astype(str) == t["ticker"].astype(str)).all():
+        t = t.drop(columns="name")
+    return t
+
+
 def render_ideas(desk: dict) -> None:
     results = desk["results"]
     plans = desk.setdefault("plans", {})            # funding the ideas replays every setup's history: do it once
@@ -975,7 +1082,11 @@ def render_ideas(desk: dict) -> None:
             render_ticket(by[pl.ticker], pl, key="desk")
     if len(table):
         st.markdown("**All tickets and the watch list**")
-        st.dataframe(table, hide_index=True, width="stretch", column_config={
+        st.dataframe(_tidy(table), hide_index=True, width="stretch", column_config={
+            "ticker": "Ticker", "name": "Company", "side": "Side", "status": "Status", "verdict": "Verdict",
+            "score": st.column_config.NumberColumn("Score", format="%.0f"), "shares": st.column_config.NumberColumn("Shares", format="%d"),
+            "rr": st.column_config.NumberColumn("R : R", format="%.1f"), "regime": "Weather", "binding": "Sized by",
+            "as_of": "Signals through", "priced_from": "Priced from", "hist_trades": st.column_config.NumberColumn("Hist. trades", format="%d"),
             "price": st.column_config.NumberColumn("Price", format="$%.2f"), "cost": st.column_config.NumberColumn("Cost", format="$%.0f"),
             "stop": st.column_config.NumberColumn("Stop", format="$%.2f"), "stop_pct": st.column_config.NumberColumn("Stop %", format="%.1f%%"),
             "risk_usd": st.column_config.NumberColumn("Risk $", format="$%.0f"), "risk_pct": st.column_config.NumberColumn("Risk % acct", format="%.2f%%"),
@@ -998,9 +1109,7 @@ def ranking_section(desk: dict) -> None:
         desk["ranking_fig"] = ix.screener(desk["ranking"])
     sdf = desk["ranking"]
     plotly(desk["ranking_fig"], key="screener")
-    show = sdf[["ticker", "name", "verdict", "score", "technical", "regime", "price", "stop"]].copy()
-    for c in ("score", "technical", "price", "stop"):
-        show[c] = pd.to_numeric(show[c], errors="coerce")   # None -> blank cell instead of the word "None"
+    show = _tidy(sdf[["ticker", "name", "verdict", "score", "technical", "regime", "price", "stop"]])
     event = st.dataframe(show, width="stretch", on_select="rerun", selection_mode="single-row", key="wl_table", column_config={
         "ticker": "Ticker", "name": "Company", "verdict": "Verdict", "score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
         "technical": st.column_config.NumberColumn("Tech.", format="%.0f"), "regime": "Weather",
@@ -1047,8 +1156,11 @@ def find_tab() -> None:
                                 text_label="Tickers to scan")
     if st.button("Find trades now", type="primary", key="desk_go", disabled=not ACCOUNT_OK):
         tick = _parse_tickers(desk_text)
-        results, failures = _load_many(tick, "Analysing")
-        st.session_state["desk"] = {"tickers": tick, "failures": failures, "results": results}
+        if tick:
+            results, failures = _load_many(tick, "Analysing")
+            st.session_state["desk"] = {"tickers": tick, "failures": failures, "results": results}
+        else:
+            st.warning("Add at least one ticker to scan, or pick a universe above.", icon="✏️")
     desk = st.session_state.get("desk")
     if not desk:
         st.info("Pick a universe and press **Find trades now**. Lighthouse scores every ticker, ranks them, keeps the "
@@ -1075,6 +1187,14 @@ with tab_find:
     find_tab()
 
 # ============================================================================= PORTFOLIO BUILDER
+def _problem(exc: Exception) -> str:
+    """An input or data problem in plain words; anything else keeps its type so it can be reported."""
+    if isinstance(exc, (ValueError, DataUnavailable)):
+        msg = str(exc)
+        return msg[:1].upper() + msg[1:]
+    return f"{type(exc).__name__}: {exc}"
+
+
 def render_portfolio(res, key: str) -> None:
     r = res.risk
     tab = res.table()
@@ -1105,12 +1225,16 @@ def render_portfolio(res, key: str) -> None:
     st.markdown("**Orders for your cash** (whole shares; the rest stays in cash)")
     show = tab[["sector", "target_weight", "actual_weight", "price", "shares", "value", "risk_share", "volatility"]].copy()
     st.dataframe(show, width="stretch", column_config={
+        "sector": "Sector",
         "target_weight": st.column_config.NumberColumn("Target weight", format="percent"),
         "actual_weight": st.column_config.NumberColumn("Actual weight", format="percent"),
         "price": st.column_config.NumberColumn("Price", format="$%.2f"), "shares": st.column_config.NumberColumn("Buy (shares)", format="%d"),
         "value": st.column_config.NumberColumn("Cost", format="$%.0f"), "risk_share": st.column_config.NumberColumn("Share of risk", format="percent"),
         "volatility": st.column_config.NumberColumn("Volatility", format="percent")})
     st.caption(f"Invested {esc(money(float(show['value'].sum())))} · cash left {esc(money(res.cash_left))}.")
+    if int(show["shares"].sum()) == 0:
+        st.info("The money to allocate buys no whole share at these weights: raise it to get orders. The weights and "
+                "the risk report above still apply.", icon="💵")
     st.download_button("Download orders (CSV)", show.to_csv(), file_name=f"lighthouse_portfolio_{res.method}.csv", key=f"dl_pf_{key}")
     c1, c2 = st.columns(2)
     with c1:
@@ -1171,16 +1295,18 @@ def portfolio_tab() -> None:
             "risk_parity": "Risk parity: every stock contributes the same share of the portfolio's risk. A robust default.",
             "min_variance": "Minimum variance: the lowest-volatility mix; often concentrates in defensive stocks."}[method]))
         if st.button("Build my portfolio", type="primary", key="pf_go"):
-            tick = tuple(dict.fromkeys(t.upper() for t in basket.replace(",", " ").split() if t))
+            tick = _parse_tickers(basket)
             with st.spinner("Estimating risk, optimising and running the walk-forward test for every method ..."):
                 try:
+                    if len(tick) < 2:
+                        raise ValueError("enter at least two tickers to build a portfolio")
                     st.session_state["pf_res"] = _basket(tick, method, max_w, min_w, sec_cap if use_sec else None,
                                                          tv / 100 if use_tv else None, float(capital), years, source, lookback,
                                                          rebalance, float(pf_cost), rf)
                     st.session_state.pop("pf_err", None)
                 except Exception as exc:  # noqa: BLE001
                     st.session_state.pop("pf_res", None)
-                    st.session_state["pf_err"] = f"{type(exc).__name__}: {exc}"
+                    st.session_state["pf_err"] = _problem(exc)
         if st.session_state.get("pf_err"):
             st.error(esc(st.session_state["pf_err"]))
         if st.session_state.get("pf_res") is not None:
@@ -1209,13 +1335,15 @@ def portfolio_tab() -> None:
             held = tuple(_parse_tickers(held_text)) if g.keep_rank is not None else ()
             with st.spinner("Ranking the universe, optimising, and re-running the selection month by month for the walk-forward test ..."):
                 try:
+                    if not tick:
+                        raise ValueError("add the tickers to choose from, or pick a universe above")
                     st.session_state["pf_goal_res"] = _goal(goal, tick, int(n_st), int(per_sec), gmax, gsec if gsec < 1.0 else None,
                                                             gtv / 100 if gtv else None, float(capital), years, source, lookback,
                                                             rebalance, float(pf_cost), rf, held)
                     st.session_state.pop("pf_goal_err", None)
                 except Exception as exc:  # noqa: BLE001
                     st.session_state.pop("pf_goal_res", None)
-                    st.session_state["pf_goal_err"] = f"{type(exc).__name__}: {exc}"
+                    st.session_state["pf_goal_err"] = _problem(exc)
         if st.session_state.get("pf_goal_err"):
             st.error(esc(st.session_state["pf_goal_err"]))
         if st.session_state.get("pf_goal_res") is not None:
@@ -1270,9 +1398,11 @@ def research_summary() -> None:
 def creators_cards() -> None:
     st.markdown("### Who built it")
     st.caption(f"Lighthouse is a student project of the {SCHOOL}.")
-    for col, (name, field) in zip(st.columns(len(CREATORS)), CREATORS):
-        col.markdown(f"<div class='lh-person'><div class='lh-person-name'>{_h(name)}</div>"
-                     f"<div class='lh-person-field'>{_h(field)}</div></div>", unsafe_allow_html=True)
+    for col, (name, field, url) in zip(st.columns(len(CREATORS)), CREATORS):
+        col.markdown(f"<div class='lh-person'><div class='lh-avatar' aria-hidden='true'>{_h(_initials(name))}</div>"
+                     f"<div><div class='lh-person-name'>{_h(name)}</div>"
+                     f"<div class='lh-person-field'>{_h(field)}</div></div>{_linkedin(name, url, button=True)}</div>",
+                     unsafe_allow_html=True)
 
 
 with tab_about:
@@ -1310,6 +1440,6 @@ with tab_about:
 # ----------------------------------------------------------------------------- the makers, under every tab
 st.markdown("<div class='lh-credit'><span class='lh-muted'>Created at the</span> "
             f"<span class='lh-school'>{_h(SCHOOL)}</span> <span class='lh-muted'>by</span> "
-            + " <span class='lh-muted'>·</span> ".join(
-                f"<b>{_h(n)}</b> <span class='lh-muted'>{_h(f)}</span>" for n, f in CREATORS)
+            + "<span class='lh-sep'>·</span>".join(
+                f"<span class='lh-credit-name'><b>{_h(n)}</b> {_linkedin(n, u)}</span>" for n, f, u in CREATORS)
             + "</div>", unsafe_allow_html=True)
