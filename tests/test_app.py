@@ -64,10 +64,13 @@ def test_app_shows_the_school_logo_and_its_creators():
     side = [type(e).__name__ for e in at.sidebar]
     kinds = [getattr(e, "type", "") for e in at.sidebar]
     assert "image" in kinds and kinds.index("image") < kinds.index("title"), (side, kinds)   # the logo, then the title
-    text = " ".join(str(m.value) for m in at.markdown)
-    for name, field in [("Yuepheng Yang", "Economics"), ("Nikhil Jangir", "Computer Science"),
-                        ("Cole Pawlenty", "Finance"), ("Jacob Moreno", "Finance")]:
+    text = " ".join(str(m.value) for m in [*at.markdown, *at.sidebar.markdown])
+    for name, field, slug in [("Yuepheng Yang", "Economics", "yuephengyang"),
+                              ("Nikhil Jangir", "Computer Science", "nikhil-jangir"),
+                              ("Cole Pawlenty", "Finance", "cole-pawlenty-9a6745385"),
+                              ("Jacob Moreno", "Finance", "jacob-moreno11")]:
         assert text.count(name) >= 2 and field in text                # the footer line and the card
+        assert f"https://www.linkedin.com/in/{slug}/" in text          # each name links to its LinkedIn profile
     assert "University of St. Thomas" in text and "Who built it" in text
 
 

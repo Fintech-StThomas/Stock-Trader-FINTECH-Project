@@ -68,10 +68,13 @@ from lighthouse.tradeplan import (TradeSettings, build_trade_plan, allocate_idea
                                   TIME_STOP_DEFAULT, StaleDataError)
 from lighthouse.universe import available_universe, get_universe, universe_names  # noqa: E402
 
-# Who made Lighthouse (name, field of study), shown under every tab, in "How it works" and in the About menu.
+# Who made Lighthouse (name, field of study, LinkedIn), shown in the sidebar, under every tab, in "How it works" and in
+# the About menu.
 SCHOOL = "University of St. Thomas"
-CREATORS = [("Yuepheng Yang", "Economics"), ("Nikhil Jangir", "Computer Science"), ("Cole Pawlenty", "Finance"),
-            ("Jacob Moreno", "Finance")]
+CREATORS = [("Yuepheng Yang", "Economics", "https://www.linkedin.com/in/yuephengyang/"),
+            ("Nikhil Jangir", "Computer Science", "https://www.linkedin.com/in/nikhil-jangir/"),
+            ("Cole Pawlenty", "Finance", "https://www.linkedin.com/in/cole-pawlenty-9a6745385/"),
+            ("Jacob Moreno", "Finance", "https://www.linkedin.com/in/jacob-moreno11/")]
 LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "stthomas_logo.png")
 
 st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_icon="🔦", layout="wide",
@@ -79,7 +82,7 @@ st.set_page_config(page_title="Lighthouse · explainable stock decisions", page_
                                         "decision, a trade ticket for the cash you have, portfolio allocations with a risk report, "
                                         "and honest backtests. Decision support, not investment advice.\n\n"
                                         f"Created at the {SCHOOL} by "
-                                        + ", ".join(f"{n} ({f})" for n, f in CREATORS) + "."})
+                                        + ", ".join(f"{n} ({f})" for n, f, _ in CREATORS) + "."})
 
 # ----------------------------------------------------------------------------- new code under a running server
 # A merge reaches a running app as changed files (Streamlit Community Cloud pulls every push without restarting
@@ -127,15 +130,44 @@ st.markdown("""
 .lh-kpi-sub { font-size: .82rem; opacity: .8; margin-top: .2rem; }
 .lh-verdict { display: inline-block; padding: .15rem .7rem; border-radius: 999px; color: white; font-weight: 700; font-size: 1.05rem; vertical-align: middle; }
 .lh-muted { opacity: .72; }
-/* the makers: a quiet line under every tab, and name cards in "How it works" */
-.lh-credit { margin-top: 2.2rem; padding-top: .9rem; border-top: 1px solid rgba(128,128,128,.28); font-size: .86rem;
-             line-height: 1.7; }
-.lh-credit b { font-weight: 650; }
-.lh-credit .lh-school { color: #510c76; font-weight: 650; }
-.lh-person { padding: .7rem .95rem; border: 1px solid rgba(128,128,128,.28); border-left: 4px solid #510c76;
-             border-radius: .7rem; background: var(--secondary-background-color); margin-bottom: .5rem; }
-.lh-person-name { font-weight: 650; font-size: 1.05rem; line-height: 1.25; }
-.lh-person-field { font-size: .86rem; opacity: .8; }
+/* the makers: a "Built by" list in the sidebar, a credit band under every tab, and name cards in "How it works" */
+:root { --lh-purple: #510c76; --lh-purple-soft: rgba(81,12,118,.09); --lh-li: #0a66c2; }
+.lh-li-link { display: inline-flex; align-items: center; justify-content: center; width: 1.45rem; height: 1.45rem;
+              border-radius: .35rem; color: var(--lh-li) !important; text-decoration: none !important; flex: 0 0 auto;
+              transition: background .15s ease, transform .15s ease; }
+.lh-li-link:hover { background: rgba(10,102,194,.12); transform: translateY(-1px); }
+.lh-li-link svg { width: 1.05rem; height: 1.05rem; fill: currentColor; display: block; }
+.lh-eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .7;
+              margin-bottom: .45rem; }
+.lh-side-team { margin: .2rem 0 1rem; padding: .7rem .8rem; border-radius: .7rem; background: var(--lh-purple-soft);
+                border: 1px solid rgba(128,128,128,.2); }
+.lh-side-row { display: flex; align-items: center; gap: .5rem; padding: .18rem 0; }
+.lh-side-name { font-weight: 650; font-size: .92rem; line-height: 1.2; flex: 1 1 auto; min-width: 0; }
+.lh-side-field { display: block; font-weight: 400; font-size: .76rem; opacity: .7; }
+.lh-credit { margin-top: 2.6rem; padding: 1.1rem 1.25rem; border-radius: .9rem; background: var(--lh-purple-soft);
+             border: 1px solid rgba(128,128,128,.22); }
+.lh-credit-head { font-size: .9rem; margin-bottom: .7rem; }
+.lh-credit-head .lh-school { font-weight: 700; }
+.lh-credit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); gap: .6rem; }
+.lh-chip { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; border-radius: .65rem;
+           background: var(--background-color, transparent); border: 1px solid rgba(128,128,128,.22); }
+.lh-chip-text { flex: 1 1 auto; min-width: 0; line-height: 1.2; }
+.lh-chip-name { font-weight: 700; font-size: 1rem; }
+.lh-chip-field { font-size: .8rem; opacity: .72; }
+.lh-avatar { flex: 0 0 auto; width: 2.3rem; height: 2.3rem; border-radius: 50%; background: var(--lh-purple); color: #fff;
+             display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem;
+             letter-spacing: .02em; }
+.lh-person { padding: 1rem; border: 1px solid rgba(128,128,128,.25); border-top: 4px solid var(--lh-purple);
+             border-radius: .8rem; background: var(--secondary-background-color); margin-bottom: .5rem;
+             display: flex; flex-direction: column; align-items: flex-start; gap: .55rem; min-height: 9.5rem; }
+.lh-person .lh-avatar { width: 3rem; height: 3rem; font-size: 1.05rem; }
+.lh-person-name { font-weight: 700; font-size: 1.12rem; line-height: 1.25; }
+.lh-person-field { font-size: .86rem; opacity: .78; }
+.lh-li-btn { display: inline-flex; align-items: center; gap: .4rem; margin-top: auto; padding: .3rem .65rem;
+             border-radius: 999px; font-size: .8rem; font-weight: 600; color: var(--lh-li) !important;
+             border: 1px solid rgba(10,102,194,.4); text-decoration: none !important; transition: background .15s ease; }
+.lh-li-btn:hover { background: rgba(10,102,194,.1); }
+.lh-li-btn svg { width: .95rem; height: .95rem; fill: currentColor; }
 /* the school's logo sits above the title, close to it */
 [data-testid="stSidebar"] [data-testid="stImage"] { margin-bottom: -.6rem; }
 h2, h3, h4 { scroll-margin-top: 4rem; }
@@ -253,6 +285,25 @@ def _h(text) -> str:
     return html.escape(str(text), quote=True).replace("$", "&#36;")
 
 
+LINKEDIN_SVG = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04'
+                '-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27'
+                ' 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77'
+                'C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>')
+
+
+def _linkedin(name: str, url: str, button: bool = False) -> str:
+    """A LinkedIn link for one creator: an icon, or a small "LinkedIn" button."""
+    attrs = (f"href='{_h(url)}' target='_blank' rel='noopener noreferrer' "
+             f"aria-label='{_h(name)} on LinkedIn' title='{_h(name)} on LinkedIn'")
+    if button:
+        return f"<a class='lh-li-btn' {attrs}>{LINKEDIN_SVG}<span>LinkedIn</span></a>"
+    return f"<a class='lh-li-link' {attrs}>{LINKEDIN_SVG}</a>"
+
+
+def _initials(name: str) -> str:
+    return "".join(p[0] for p in name.split()[:2]).upper()
+
+
 def kpi(col, label: str, value: str, sub: str = "", color: str | None = None, help_: str | None = None) -> None:
     """A wrap-safe metric card (st.metric truncates long values such as 'Bull / Turbulent')."""
     style = f" style='color:{color}'" if color else ""
@@ -350,6 +401,11 @@ with st.sidebar:
         st.image(LOGO, width=190)       # University of St. Thomas, where Lighthouse was made
     st.title("🔦 Lighthouse")
     st.caption("A clear signal in a noisy market. Explainable Buy / Hold / Sell decisions for self-directed investors.")
+    st.markdown("<div class='lh-side-team'><div class='lh-eyebrow'>Built by</div>"
+                + "".join(f"<div class='lh-side-row'><span class='lh-side-name'>{_h(n)}"
+                          f"<span class='lh-side-field'>{_h(f)}</span></span>{_linkedin(n, u)}</div>"
+                          for n, f, u in CREATORS)
+                + "</div>", unsafe_allow_html=True)
 
     st.text_input("Ticker", key="ticker", help="Any US-listed symbol, e.g. MSFT, AAPL, BRK-B", on_change=_typed_ticker)
     ticker = st.session_state["ticker"].upper().strip()
@@ -1270,9 +1326,11 @@ def research_summary() -> None:
 def creators_cards() -> None:
     st.markdown("### Who built it")
     st.caption(f"Lighthouse is a student project of the {SCHOOL}.")
-    for col, (name, field) in zip(st.columns(len(CREATORS)), CREATORS):
-        col.markdown(f"<div class='lh-person'><div class='lh-person-name'>{_h(name)}</div>"
-                     f"<div class='lh-person-field'>{_h(field)}</div></div>", unsafe_allow_html=True)
+    for col, (name, field, url) in zip(st.columns(len(CREATORS)), CREATORS):
+        col.markdown(f"<div class='lh-person'><div class='lh-avatar' aria-hidden='true'>{_h(_initials(name))}</div>"
+                     f"<div><div class='lh-person-name'>{_h(name)}</div>"
+                     f"<div class='lh-person-field'>{_h(field)}</div></div>{_linkedin(name, url, button=True)}</div>",
+                     unsafe_allow_html=True)
 
 
 with tab_about:
@@ -1308,8 +1366,10 @@ with tab_about:
 
 
 # ----------------------------------------------------------------------------- the makers, under every tab
-st.markdown("<div class='lh-credit'><span class='lh-muted'>Created at the</span> "
-            f"<span class='lh-school'>{_h(SCHOOL)}</span> <span class='lh-muted'>by</span> "
-            + " <span class='lh-muted'>·</span> ".join(
-                f"<b>{_h(n)}</b> <span class='lh-muted'>{_h(f)}</span>" for n, f in CREATORS)
-            + "</div>", unsafe_allow_html=True)
+st.markdown("<div class='lh-credit'><div class='lh-credit-head'><span class='lh-muted'>Created at the</span> "
+            f"<span class='lh-school'>{_h(SCHOOL)}</span> <span class='lh-muted'>by</span></div>"
+            "<div class='lh-credit-grid'>"
+            + "".join(f"<div class='lh-chip'><div class='lh-avatar' aria-hidden='true'>{_h(_initials(n))}</div>"
+                      f"<div class='lh-chip-text'><div class='lh-chip-name'>{_h(n)}</div>"
+                      f"<div class='lh-chip-field'>{_h(f)}</div></div>{_linkedin(n, u)}</div>" for n, f, u in CREATORS)
+            + "</div></div>", unsafe_allow_html=True)

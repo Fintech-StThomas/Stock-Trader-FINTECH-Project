@@ -225,12 +225,12 @@ MIT licensed.
 
 Lighthouse was created at the University of St. Thomas by:
 
-| Name | Field |
-|---|---|
-| Yuepheng Yang | Economics |
-| Nikhil Jangir | Computer Science |
-| Cole Pawlenty | Finance |
-| Jacob Moreno | Finance |
+| Name | Field | LinkedIn |
+|---|---|---|
+| Yuepheng Yang | Economics | [linkedin.com/in/yuephengyang](https://www.linkedin.com/in/yuephengyang/) |
+| Nikhil Jangir | Computer Science | [linkedin.com/in/nikhil-jangir](https://www.linkedin.com/in/nikhil-jangir/) |
+| Cole Pawlenty | Finance | [linkedin.com/in/cole-pawlenty-9a6745385](https://www.linkedin.com/in/cole-pawlenty-9a6745385/) |
+| Jacob Moreno | Finance | [linkedin.com/in/jacob-moreno11](https://www.linkedin.com/in/jacob-moreno11/) |
 
 ## Parked projects (not part of the app)
 
