@@ -137,7 +137,8 @@ def score_gauge(decision, height: int = 230) -> go.Figure:
                    bar=dict(color="#0b0b0b", thickness=0.25), bgcolor="rgba(0,0,0,0)", borderwidth=0, steps=steps,
                    threshold=dict(line=dict(color="#0b0b0b", width=3), thickness=0.8, value=decision.composite_score)),
     ))
-    fig.update_layout(height=height, margin=dict(l=20, r=20, t=40, b=0), paper_bgcolor="rgba(0,0,0,0)", font=FONT)
+    # side margins wide enough for the "0" and "100" tick labels at the ends of the dial
+    fig.update_layout(height=height, margin=dict(l=36, r=36, t=44, b=6), paper_bgcolor="rgba(0,0,0,0)", font=FONT)
     return fig
 
 
@@ -145,28 +146,30 @@ def score_waterfall(decision, profile, height: int = 300) -> go.Figure:
     """How the score is built: fundamental x weight + technical x weight - market weather = the Lighthouse score."""
     labels, values, text = [], [], []
     if decision.fundamental_score is not None:
-        labels.append(f"Fundamental {decision.fundamental_score:.0f} × {profile.fundamental_weight:.0%}")
+        labels.append(f"Fundamental<br>{decision.fundamental_score:.0f} × {profile.fundamental_weight:.0%}")
         values.append(decision.fundamental_score * profile.fundamental_weight)
-        labels.append(f"Technical {decision.technical_score:.0f} × {profile.technical_weight:.0%}")
+        labels.append(f"Technical<br>{decision.technical_score:.0f} × {profile.technical_weight:.0%}")
         values.append(decision.technical_score * profile.technical_weight)
     else:
-        labels.append(f"Technical {decision.technical_score:.0f} × 100% (fundamentals unavailable)")
+        labels.append(f"Technical<br>{decision.technical_score:.0f} × 100%<br>(no fundamentals)")
         values.append(decision.technical_score)
-    labels.append("Market weather" + (f" ({decision.regime.label})" if decision.regime else ""))
+    labels.append("Market<br>weather")
     values.append(-decision.regime_penalty)
     text = [f"{v:+.1f}" for v in values]
     fig = go.Figure(go.Waterfall(
         orientation="v", measure=["relative"] * len(values) + ["total"],
-        x=labels + ["Lighthouse score"], y=values + [decision.composite_score], text=text + [f"{decision.composite_score:.0f}"],
+        x=labels + ["Lighthouse<br>score"], y=values + [decision.composite_score], text=text + [f"{decision.composite_score:.0f}"],
         textposition="outside", connector=dict(line=dict(color=INK2, width=1)),
         increasing=dict(marker=dict(color=SERIES["strategy"])), decreasing=dict(marker=dict(color=STATUS["red"])),
         totals=dict(marker=dict(color=VERDICT_COLOR[decision.verdict])),
-        hovertemplate="%{x}<br>%{text} points<extra></extra>",
+        hovertemplate="%{x}<br>%{text} points<extra></extra>", cliponaxis=False,
     ))
     for thr, label in VERDICT_BANDS[:-1]:
         fig.add_hline(y=thr, line=dict(color=INK2, width=0.7, dash="dot"), annotation_text=f"{label} ≥{thr}",
-                      annotation_position="right", annotation_font=dict(size=10, color=INK2))
+                      annotation_position="right", annotation_xshift=4, annotation_font=dict(size=9.5, color=INK2))
     _base_layout(fig, title="How the score is built", height=height, showlegend=False, hovermode="closest")
+    fig.update_layout(margin=dict(l=10, r=78, t=56, b=10))   # room on the right for the verdict-band labels
+    fig.update_xaxes(tickangle=0, tickfont=dict(size=10.5))
     fig.update_yaxes(range=[0, 105], title="points")
     return fig
 

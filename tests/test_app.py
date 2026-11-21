@@ -268,3 +268,69 @@ def test_app_reloads_lighthouse_deployed_under_a_running_server(monkeypatch, old
         for n in _lighthouse_modules():
             del sys.modules[n]
         sys.modules.update(before)
+
+
+def test_short_horizon_uses_its_own_exit_score():
+    """The exit score box follows the horizon: a keyed widget keeps its value, so one shared box left short-term
+    trades on the long-term exit (35 instead of 40)."""
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    assert at.sidebar.number_input(key="exit_long").value == 35
+    at.sidebar.radio(key="horizon").set_value("short")
+    at.run()
+    assert not at.exception, at.exception
+    assert at.sidebar.number_input(key="exit_short").value == 40
+
+
+def test_empty_or_too_small_inputs_get_a_plain_message():
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.run()
+    at.text_input(key="desk_text").set_value("")
+    at.run()
+    at.button(key="desk_go").click()
+    at.run()
+    assert not at.exception, at.exception
+    assert any("at least one ticker" in str(w.value) for w in at.warning)
+    at.text_input(key="pf_basket").set_value("AAPL")
+    at.run()
+    at.button(key="pf_go").click()
+    at.run()
+    errs = [str(e.value) for e in at.error]
+    assert any("at least two tickers" in e for e in errs) and not any("ValueError" in e for e in errs), errs
+
+
+def test_ticker_box_follows_the_data_source_until_edited(monkeypatch):
+    """The scan's default list depends on live vs sample data; switching to the sample pack swaps an untouched box to
+    tickers the pack has, and a box the user edited is left alone."""
+    monkeypatch.delenv("LIGHTHOUSE_OFFLINE", raising=False)
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    live_default = at.text_input(key="desk_text").value
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.run()
+    assert not at.exception, at.exception
+    offline_default = at.text_input(key="desk_text").value
+    assert offline_default != live_default and "MSFT" in offline_default
+    at.text_input(key="desk_text").set_value("KO PEP")
+    at.run()
+    at.sidebar.selectbox(key="source").set_value("auto")
+    at.run()
+    assert at.text_input(key="desk_text").value == "KO PEP"
+
+
+def test_landing_button_and_ticker_pick_analyse_straight_away():
+    """The landing page has its own Analyse button, and picking or typing a ticker analyses it without a second click."""
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    at.sidebar.selectbox(key="source").set_value("sample")
+    at.run()
+    at.button(key="analyse_landing").click()
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["result"].ticker == "MSFT"
+    at.sidebar.text_input(key="ticker").set_value("ko")
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["result"].ticker == "KO"
