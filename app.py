@@ -130,38 +130,32 @@ st.markdown("""
 .lh-kpi-sub { font-size: .82rem; opacity: .8; margin-top: .2rem; }
 .lh-verdict { display: inline-block; padding: .15rem .7rem; border-radius: 999px; color: white; font-weight: 700; font-size: 1.05rem; vertical-align: middle; }
 .lh-muted { opacity: .72; }
-/* the makers: a "Built by" list in the sidebar, a credit band under every tab, and name cards in "How it works" */
-:root { --lh-purple: #510c76; --lh-purple-soft: rgba(81,12,118,.09); --lh-li: #0a66c2; }
-.lh-li-link { display: inline-flex; align-items: center; justify-content: center; width: 1.45rem; height: 1.45rem;
-              border-radius: .35rem; color: var(--lh-li) !important; text-decoration: none !important; flex: 0 0 auto;
-              transition: background .15s ease, transform .15s ease; }
-.lh-li-link:hover { background: rgba(10,102,194,.12); transform: translateY(-1px); }
-.lh-li-link svg { width: 1.05rem; height: 1.05rem; fill: currentColor; display: block; }
-.lh-eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .7;
-              margin-bottom: .45rem; }
-.lh-side-team { margin: .2rem 0 1rem; padding: .7rem .8rem; border-radius: .7rem; background: var(--lh-purple-soft);
-                border: 1px solid rgba(128,128,128,.2); }
-.lh-side-row { display: flex; align-items: center; gap: .5rem; padding: .18rem 0; }
-.lh-side-name { font-weight: 650; font-size: .92rem; line-height: 1.2; flex: 1 1 auto; min-width: 0; }
-.lh-side-field { display: block; font-weight: 400; font-size: .76rem; opacity: .7; }
-.lh-credit { margin-top: 2.6rem; padding: 1.1rem 1.25rem; border-radius: .9rem; background: var(--lh-purple-soft);
-             border: 1px solid rgba(128,128,128,.22); }
-.lh-credit-head { font-size: .9rem; margin-bottom: .7rem; }
-.lh-credit-head .lh-school { font-weight: 700; }
-.lh-credit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); gap: .6rem; }
-.lh-chip { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; border-radius: .65rem;
-           background: var(--background-color, transparent); border: 1px solid rgba(128,128,128,.22); }
-.lh-chip-text { flex: 1 1 auto; min-width: 0; line-height: 1.2; }
-.lh-chip-name { font-weight: 700; font-size: 1rem; }
-.lh-chip-field { font-size: .8rem; opacity: .72; }
-.lh-avatar { flex: 0 0 auto; width: 2.3rem; height: 2.3rem; border-radius: 50%; background: var(--lh-purple); color: #fff;
+/* the makers: a quiet "Built by" list at the foot of the sidebar, a credit line under every tab, and name cards in
+   "How it works" */
+:root { --lh-purple: #510c76; --lh-li: #0a66c2; }
+.lh-li-link { display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem;
+              border-radius: .3rem; color: var(--lh-li) !important; text-decoration: none !important; flex: 0 0 auto;
+              opacity: .8; vertical-align: -.22rem; transition: opacity .15s ease, background .15s ease; }
+.lh-li-link:hover { opacity: 1; background: rgba(10,102,194,.1); }
+.lh-li-link svg { width: .9rem; height: .9rem; fill: currentColor; display: block; }
+.lh-eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .6;
+              margin-bottom: .3rem; }
+.lh-side-team { margin-top: 1.2rem; padding-top: .8rem; border-top: 1px solid rgba(128,128,128,.22); }
+.lh-side-row { display: flex; align-items: center; gap: .35rem; padding: .05rem 0; font-size: .85rem; }
+.lh-side-name { opacity: .85; }
+.lh-credit { margin-top: 2.4rem; padding-top: .9rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .9rem;
+             line-height: 1.9; }
+.lh-credit .lh-school { color: var(--lh-purple); font-weight: 650; }
+.lh-credit-name { white-space: nowrap; margin-right: .2rem; }
+.lh-credit-name b { font-weight: 650; }
+.lh-credit .lh-sep { opacity: .4; margin: 0 .45rem; }
+.lh-avatar { flex: 0 0 auto; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--lh-purple); color: #fff;
              display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem;
              letter-spacing: .02em; }
-.lh-person { padding: 1rem; border: 1px solid rgba(128,128,128,.25); border-top: 4px solid var(--lh-purple);
+.lh-person { padding: 1rem; border: 1px solid rgba(128,128,128,.25); border-top: 3px solid var(--lh-purple);
              border-radius: .8rem; background: var(--secondary-background-color); margin-bottom: .5rem;
-             display: flex; flex-direction: column; align-items: flex-start; gap: .55rem; min-height: 9.5rem; }
-.lh-person .lh-avatar { width: 3rem; height: 3rem; font-size: 1.05rem; }
-.lh-person-name { font-weight: 700; font-size: 1.12rem; line-height: 1.25; }
+             display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
+.lh-person-name { font-weight: 650; font-size: 1.05rem; line-height: 1.25; }
 .lh-person-field { font-size: .86rem; opacity: .78; }
 .lh-li-btn { display: inline-flex; align-items: center; gap: .4rem; margin-top: auto; padding: .3rem .65rem;
              border-radius: 999px; font-size: .8rem; font-weight: 600; color: var(--lh-li) !important;
@@ -401,11 +395,6 @@ with st.sidebar:
         st.image(LOGO, width=190)       # University of St. Thomas, where Lighthouse was made
     st.title("🔦 Lighthouse")
     st.caption("A clear signal in a noisy market. Explainable Buy / Hold / Sell decisions for self-directed investors.")
-    st.markdown("<div class='lh-side-team'><div class='lh-eyebrow'>Built by</div>"
-                + "".join(f"<div class='lh-side-row'><span class='lh-side-name'>{_h(n)}"
-                          f"<span class='lh-side-field'>{_h(f)}</span></span>{_linkedin(n, u)}</div>"
-                          for n, f, u in CREATORS)
-                + "</div>", unsafe_allow_html=True)
 
     st.text_input("Ticker", key="ticker", help="Any US-listed symbol, e.g. MSFT, AAPL, BRK-B", on_change=_typed_ticker)
     ticker = st.session_state["ticker"].upper().strip()
@@ -475,6 +464,10 @@ with st.sidebar:
     if _is_offline():
         st.info("Offline sample pack: " + ", ".join(t for t in sample_pack_tickers() if not t.startswith("^")))
     st.caption("Decision-support tool, not investment advice.")
+    st.markdown("<div class='lh-side-team'><div class='lh-eyebrow'>Built by</div>"
+                + "".join(f"<div class='lh-side-row'><span class='lh-side-name'>{_h(n)}</span>{_linkedin(n, u)}</div>"
+                          for n, f, u in CREATORS)
+                + "</div>", unsafe_allow_html=True)
 
 run = run or st.session_state.pop("auto_run", False)
 NONCE = st.session_state.get("live_nonce", 0)
@@ -1366,10 +1359,8 @@ with tab_about:
 
 
 # ----------------------------------------------------------------------------- the makers, under every tab
-st.markdown("<div class='lh-credit'><div class='lh-credit-head'><span class='lh-muted'>Created at the</span> "
-            f"<span class='lh-school'>{_h(SCHOOL)}</span> <span class='lh-muted'>by</span></div>"
-            "<div class='lh-credit-grid'>"
-            + "".join(f"<div class='lh-chip'><div class='lh-avatar' aria-hidden='true'>{_h(_initials(n))}</div>"
-                      f"<div class='lh-chip-text'><div class='lh-chip-name'>{_h(n)}</div>"
-                      f"<div class='lh-chip-field'>{_h(f)}</div></div>{_linkedin(n, u)}</div>" for n, f, u in CREATORS)
-            + "</div></div>", unsafe_allow_html=True)
+st.markdown("<div class='lh-credit'><span class='lh-muted'>Created at the</span> "
+            f"<span class='lh-school'>{_h(SCHOOL)}</span> <span class='lh-muted'>by</span> "
+            + "<span class='lh-sep'>·</span>".join(
+                f"<span class='lh-credit-name'><b>{_h(n)}</b> {_linkedin(n, u)}</span>" for n, f, u in CREATORS)
+            + "</div>", unsafe_allow_html=True)
