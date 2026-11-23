@@ -1,0 +1,13 @@
+{
+  "label_source": "team-reviewed labels",
+  "reviewed_sample_size": 0,
+  "measured_accuracy": null,
+  "unresolved_errors": null,
+  "coverage_limits": [
+    "The bundled Nikhil record is a synthetic example, not a verified deal.",
+    "No team-reviewed ground-truth labels have been published yet.",
+    "No automated extraction evaluation results have been published yet.",
+    "Source universe, geography, industry, and date coverage are not yet measured."
+  ],
+  "test_results": []
+}

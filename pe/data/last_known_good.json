@@ -1,0 +1,27 @@
+{
+  "contract_version": "1.0.0",
+  "metadata": {
+    "data_version": "pe-demo-2026-10-29.1",
+    "last_updated": "2026-10-29T00:00:00+00:00",
+    "coverage_start": null,
+    "coverage_end": null,
+    "coverage_notes": "Illustrative schema fixture only; no real transaction coverage or source verification is claimed. Replace with team-published, sourced records."
+  },
+  "records": [
+    {
+      "deal_id": "example-nikhil-001",
+      "buyer": "Nikhil Demo Capital (illustrative only)",
+      "target": "Example Industrial Co. (illustrative only)",
+      "announced_date": null,
+      "industry": "Industrials (example label)",
+      "geography": null,
+      "rationale": "Not provided; do not infer from the example record.",
+      "source_name": null,
+      "source_url": null,
+      "source_excerpt": null,
+      "record_status": "example_not_verified",
+      "reviewer": "Nikhil",
+      "reviewed_label": null
+    }
+  ]
+}
